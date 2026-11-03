@@ -103,6 +103,10 @@ function loadScript(url) {
   });
   return loadScript.p[url];
 }
+// Persentase pajak: terima koma atau titik desimal, tampilkan dengan koma (gaya Indonesia).
+function persenNum(v) { const n = parseFloat(String(v === undefined || v === null ? '' : v).replace(',', '.')); return isFinite(n) ? Math.min(Math.max(n, 0), 100) : 0; }
+function fmtPersen(v) { const n = Math.round(persenNum(v) * 100) / 100; return String(n).replace('.', ','); }
+function labelPajak(o) { return 'Pajak' + (String(o.PajakPersen || '').trim() !== '' ? ' ' + fmtPersen(o.PajakPersen) + '%' : ''); }
 function terbilang(n) {
   n = Math.floor(Math.abs(Number(n) || 0));
   const s = ['', 'satu', 'dua', 'tiga', 'empat', 'lima', 'enam', 'tujuh', 'delapan', 'sembilan', 'sepuluh', 'sebelas'];
@@ -968,7 +972,7 @@ function openOrderDrawer(id) {
       ['Mobil', [o.Merk, o.Tipe, o.JenisMobil, o.Model].filter(Boolean).join(' ')], ['No. polisi', o.NoPolMobil], ['Warna / tahun', [o.Warna, o.Tahun].filter(Boolean).join(' · ')], ['No. rangka', o.NoRangka],
       ['Unit pengangkut', o.UnitNoPol], ['Pengemudi', o.PengemudiNama], ['Inspeksi', insp ? `${insp.Status === 'Disahkan' ? 'Disahkan · ' + insp.KondisiRingkas : 'Draf'}` : 'Belum diisi']]);
   }
-  body += '<div class="sec-title">Pembayaran</div>' + dl([['Metode', o.Pembayaran], ['Harga', o.Harga !== '' ? rp(o.Harga) : ''], ['Pajak', o.Pajak ? rp(o.Pajak) : ''], ['Penyesuaian tarif', o.Penyesuaian ? rp(o.Penyesuaian) : ''],
+  body += '<div class="sec-title">Pembayaran</div>' + dl([['Metode', o.Pembayaran], ['Harga', o.Harga !== '' ? rp(o.Harga) : ''], [labelPajak(o), o.Pajak ? rp(o.Pajak) : ''], ['Penyesuaian tarif', o.Penyesuaian ? rp(o.Penyesuaian) : ''],
     ['Total', `<b>${rp(o.Total)}</b>`, 1], ['DP', o.Pembayaran === 'DP' ? rp(o.DP) : ''], ['Sisa', o.Pembayaran === 'DP' ? rp(o.Sisa) : ''], ['Jatuh tempo', o.JatuhTempo ? tgl(o.JatuhTempo) : ''],
     ['Rekening', rek ? rek.Bank + ' ' + rek.NoRekening : ''], ['Invoice', inv ? `${esc(inv.NoInvoice)} · <span class="badge ${inv.Status === 'Lunas' ? 'b-green' : inv.Status === 'Batal' ? 'b-slate' : 'b-amber'}">${esc(inv.Status)}</span>` : '', 1], ['Catatan', o.Catatan]]);
   if (o.PdfUrl) body += `<a class="btn btn-secondary btn-sm" href="${esc(o.PdfUrl)}" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i> Buka arsip PDF di Drive</a>`;
@@ -1590,7 +1594,8 @@ function payBlockHTML(lay) {
   </div>
   <div class="row-2">
     <label class="field"><span class="label req">Harga dasar</span><div class="prefix-input"><span>Rp</span><input class="input money" name="Harga" inputmode="numeric" placeholder="0"></div></label>
-    <label class="field"><span class="label">Pajak</span><div class="prefix-input"><span>Rp</span><input class="input money" name="Pajak" inputmode="numeric" placeholder="0"></div></label>
+    <div class="field"><label class="label" for="pp-${lay}">Pajak <small class="muted">(% dari harga dasar)</small></label><div class="suffix-input"><input class="input" id="pp-${lay}" name="PajakPersen" inputmode="decimal" placeholder="0" maxlength="6" autocomplete="off"><span>%</span></div>
+      <input type="hidden" name="Pajak"><div class="tax-row"><small class="muted mono" data-calc="PajakRp">= Rp 0</small><span class="tax-chips">${['0', '1,1', '2', '11'].map(v => `<button type="button" class="chip-btn" data-pajak="${v}">${v}%</button>`).join('')}</span></div></div>
   </div>
   <label class="field"><span class="label">Penyesuaian tarif <small class="muted">(boleh minus untuk diskon)</small></span><div class="prefix-input"><span>Rp</span><input class="input money" name="Penyesuaian" inputmode="numeric" placeholder="0"></div></label>
   <div class="pay-total"><div><span class="label">Total tagihan</span><br><span data-calc="TotalText">Harga + pajak + penyesuaian</span></div><b data-calc="Total">Rp 0</b></div>
@@ -1634,8 +1639,14 @@ function setupForm(lay) {
   form.querySelectorAll('.combo').forEach(c => initCombo(c, (id, el) => onComboPick(lay, el.dataset.target, id)));
   refreshFormLists(lay);
 
+  form.addEventListener('click', e => {
+    const b = e.target.closest('[data-pajak]'); if (!b || form.classList.contains('locked')) return;
+    const inp = form.querySelector('[name=PajakPersen]'); inp.value = b.dataset.pajak; inp.classList.remove('invalid');
+    markDirty(lay); recalc(lay);
+  });
   form.addEventListener('input', e => {
     if (e.target.classList.contains('money')) formatMoneyInput(e.target);
+    if (e.target.name === 'PajakPersen') { const v = e.target.value.replace(/[^\d.,]/g, ''); if (v !== e.target.value) e.target.value = v; }
     if (e.target.name === 'NoPolMobil' || e.target.name === 'NoRangka') { const p = e.target.selectionStart; e.target.value = e.target.value.toUpperCase(); e.target.setSelectionRange(p, p); }
     if (e.target.classList.contains('invalid')) e.target.classList.remove('invalid');
     if (e.target.name === 'Status') return;
@@ -1729,6 +1740,9 @@ function collectForm(lay) {
 }
 function applyValues(lay, data) {
   const st = FORMS[lay]; st.loading = true;
+  if (data && String(data.PajakPersen || '').trim() === '' && num(data.Pajak) > 0 && num(data.Harga) > 0) {
+    data = Object.assign({}, data, { PajakPersen: fmtPersen(num(data.Pajak) / num(data.Harga) * 100) });
+  } else if (data && String(data.PajakPersen || '').trim() !== '') data = Object.assign({}, data, { PajakPersen: fmtPersen(data.PajakPersen) });
   Object.entries(data || {}).forEach(([k, v]) => {
     const el = st.el.querySelector(`[name="${k}"]`); if (!el) return;
     if (el.type === 'hidden' && el.closest('.combo')) comboSet(el.closest('.combo'), v);
@@ -1742,7 +1756,7 @@ function fillForm(lay, rec) {
   const st = FORMS[lay]; const form = st.el;
   st.rec = rec ? Object.assign({}, rec) : null;
   st.loading = true;
-  form.querySelectorAll('[name]').forEach(el => { if (el.type !== 'hidden' || el.closest('.combo')) el.value = ''; el.classList.remove('invalid'); });
+  form.querySelectorAll('[name]').forEach(el => { if (el.type !== 'hidden' || el.closest('.combo') || el.name === 'Pajak') el.value = ''; el.classList.remove('invalid'); });
   form.querySelectorAll('.combo').forEach(c => comboSet(c, ''));
   form.querySelector('[name=Status]').value = 'Dijadwalkan';
   if (rec) applyValues(lay, rec);
@@ -1855,7 +1869,12 @@ function recalc(lay) {
   const st = FORMS[lay]; if (!st) return; const form = st.el;
   const v = n => num(form.querySelector(`[name="${n}"]`).value);
   const pay = form.querySelector('[name=Pembayaran]').value;
-  const total = v('Harga') + v('Pajak') + v('Penyesuaian');
+  const ppEl = form.querySelector('[name=PajakPersen]'), pp = persenNum(ppEl.value);
+  const pajak = Math.round(v('Harga') * pp / 100);
+  form.querySelector('[name=Pajak]').value = ppEl.value.trim() === '' ? '' : String(pajak);
+  form.querySelector('[data-calc="PajakRp"]').textContent = '= ' + rp(pajak) + (pp ? ' (' + fmtPersen(pp) + '% × ' + rp(v('Harga')) + ')' : '');
+  form.querySelectorAll('[data-pajak]').forEach(b => b.classList.toggle('on', ppEl.value.trim() !== '' && persenNum(b.dataset.pajak.replace(',', '.')) === pp));
+  const total = v('Harga') + pajak + v('Penyesuaian');
   form.querySelector('[data-calc="Total"]').textContent = rp(total);
   form.querySelector('[data-calc="TotalText"]').textContent = pay ? 'Metode: ' + pay : 'Harga + pajak + penyesuaian';
   const hari = form.querySelector('[data-pay="hari"]'), dp = form.querySelector('[data-pay="dp"]'), due = form.querySelector('[data-pay="due"]');
@@ -1875,6 +1894,8 @@ function validateForm(lay) {
   const st = FORMS[lay], form = st.el, data = collectForm(lay);
   form.querySelectorAll('.invalid').forEach(e => e.classList.remove('invalid'));
   const miss = REQ[lay].filter(([k]) => !String(data[k] || '').trim() || (MONEY.includes(k) && num(data[k]) <= 0));
+  const ppRaw = String(data.PajakPersen || '').trim();
+  if (ppRaw !== '' && (!/^\d{1,3}([.,]\d{1,2})?$/.test(ppRaw) || parseFloat(ppRaw.replace(',', '.')) > 100)) miss.push(['PajakPersen', 'Pajak (0–100%, maks. 2 desimal)']);
   if (data.Pembayaran === 'Termin' && !(num(data.TerminHari) > 0)) miss.push(['TerminHari', 'Jumlah hari termin']);
   if (data.Pembayaran === 'DP') { const tot = num(data.Harga) + num(data.Pajak) + num(data.Penyesuaian); if (!(num(data.DP) > 0) || num(data.DP) > tot) miss.push(['DP', 'Nominal DP (≤ total)']); }
   if (!miss.length) return true;
@@ -2654,7 +2675,7 @@ function bankBox(list) {
 function priceTable(o) {
   return `<table class="t" style="margin-top:7px"><tr><th>Rincian biaya</th><th class="num">Jumlah</th></tr>
     <tr><td>Harga dasar ${o.Layanan === 'sewa' ? 'sewa' : 'pengiriman'}</td><td class="num">${rp(o.Harga)}</td></tr>
-    ${num(o.Pajak) ? `<tr><td>Pajak</td><td class="num">${rp(o.Pajak)}</td></tr>` : ''}
+    ${num(o.Pajak) ? `<tr><td>${esc(labelPajak(o))}</td><td class="num">${rp(o.Pajak)}</td></tr>` : ''}
     ${num(o.Penyesuaian) ? `<tr><td>Penyesuaian tarif</td><td class="num">${rp(o.Penyesuaian)}</td></tr>` : ''}
     <tr><td style="font-weight:700">TOTAL · ${esc(o.Pembayaran === 'Termin' ? 'Pembayaran termin' : o.Pembayaran)}</td><td class="num" style="font-weight:700;font-size:12px">${rp(o.Total)}</td></tr>
     ${o.Pembayaran === 'DP' ? `<tr><td>DP diterima</td><td class="num">${rp(o.DP)}</td></tr><tr><td>Sisa tagihan</td><td class="num">${rp(o.Sisa)}</td></tr>` : ''}</table>`;
@@ -2747,7 +2768,7 @@ function docInvoice(i, forPdf) {
     <table class="t"><tr><th style="width:4%">No</th><th style="width:13%">No. SJ</th><th style="width:12%">Tanggal</th><th>Layanan / rute &amp; keterangan</th><th class="num">Harga</th><th class="num">Pajak</th><th class="num">Penyesuaian</th><th class="num">Total</th></tr>
       <tr><td>1</td><td><b>${esc(i.NoSJ)}</b></td><td>${tglPendek(o.Tanggal || i.Tanggal)}</td><td>${desc}</td><td class="num">${fnum(o.Harga)}</td><td class="num">${fnum(o.Pajak)}</td><td class="num">${fnum(o.Penyesuaian)}</td><td class="num"><b>${fnum(i.Total)}</b></td></tr></table>
     <table style="margin-top:10px"><tr><td style="vertical-align:top;padding-right:16px"><div class="box"><div class="lbl">Terbilang</div><i>${esc(terbilang(i.Tagihan))}</i></div>${bankBox(payAccountsFor(o))}</td>
-      <td style="width:40%;vertical-align:top"><table class="t"><tr><td>Subtotal</td><td class="num">${rp(o.Harga)}</td></tr><tr><td>Pajak</td><td class="num">${rp(o.Pajak)}</td></tr><tr><td>Penyesuaian tarif</td><td class="num">${rp(o.Penyesuaian)}</td></tr><tr><td>Total</td><td class="num">${rp(i.Total)}</td></tr>
+      <td style="width:40%;vertical-align:top"><table class="t"><tr><td>Subtotal</td><td class="num">${rp(o.Harga)}</td></tr><tr><td>${esc(labelPajak(o))}</td><td class="num">${rp(o.Pajak)}</td></tr><tr><td>Penyesuaian tarif</td><td class="num">${rp(o.Penyesuaian)}</td></tr><tr><td>Total</td><td class="num">${rp(i.Total)}</td></tr>
         ${num(i.DP) ? `<tr><td>DP diterima</td><td class="num">− ${rp(i.DP)}</td></tr>` : ''}<tr><td style="font-weight:800;color:${acc}">TOTAL TAGIHAN</td><td class="num" style="font:800 14px Arial;color:${acc}">${rp(i.Tagihan)}</td></tr></table></td></tr></table>
     <table style="margin-top:28px"><tr><td></td><td style="width:34%;text-align:center"><div>Hormat kami,</div><div style="height:64px"></div><div style="border-top:1px solid #94A3B8;padding-top:4px;font-weight:700">${esc(st.companyName || '')}</div></td></tr></table>
     ${docFooter('Mohon cantumkan nomor invoice pada berita transfer.')}</div>`;
