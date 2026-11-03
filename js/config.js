@@ -5,6 +5,5 @@
    dijaga oleh login email + kata sandi di dalam aplikasi.
    ============================================================ */
 window.KAGUMI_CONFIG = {
-  GAS_URL: 'https://script.google.com/macros/s/AKfycbwtvvwGdJbMeFQmhtWxZnpfLm8h1M4fZ05Txx8VcjXASqqycK4UKUAuhimRY6ejm_94/exec
-'
-};
+  GAS_URL: 'https://script.google.com/macros/s/AKfycbwtvvwGdJbMeFQmhtWxZnpfLm8h1M4fZ05Txx8VcjXASqqycK4UKUAuhimRY6ejm_94/exec'
+}
