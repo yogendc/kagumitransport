@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#006C49">
+  <title>KAGUMI Transport</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2216%22 fill=%22%23006C49%22/%3E%3Cpath d=%22M14 22h22v18H14zM36 28h8l6 6v6H36z%22 fill=%22white%22/%3E%3Ccircle cx=%2222%22 cy=%2243%22 r=%225%22 fill=%22white%22/%3E%3Ccircle cx=%2244%22 cy=%2243%22 r=%225%22 fill=%22white%22/%3E%3C/svg%3E">
+</head>
+<body>
+
+<!-- ═══════════════ Layar awal (muncul < 1 detik) ═══════════════ -->
+<div id="bootSplash" class="boot-splash" aria-live="polite">
+  <div class="boot-mark"><i class="bi bi-truck"></i></div>
+  <div class="boot-bar"><span></span></div>
+</div>
+
+<!-- ═══════════════ HALAMAN MASUK ═══════════════ -->
+<div id="loginView" class="login-view" hidden>
+  <section class="login-brand" aria-hidden="false">
+    <svg class="login-routes" viewBox="0 0 600 800" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <defs>
+        <linearGradient id="lr" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity=".0"/><stop offset=".5" stop-color="#fff" stop-opacity=".35"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+      </defs>
+      <path d="M-20 640 C 120 560, 180 700, 320 600 S 520 470, 640 520" stroke="url(#lr)" stroke-width="2" fill="none" stroke-dasharray="6 10"/>
+      <path d="M-40 420 C 90 360, 210 470, 330 390 S 520 250, 660 300" stroke="url(#lr)" stroke-width="2" fill="none" stroke-dasharray="2 9"/>
+      <path d="M-30 210 C 140 150, 230 260, 360 190 S 540 90, 650 120" stroke="url(#lr)" stroke-width="1.5" fill="none"/>
+      <circle cx="320" cy="600" r="5" fill="#fff" fill-opacity=".55"/><circle cx="320" cy="600" r="14" fill="none" stroke="#fff" stroke-opacity=".25"/>
+      <circle cx="330" cy="390" r="4" fill="#fff" fill-opacity=".5"/><circle cx="360" cy="190" r="4" fill="#fff" fill-opacity=".45"/>
+    </svg>
+    <div class="login-brand-inner">
+      <div class="brand-row">
+        <div class="brand-logo" id="loginLogo"><i class="bi bi-truck"></i></div>
+        <div>
+          <div class="brand-name" id="loginAppName">KAGUMI Transport</div>
+          <div class="brand-sub" id="loginSub">Portal operasional internal</div>
+        </div>
+      </div>
+      <h1 class="login-headline" id="loginTagline">Administrasi sewa dan pengiriman kendaraan dalam satu tempat.</h1>
+      <ul class="login-points">
+        <li id="loginP1"><span class="lp-ic"><i class="bi bi-file-earmark-text"></i></span><div><b id="loginP1Judul">Surat jalan bernomor otomatis</b><span id="loginP1Teks">Nomor berurutan, siap cetak dengan atau tanpa nominal.</span></div></li>
+        <li id="loginP2"><span class="lp-ic"><i class="bi bi-bell"></i></span><div><b id="loginP2Judul">Pengingat jatuh tempo</b><span id="loginP2Teks">Tagihan termin terpantau, pengingat lewat WhatsApp dan email.</span></div></li>
+        <li id="loginP3"><span class="lp-ic"><i class="bi bi-folder-check"></i></span><div><b id="loginP3Judul">Arsip rapi di Google Drive</b><span id="loginP3Teks">PDF surat jalan, tanda terima, dan foto inspeksi tersimpan otomatis.</span></div></li>
+      </ul>
+      <div class="login-foot" id="loginFoot">Akses terbatas untuk pengguna internal</div>
+    </div>
+  </section>
+
+  <section class="login-panel">
+    <div class="login-card">
+      <div class="login-mobile-brand">
+        <div class="brand-logo sm" id="loginLogoSm"><i class="bi bi-truck"></i></div>
+        <span id="loginAppNameSm">KAGUMI Transport</span>
+      </div>
+      <p class="eyebrow">Selamat datang kembali</p>
+      <h2>Masuk ke akun Anda</h2>
+      <p class="muted">Gunakan akun yang sudah didaftarkan oleh Super Admin.</p>
+
+      <div id="loginAlert" class="alert alert-danger" role="alert" hidden></div>
+      <div id="setupAlert" class="alert alert-warning" hidden>
+        <i class="bi bi-tools"></i>
+        <div><b>Aplikasi belum di-setup.</b> Jalankan fungsi <code>setupAppEnvironment</code> sekali dari editor Apps Script.</div>
+      </div>
+
+      <button type="button" id="btnGoogle" class="btn btn-google btn-block" hidden>
+        <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
+        <span id="btnGoogleText">Lanjutkan dengan Google</span>
+      </button>
+      <div class="divider-text" id="loginDivider" hidden><span>atau masuk dengan email</span></div>
+
+      <form id="loginForm" novalidate autocomplete="on">
+        <label class="field">
+          <span class="label">Email</span>
+          <span class="input-icon"><i class="bi bi-envelope"></i>
+            <input class="input" type="email" id="loginEmail" autocomplete="username" placeholder="nama@email.com" required>
+          </span>
+        </label>
+        <label class="field">
+          <span class="label">Kata sandi</span>
+          <span class="input-icon"><i class="bi bi-lock"></i>
+            <input class="input" type="password" id="loginPass" autocomplete="current-password" placeholder="Kata sandi" required>
+            <button type="button" class="input-action" id="togglePass" aria-label="Tampilkan kata sandi"><i class="bi bi-eye"></i></button>
+          </span>
+        </label>
+        <button type="submit" class="btn btn-primary btn-block btn-lg" id="btnLogin">
+          <span>Masuk</span><i class="bi bi-arrow-right"></i>
+        </button>
+      </form>
+      <p class="login-help"><i class="bi bi-shield-lock"></i> Lupa kata sandi? Hubungi Super Admin untuk mereset.</p>
+    </div>
+    <p class="login-copy" id="loginCopy"></p>
+  </section>
+</div>
+
+<!-- ═══════════════ APLIKASI ═══════════════ -->
+<div id="appView" class="app" hidden>
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+  <aside class="sidebar" id="sidebar" aria-label="Navigasi utama">
+    <div class="sb-brand">
+      <div class="brand-logo" id="sbLogo"><i class="bi bi-truck"></i></div>
+      <div class="sb-brand-text">
+        <div class="sb-name" id="sbAppName">KAGUMI</div>
+        <div class="sb-tag" id="sbTagline">Transport</div>
+      </div>
+      <button class="icon-btn sb-close" id="sbClose" aria-label="Tutup menu"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <nav class="sb-nav" id="sbNav">
+      <div class="sb-group">Operasional</div>
+      <a class="sb-link" data-page="ringkasan" href="javascript:void(0)"><i class="bi bi-grid-1x2"></i><span>Ringkasan</span></a>
+      <a class="sb-link" data-page="sewa" href="javascript:void(0)"><i class="bi bi-truck-front"></i><span>Form Sewa Kendaraan</span></a>
+      <a class="sb-link" data-page="kirim" href="javascript:void(0)"><i class="bi bi-truck"></i><span>Form Kirim Mobil</span></a>
+      <a class="sb-link" data-page="inspeksi" href="javascript:void(0)"><i class="bi bi-clipboard2-check"></i><span>Form Inspeksi</span></a>
+      <a class="sb-link" data-page="rekap" href="javascript:void(0)"><i class="bi bi-journal-text"></i><span>Rekap Order</span><b class="sb-badge neutral" id="badgeDraf" hidden></b></a>
+      <a class="sb-link" data-page="invoice" href="javascript:void(0)"><i class="bi bi-receipt"></i><span>Invoice &amp; Tagihan</span><b class="sb-badge danger" id="badgeInvoice" hidden></b></a>
+      <button class="sb-link sb-toggle" id="sbMasterToggle" aria-expanded="true"><i class="bi bi-database"></i><span>Data Master</span><i class="bi bi-chevron-down chev"></i></button>
+      <div class="sb-sub" id="sbMaster">
+        <a class="sb-link" data-page="pelanggan" href="javascript:void(0)"><i class="bi bi-buildings"></i><span>Data Pelanggan</span></a>
+        <a class="sb-link" data-page="kendaraan" href="javascript:void(0)"><i class="bi bi-car-front"></i><span>Data Kendaraan</span><b class="sb-badge warn" id="badgeArmada" hidden></b></a>
+        <a class="sb-link" data-page="pengemudi" href="javascript:void(0)"><i class="bi bi-person-badge"></i><span>Data Pengemudi</span><b class="sb-badge warn" id="badgeDriver" hidden></b></a>
+        <a class="sb-link" data-page="penerima" href="javascript:void(0)"><i class="bi bi-geo-alt"></i><span>Data Penerima</span></a>
+      </div>
+      <div class="sa-only">
+        <div class="sb-group">Super Admin</div>
+        <a class="sb-link" data-page="finance" href="javascript:void(0)"><i class="bi bi-wallet2"></i><span>Keuangan &amp; Finance</span></a>
+        <a class="sb-link" data-page="laporan" href="javascript:void(0)"><i class="bi bi-bar-chart-line"></i><span>Laporan &amp; Export</span></a>
+        <a class="sb-link" data-page="pengaturan" href="javascript:void(0)"><i class="bi bi-gear"></i><span>Pengaturan Sistem</span></a>
+      </div>
+    </nav>
+    <div class="sb-user">
+      <button class="sb-user-btn" id="userMenuBtn" aria-haspopup="menu">
+        <span class="avatar" id="sbAvatar">A</span>
+        <span class="sb-user-text"><b id="sbUserName">Pengguna</b><small id="sbUserRole">Admin</small></span>
+        <i class="bi bi-three-dots-vertical"></i>
+      </button>
+      <div class="menu up" id="userMenu" role="menu" hidden>
+        <button role="menuitem" data-act="password"><i class="bi bi-key"></i> Ubah kata sandi</button>
+        <button role="menuitem" data-act="theme"><i class="bi bi-moon-stars"></i> <span id="themeMenuText">Mode gelap</span></button>
+        <button role="menuitem" data-act="refresh"><i class="bi bi-arrow-clockwise"></i> Muat ulang data</button>
+        <hr>
+        <button role="menuitem" data-act="logout" class="danger"><i class="bi bi-box-arrow-left"></i> Keluar</button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-btn only-mobile" id="btnMenu" aria-label="Buka menu"><i class="bi bi-list"></i></button>
+      <div class="crumb"><i class="bi bi-house"></i><span>/</span><b id="crumbTitle">Ringkasan</b></div>
+      <div class="top-search">
+        <i class="bi bi-search"></i>
+        <input id="globalSearch" class="input" type="search" placeholder="Cari no. surat jalan, nopol, pelanggan…" autocomplete="off">
+        <kbd>/</kbd>
+        <div class="search-pop" id="searchPop" hidden></div>
+      </div>
+      <div class="top-right">
+        <span class="chip chip-date" id="todayChip"><i class="bi bi-calendar3"></i><span></span></span>
+        <span class="sync-dot" id="syncDot" title="Data tersinkron"></span>
+        <button class="icon-btn" id="btnTheme" aria-label="Ganti tema"><i class="bi bi-moon-stars"></i></button>
+        <div class="pos-rel">
+          <button class="icon-btn" id="btnBell" aria-label="Notifikasi"><i class="bi bi-bell"></i><i class="bell-dot" id="bellDot" hidden></i></button>
+          <div class="menu notif" id="notifMenu" hidden></div>
+        </div>
+      </div>
+    </header>
+
+    <main class="content" id="content">
+
+      <!-- ───────── RINGKASAN ───────── -->
+      <section class="page" id="page-ringkasan" data-title="Ringkasan"></section>
+
+      <!-- ───────── FORM SEWA ───────── -->
+      <section class="page" id="page-sewa" data-title="Form Sewa Kendaraan">
+        <form id="formSewa" class="order-form" data-layanan="sewa" novalidate autocomplete="off">
+          <div class="page-head">
+            <div class="ph-icon"><i class="bi bi-truck-front"></i></div>
+            <div>
+              <h1>Formulir Sewa Kendaraan <small>(dengan pengemudi)</small></h1>
+              <p class="muted">Isi data lalu simpan draf atau konfirmasi untuk menerbitkan surat jalan.</p>
+            </div>
+            <div class="ph-actions">
+              <button type="button" class="btn btn-ghost" data-act="new"><i class="bi bi-plus-lg"></i> Order baru</button>
+            </div>
+          </div>
+          <div class="lock-banner" hidden></div>
+          <div class="meta-strip">
+            <div><span class="label">Tanggal &amp; waktu input</span><div class="meta-val"><i class="bi bi-clock"></i><span data-meta="Tanggal">Otomatis</span><span class="chip chip-soft">WIB</span></div></div>
+            <div><span class="label">No. surat jalan</span><div class="meta-val strong"><i class="bi bi-hash"></i><span data-meta="NoSJ">Terbit saat konfirmasi</span><i class="bi bi-lock-fill dim"></i></div></div>
+            <div><span class="label">Status</span><select class="input" name="Status"></select></div>
+            <div><span class="label">No. unik entri <i class="bi bi-eye-slash" title="Tidak tercetak"></i></span><div class="meta-val mono"><span data-meta="NoUnik">—</span></div></div>
+          </div>
+
+          <div class="form-grid">
+            <div class="card">
+              <div class="card-h"><span class="num">1</span><div><h3>Data pelanggan</h3><p>Hanya nama pelanggan yang tercetak pada surat jalan.</p></div></div>
+              <div class="field">
+                <div class="label-row"><span class="label req">Nama pelanggan</span><button type="button" class="link-btn" data-add="pelanggan"><i class="bi bi-person-plus"></i> Tambah baru</button></div>
+                <div class="combo" data-combo="pelanggan" data-target="PelangganID"><i class="bi bi-search"></i><input class="input combo-input" placeholder="Cari nama pelanggan…"><input type="hidden" name="PelangganID"></div>
+              </div>
+              <div class="row-2">
+                <label class="field"><span class="label req">ID pelanggan</span><select class="input" name="KodePelanggan"><option value="">Pilih pelanggan dulu</option></select></label>
+                <div class="field"><span class="label">No. telepon</span><div class="readonly" data-info="NoHP">—</div></div>
+              </div>
+              <div class="row-2">
+                <div class="field"><span class="label">NPWP</span><div class="readonly mono" data-info="NPWP">—</div></div>
+                <div class="field"><span class="label">Alamat</span><div class="readonly" data-info="Alamat">—</div></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-h"><span class="num"><i class="bi bi-geo"></i></span><div><h3>Lokasi muat &amp; bongkar</h3><p>Tampil pada surat jalan.</p></div></div>
+              <div class="loc-box">
+                <div class="loc-title"><i class="bi bi-box-arrow-up"></i> Lokasi muat</div>
+                <div class="row-2">
+                  <label class="field"><span class="label req">Nama PIC muat</span><input class="input" name="MuatPIC" maxlength="80"></label>
+                  <label class="field"><span class="label req">No. HP PIC muat</span><input class="input" name="MuatHP" inputmode="tel" maxlength="20"></label>
+                </div>
+                <label class="field"><span class="label req">Alamat muat</span><textarea class="input" name="MuatAlamat" rows="2" maxlength="300"></textarea></label>
+              </div>
+              <div class="loc-box">
+                <div class="loc-title"><i class="bi bi-box-arrow-in-down"></i> Lokasi bongkar</div>
+                <div class="row-2">
+                  <label class="field"><span class="label req">Nama PIC bongkar</span><input class="input" name="BongkarPIC" maxlength="80"></label>
+                  <label class="field"><span class="label req">No. HP PIC bongkar</span><input class="input" name="BongkarHP" inputmode="tel" maxlength="20"></label>
+                </div>
+                <label class="field"><span class="label req">Alamat bongkar</span><textarea class="input" name="BongkarAlamat" rows="2" maxlength="300"></textarea></label>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-h"><span class="num">2</span><div><h3>Armada, pengemudi &amp; muatan</h3><p>Pilih dari data master atau tambah baru.</p></div></div>
+              <label class="field"><span class="label req">Jenis kendaraan sewa</span><select class="input" name="JenisKendaraan"></select></label>
+              <div class="field">
+                <div class="label-row"><span class="label req">Unit kendaraan</span><button type="button" class="link-btn" data-add="kendaraan"><i class="bi bi-plus-circle"></i> Tambah unit</button></div>
+                <div class="combo" data-combo="kendaraan" data-target="KendaraanID"><i class="bi bi-search"></i><input class="input combo-input" placeholder="Cari nopol / merk…"><input type="hidden" name="KendaraanID"></div>
+                <div class="warn-line" data-warn="kendaraan" hidden></div>
+              </div>
+              <div class="field">
+                <div class="label-row"><span class="label req">Pengemudi</span><button type="button" class="link-btn" data-add="pengemudi"><i class="bi bi-person-plus"></i> Tambah pengemudi</button></div>
+                <div class="combo" data-combo="pengemudi" data-target="PengemudiID"><i class="bi bi-search"></i><input class="input combo-input" placeholder="Cari nama pengemudi…"><input type="hidden" name="PengemudiID"></div>
+                <div class="warn-line" data-warn="pengemudi" hidden></div>
+              </div>
+              <label class="field"><span class="label req">Jenis muatan</span><textarea class="input" name="JenisMuatan" rows="2" maxlength="300" placeholder="Contoh: Komponen otomotif dalam pallet"></textarea></label>
+              <div class="row-3">
+                <label class="field"><span class="label">Satuan</span><input class="input" name="Satuan" list="dlSatuan" placeholder="Pallet / Koli"></label>
+                <label class="field"><span class="label">Jumlah</span><input class="input" name="Kuantitas" inputmode="numeric" placeholder="0"></label>
+                <label class="field"><span class="label">Berat / volume</span><input class="input" name="Berat" placeholder="4.200 kg"></label>
+              </div>
+              <label class="field"><span class="label">No. segel</span><input class="input" name="NoSegel" placeholder="Opsional"></label>
+            </div>
+
+            <div class="card pay-card" data-pay-block></div>
+          </div>
+          <div class="action-bar" data-actionbar></div>
+        </form>
+      </section>
+
+      <!-- ───────── FORM KIRIM ───────── -->
+      <section class="page" id="page-kirim" data-title="Form Kirim Mobil">
+        <form id="formKirim" class="order-form" data-layanan="kirim" novalidate autocomplete="off">
+          <div class="page-head">
+            <div class="ph-icon"><i class="bi bi-truck"></i></div>
+            <div>
+              <h1>Formulir Pengiriman Kendaraan <small>(towing &amp; car carrier)</small></h1>
+              <p class="muted">Kondisi fisik kendaraan dicatat pada Form Inspeksi yang tersambung ke surat jalan ini.</p>
+            </div>
+            <div class="ph-actions">
+              <button type="button" class="btn btn-ghost" data-act="new"><i class="bi bi-plus-lg"></i> Order baru</button>
+            </div>
+          </div>
+          <div class="lock-banner" hidden></div>
+          <div class="meta-strip">
+            <div><span class="label">Tanggal penerbitan</span><div class="meta-val"><i class="bi bi-calendar-check"></i><span data-meta="Tanggal">Otomatis</span><span class="chip chip-soft">WIB</span></div></div>
+            <div><span class="label">No. surat jalan</span><div class="meta-val strong"><i class="bi bi-hash"></i><span data-meta="NoSJ">Terbit saat konfirmasi</span><i class="bi bi-lock-fill dim"></i></div></div>
+            <div><span class="label">Status</span><select class="input" name="Status"></select></div>
+            <div><span class="label">Kode unik <i class="bi bi-eye-slash" title="Tidak tercetak"></i></span><div class="meta-val mono"><span data-meta="NoUnik">—</span></div></div>
+          </div>
+
+          <div class="form-grid">
+            <div class="card">
+              <div class="card-h"><span class="num">01</span><div><h3>Pengirim, penerima &amp; layanan</h3><p>Pelanggan sebagai pengirim, penerima di lokasi tujuan.</p></div></div>
+              <div class="field">
+                <div class="label-row"><span class="label req">Pelanggan / pengirim</span><button type="button" class="link-btn" data-add="pelanggan"><i class="bi bi-person-plus"></i> Tambah baru</button></div>
+                <div class="combo" data-combo="pelanggan" data-target="PelangganID"><i class="bi bi-search"></i><input class="input combo-input" placeholder="Cari nama pelanggan…"><input type="hidden" name="PelangganID"></div>
+              </div>
+              <div class="row-2">
+                <label class="field"><span class="label req">ID pelanggan</span><select class="input" name="KodePelanggan"><option value="">Pilih pelanggan dulu</option></select></label>
+                <label class="field"><span class="label req">Jenis layanan</span><select class="input" name="JenisLayanan"></select></label>
+              </div>
+              <label class="field"><span class="label">Alamat penjemputan</span><textarea class="input" name="AsalAlamat" rows="2" maxlength="300" placeholder="Kosongkan bila sama dengan alamat pelanggan"></textarea></label>
+              <div class="sub-box">
+                <div class="label-row"><span class="label req"><i class="bi bi-geo-alt"></i> Penerima (tujuan)</span><button type="button" class="link-btn" data-add="penerima"><i class="bi bi-plus-circle"></i> Tambah penerima</button></div>
+                <div class="combo" data-combo="penerima" data-target="PenerimaID"><i class="bi bi-search"></i><input class="input combo-input" placeholder="Cari nama penerima…"><input type="hidden" name="PenerimaID"></div>
+                <div class="info-grid">
+                  <div><span class="label">No. HP / WhatsApp</span><div class="readonly" data-info="PenerimaHP">—</div></div>
+                  <div><span class="label">Alamat tujuan</span><div class="readonly" data-info="PenerimaAlamat">—</div></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-h"><span class="num">02</span><div><h3>Kendaraan yang dikirim</h3><p>Sesuai STNK / BPKB.</p></div></div>
+              <div class="row-2">
+                <label class="field"><span class="label req">No. polisi</span><input class="input mono upper" name="NoPolMobil" maxlength="15" placeholder="B 1234 ABC"></label>
+                <label class="field"><span class="label req">Warna</span><input class="input" name="Warna" maxlength="40"></label>
+              </div>
+              <div class="row-2">
+                <label class="field"><span class="label req">Merk mobil</span><select class="input" name="Merk"></select></label>
+                <label class="field"><span class="label req">Tahun pembuatan</span><select class="input" name="Tahun"></select></label>
+              </div>
+              <div class="row-3">
+                <label class="field"><span class="label">Tipe</span><input class="input" name="Tipe" maxlength="60" placeholder="Innova"></label>
+                <label class="field"><span class="label">Jenis</span><input class="input" name="JenisMobil" maxlength="60" placeholder="MPV"></label>
+                <label class="field"><span class="label">Model</span><input class="input" name="Model" maxlength="60" placeholder="2.0 Q AT"></label>
+              </div>
+              <label class="field"><span class="label">No. rangka (VIN)</span><input class="input mono upper" name="NoRangka" maxlength="30"></label>
+            </div>
+
+            <div class="card">
+              <div class="card-h"><span class="num">03</span><div><h3>Unit pengangkut &amp; pengemudi</h3><p>Opsional, untuk memfilter rekap per unit dan pengemudi.</p></div></div>
+              <div class="field">
+                <div class="label-row"><span class="label">Unit towing / carrier</span><button type="button" class="link-btn" data-add="kendaraan"><i class="bi bi-plus-circle"></i> Tambah unit</button></div>
+                <div class="combo" data-combo="kendaraan" data-target="UnitID"><i class="bi bi-search"></i><input class="input combo-input" placeholder="Cari nopol unit…"><input type="hidden" name="UnitID"></div>
+                <div class="warn-line" data-warn="kendaraan" hidden></div>
+              </div>
+              <div class="field">
+                <div class="label-row"><span class="label">Pengemudi</span><button type="button" class="link-btn" data-add="pengemudi"><i class="bi bi-person-plus"></i> Tambah pengemudi</button></div>
+                <div class="combo" data-combo="pengemudi" data-target="PengemudiID"><i class="bi bi-search"></i><input class="input combo-input" placeholder="Cari nama pengemudi…"><input type="hidden" name="PengemudiID"></div>
+                <div class="warn-line" data-warn="pengemudi" hidden></div>
+              </div>
+              <div class="insp-box" id="kirimInspBox">
+                <div><b><i class="bi bi-clipboard2-check"></i> Form inspeksi body</b><span class="muted" data-insp-text>Belum diisi</span></div>
+                <button type="button" class="btn btn-secondary btn-sm" data-act="inspeksi"><i class="bi bi-pencil-square"></i> Isi form inspeksi</button>
+              </div>
+            </div>
+
+            <div class="card pay-card" data-pay-block></div>
+          </div>
+          <div class="action-bar" data-actionbar></div>
+        </form>
+      </section>
+
+      <!-- ───────── FORM INSPEKSI ───────── -->
+      <section class="page" id="page-inspeksi" data-title="Form Inspeksi">
+        <div class="page-head">
+          <div class="ph-icon"><i class="bi bi-clipboard2-check"></i></div>
+          <div>
+            <h1>Form Inspeksi Body Kendaraan</h1>
+            <p class="muted">Serah terima kondisi fisik eksterior mobil yang dikirim.</p>
+          </div>
+        </div>
+        <div class="card insp-pick">
+          <div class="field grow">
+            <span class="label req">Surat jalan pengiriman</span>
+            <div class="combo" data-combo="orderKirim" data-target="InspOrderID"><i class="bi bi-search"></i><input class="input combo-input" placeholder="Cari no. surat jalan, nopol, atau pelanggan…"><input type="hidden" id="InspOrderID"></div>
+          </div>
+          <div class="insp-pick-status" id="inspPickStatus"></div>
+        </div>
+        <div id="inspEmpty"></div>
+        <form id="formInspeksi" novalidate hidden>
+          <div class="lock-banner" hidden></div>
+          <div class="insp-sheet">
+            <div class="insp-head">
+              <div class="ih-left"><span class="ih-ic"><i class="bi bi-car-front"></i></span>
+                <div><h2>FORM INSPEKSI BODY KENDARAAN</h2><span class="chip chip-amber">Serah terima kondisi body</span></div></div>
+              <div class="ih-right"><div><span>No. surat jalan</span><b data-insp="NoSJ">—</b></div><div><span>Tanggal</span><b data-insp="Tanggal">—</b></div></div>
+            </div>
+            <div class="insp-grid">
+              <div class="card">
+                <div class="card-h"><span class="num"><i class="bi bi-info-lg"></i></span><div><h3>Data kendaraan</h3><p>Otomatis dari form pengiriman, tidak dapat diubah di sini.</p></div></div>
+                <dl class="kv" id="inspVehicle"></dl>
+                <label class="field"><span class="label">KM odometer</span><input class="input" name="KM" inputmode="numeric" placeholder="0"></label>
+              </div>
+              <div class="card">
+                <div class="card-h"><span class="num"><i class="bi bi-shield-check"></i></span><div><h3>Kondisi body (ringkas)</h3></div></div>
+                <div class="radio-cards" id="inspKondisi">
+                  <label><input type="radio" name="KondisiRingkas" value="Baik"><span><b>Baik</b><small>Tidak ada kerusakan</small></span></label>
+                  <label><input type="radio" name="KondisiRingkas" value="Ada Catatan"><span><b>Ada catatan</b><small>Gores atau penyok ringan</small></span></label>
+                  <label><input type="radio" name="KondisiRingkas" value="Rusak"><span><b>Rusak</b><small>Wajib keterangan detail</small></span></label>
+                </div>
+                <div class="legend" id="inspLegend"></div>
+              </div>
+            </div>
+            <div class="insp-grid wide">
+              <div class="card pad0">
+                <div class="card-h pad"><span class="num"><i class="bi bi-list-check"></i></span><div><h3>Checklist body eksterior</h3><p id="inspCount">19 bagian diperiksa</p></div></div>
+                <div class="table-wrap"><table class="table checklist"><thead><tr><th>Bagian eksterior</th><th style="width:170px">Kondisi</th><th>Catatan</th></tr></thead><tbody id="inspChecklist"></tbody></table></div>
+              </div>
+              <div class="stack">
+                <div class="card">
+                  <div class="card-h"><span class="num"><i class="bi bi-chat-square-text"></i></span><div><h3>Catatan detail temuan</h3><p>Tersusun otomatis dari checklist.</p></div></div>
+                  <ol class="temuan" id="inspTemuan"></ol>
+                </div>
+                <div class="card">
+                  <div class="card-h"><span class="num"><i class="bi bi-camera"></i></span><div><h3>Dokumentasi foto</h3><p id="inspFotoCount">0/6 terisi · dikompres otomatis</p></div></div>
+                  <div class="photo-grid" id="inspPhotos"></div>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <label class="field"><span class="label">Keterangan tambahan</span><textarea class="input" name="Catatan" rows="3" maxlength="1500" placeholder="Barang bawaan, kelengkapan kunci & STNK, dll."></textarea></label>
+              <div class="row-3 sign-row">
+                <label class="field"><span class="label">Diserahkan (pengirim)</span><input class="input" name="NamaPengirim" maxlength="80"></label>
+                <label class="field"><span class="label">Diperiksa (inspektur)</span><input class="input" name="NamaInspektur" maxlength="80"></label>
+                <label class="field"><span class="label">Diterima (pengemudi)</span><input class="input" name="NamaPenerimaUnit" maxlength="80"></label>
+              </div>
+            </div>
+          </div>
+          <div class="action-bar">
+            <div class="ab-info muted" id="inspInfo"></div>
+            <button type="button" class="btn btn-secondary" data-act="cetak"><i class="bi bi-printer"></i> Cetak form fisik</button>
+            <button type="button" class="btn btn-indigo" data-act="simpan"><i class="bi bi-save"></i> Simpan</button>
+            <button type="button" class="btn btn-primary" data-act="sahkan"><i class="bi bi-patch-check"></i> Sahkan &amp; lampirkan</button>
+          </div>
+        </form>
+        <div class="card mt" id="inspList"></div>
+      </section>
+
+      <!-- ───────── REKAP, INVOICE, MASTER, FINANCE, LAPORAN, PENGATURAN (dirender JS) ───────── -->
+      <section class="page" id="page-rekap" data-title="Rekap Order"></section>
+      <section class="page" id="page-invoice" data-title="Invoice & Tagihan"></section>
+      <section class="page" id="page-pelanggan" data-title="Data Pelanggan"></section>
+      <section class="page" id="page-kendaraan" data-title="Data Kendaraan"></section>
+      <section class="page" id="page-pengemudi" data-title="Data Pengemudi"></section>
+      <section class="page" id="page-penerima" data-title="Data Penerima"></section>
+      <section class="page" id="page-finance" data-title="Keuangan & Finance"></section>
+      <section class="page" id="page-laporan" data-title="Laporan & Export"></section>
+      <section class="page" id="page-pengaturan" data-title="Pengaturan Sistem"></section>
+    </main>
+  </div>
+
+  <!-- Navigasi bawah (ponsel) -->
+  <nav class="bottom-nav" id="bottomNav" aria-label="Navigasi cepat">
+    <button data-page="ringkasan"><i class="bi bi-grid-1x2"></i><span>Ringkasan</span></button>
+    <button data-page="rekap"><i class="bi bi-journal-text"></i><span>Rekap</span></button>
+    <button class="bn-main" data-act="new-order" aria-label="Buat surat jalan"><i class="bi bi-plus-lg"></i></button>
+    <button data-page="invoice"><i class="bi bi-receipt"></i><span>Invoice</span><b class="bn-badge" id="bnBadge" hidden></b></button>
+    <button data-act="menu"><i class="bi bi-list"></i><span>Menu</span></button>
+  </nav>
+</div>
+
+<datalist id="dlSatuan"><option>Pallet</option><option>Koli</option><option>Box</option><option>Unit</option><option>Ton</option><option>Kg</option><option>Rit</option></datalist>
+<datalist id="dlPool"></datalist>
+
+<!-- ═══════════════ MODAL & OVERLAY ═══════════════ -->
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-box">
+    <div class="modal-h">
+      <span class="modal-ic" id="modalIcon"><i class="bi bi-plus"></i></span>
+      <div><h3 id="modalTitle">Judul</h3><p id="modalSub" class="muted"></p></div>
+      <button class="icon-btn" data-close aria-label="Tutup"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-b" id="modalBody"></div>
+    <div class="modal-f" id="modalFoot"></div>
+  </div>
+</div>
+
+<div class="modal" id="confirmBox" role="alertdialog" aria-modal="true" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-box sm">
+    <div class="confirm-b">
+      <span class="confirm-ic" id="confirmIcon"><i class="bi bi-question-lg"></i></span>
+      <h3 id="confirmTitle">Yakin?</h3>
+      <div id="confirmText" class="muted"></div>
+    </div>
+    <div class="modal-f" id="confirmFoot"></div>
+  </div>
+</div>
+
+<div class="drawer" id="drawer" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="drawer-box">
+    <div class="modal-h"><span class="modal-ic"><i class="bi bi-file-earmark-text"></i></span><div><h3 id="drawerTitle">Detail</h3><p id="drawerSub" class="muted"></p></div><button class="icon-btn" data-close aria-label="Tutup"><i class="bi bi-x-lg"></i></button></div>
+    <div class="drawer-b" id="drawerBody"></div>
+    <div class="modal-f" id="drawerFoot"></div>
+  </div>
+</div>
+
+<div class="modal print-modal" id="printModal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-box xl">
+    <div class="modal-h">
+      <span class="modal-ic"><i class="bi bi-printer"></i></span>
+      <div><h3 id="printTitle">Pratinjau cetak</h3><p class="muted" id="printSub"></p></div>
+      <div class="print-actions" id="printActions"></div>
+      <button class="icon-btn" data-close aria-label="Tutup"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="print-stage"><iframe id="printFrame" title="Pratinjau dokumen"></iframe></div>
+    <div class="print-tip"><i class="bi bi-lightbulb"></i> Untuk menyimpan sebagai PDF, pilih "Simpan sebagai PDF" di jendela cetak. Arsip PDF juga tersimpan otomatis di Google Drive.</div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<input type="file" id="filePicker" accept="image/*" hidden>
+
+<script>
+(function () {
+  var errs = [];
+  window.addEventListener('error', function (e) { errs.push((e.message || 'Galat skrip') + (e.lineno ? ' (baris ' + e.lineno + ')' : '')); });
+  function tampil(judul, isi) {
+    var s = document.getElementById('bootSplash');
+    if (!s || s.classList.contains('out') || s.getAttribute('data-err')) return;
+    s.setAttribute('data-err', '1');
+    s.innerHTML = '<div class="boot-err"><div class="boot-mark"><i class="bi bi-exclamation-triangle"></i></div><h2>' + judul + '</h2><p>' + isi + '</p>' +
+      (errs.length ? '<code>' + errs.slice(0, 3).join('<br>').replace(/</g, '&lt;') + '</code>' : '') +
+      '<button type="button" onclick="location.reload()">Muat ulang</button></div>';
+  }
+  window.__kgmCheck = function (akhir) {
+    if (window.__KGM_BOOTED) return;
+    if (!window.__KGM_JS_END) return tampil('Berkas aplikasi tidak termuat', 'Berkas <b>js/app.js</b> tidak termuat. Pastikan folder <b>js/</b> ikut terunggah ke GitHub (bukan file rata di luar folder), lalu tunggu 1–2 menit dan muat ulang dengan Ctrl+Shift+R.');
+    if (!getComputedStyle(document.documentElement).getPropertyValue('--kgm-css-end')) return tampil('Berkas tampilan tidak termuat', 'Berkas <b>css/style.css</b> tidak ditemukan. Pastikan folder <b>css/</b> ikut terunggah ke GitHub, lalu muat ulang dengan Ctrl+Shift+R.');
+    if (errs.length) return tampil('Aplikasi gagal dimulai', 'Terjadi galat saat memuat aplikasi. Kirimkan pesan di bawah ini ke pengembang.');
+    if (akhir) tampil('Aplikasi belum merespons', 'Pemuatan terlalu lama. Periksa koneksi internet, lalu muat ulang dengan Ctrl+Shift+R.');
+  };
+  setTimeout(function () { window.__kgmCheck(true); }, 15000);
+})();
+</script>
+<script src="js/config.js"></script>
+<script src="js/app.js"></script>
+<script>setTimeout(function () { window.__kgmCheck(false); }, 0);</script>
+</body>
+</html>
