@@ -745,4 +745,8 @@ select.input{appearance:none;padding-right:34px;cursor:pointer;
 @media (max-width:640px){.tarif-head{flex-direction:column}.tarif-payer{justify-items:start}}
 .ver-warn{position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:3000;max-width:min(560px,calc(100% - 24px));display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:12px;background:#FEF3C7;color:#78350F;border:1px solid #F59E0B;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.12)}
 .ver-warn button{margin-left:auto;border:0;background:transparent;color:inherit;font-size:16px;cursor:pointer}
+/* Ekspedisi rekanan (internal) */
+.eksp-card{border-style:dashed}
+.eksp-info{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:10px 12px;border-radius:var(--r);background:var(--surface-2);margin-bottom:12px;font-size:13px}
+.eksp-info .t-sub{display:block}
 :root{--kgm-css-end:1}

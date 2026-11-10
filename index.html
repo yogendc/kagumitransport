@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=2.4">
+  <link rel="stylesheet" href="css/style.css?v=2.5">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2216%22 fill=%22%23006C49%22/%3E%3Cpath d=%22M14 22h22v18H14zM36 28h8l6 6v6H36z%22 fill=%22white%22/%3E%3Ccircle cx=%2222%22 cy=%2243%22 r=%225%22 fill=%22white%22/%3E%3Ccircle cx=%2244%22 cy=%2243%22 r=%225%22 fill=%22white%22/%3E%3C/svg%3E">
 </head>
 <body>
@@ -124,6 +124,7 @@
         <a class="sb-link" data-page="kendaraan" href="javascript:void(0)"><i class="bi bi-car-front"></i><span>Data Kendaraan</span><b class="sb-badge warn" id="badgeArmada" hidden></b></a>
         <a class="sb-link" data-page="pengemudi" href="javascript:void(0)"><i class="bi bi-person-badge"></i><span>Data Pengemudi</span><b class="sb-badge warn" id="badgeDriver" hidden></b></a>
         <a class="sb-link" data-page="penerima" href="javascript:void(0)"><i class="bi bi-geo-alt"></i><span>Data Penerima</span></a>
+        <a class="sb-link" data-page="ekspedisi" href="javascript:void(0)"><i class="bi bi-buildings"></i><span>Ekspedisi Rekanan</span></a>
       </div>
       <div class="sa-only">
         <div class="sb-group">Super Admin</div>
@@ -448,6 +449,17 @@
             </div>
 
             <div class="card pay-card" data-pay-block></div>
+
+            <div class="card no-lock eksp-card">
+              <div class="card-h"><span class="num"><i class="bi bi-buildings"></i></span><div><h3>Ekspedisi rekanan <span class="chip chip-soft">Internal</span></h3><p>Opsional. Tidak tercetak di dokumen pelanggan. Admin tetap bisa mengisi setelah resi dikonfirmasi.</p></div></div>
+              <div class="field">
+                <div class="label-row"><span class="label">Ekspedisi</span><button type="button" class="link-btn" data-add="ekspedisi"><i class="bi bi-plus-lg"></i> Tambah baru</button></div>
+                <div class="combo" data-combo="ekspedisi" data-target="EkspedisiID"><i class="bi bi-search"></i><input class="input combo-input" placeholder="Cari ekspedisi rekanan… (opsional)"><input type="hidden" name="EkspedisiID"></div>
+              </div>
+              <div class="eksp-info" data-eksp-info hidden></div>
+              <label class="field"><span class="label">No. resi dari ekspedisi rekanan</span><input class="input" name="ResiEkspedisi" maxlength="60" placeholder="Opsional"></label>
+              <button type="button" class="btn btn-primary btn-sm" data-eksp-save hidden><i class="bi bi-check2"></i> Simpan ekspedisi</button>
+            </div>
           </div>
           <div class="action-bar" data-actionbar></div>
         </form>
@@ -536,6 +548,7 @@
       <section class="page" id="page-kendaraan" data-title="Data Kendaraan"></section>
       <section class="page" id="page-pengemudi" data-title="Data Pengemudi"></section>
       <section class="page" id="page-penerima" data-title="Data Penerima"></section>
+      <section class="page" id="page-ekspedisi" data-title="Ekspedisi Rekanan"></section>
       <section class="page" id="page-finance" data-title="Keuangan & Finance"></section>
       <section class="page" id="page-laporan" data-title="Laporan & Export"></section>
       <section class="page" id="page-pengaturan" data-title="Pengaturan Sistem"></section>
@@ -600,7 +613,7 @@
       <button class="icon-btn" data-close aria-label="Tutup"><i class="bi bi-x-lg"></i></button>
     </div>
     <div class="print-stage"><iframe id="printFrame" title="Pratinjau dokumen"></iframe></div>
-    <div class="print-tip"><i class="bi bi-lightbulb"></i> Untuk menyimpan sebagai PDF, pilih "Simpan sebagai PDF" di jendela cetak. Arsip PDF juga tersimpan otomatis di Google Drive.</div>
+    <div class="print-tip"><i class="bi bi-lightbulb"></i> <b>Cetak</b> untuk printer, <b>Unduh PDF</b> untuk berkas siap kirim. Tanda tangan petugas berupa QR berisi nama pencetak &amp; waktu cetak. Salinan PDF tersimpan otomatis di Google Drive.</div>
   </div>
 </div>
 
@@ -629,8 +642,8 @@
   setTimeout(function () { window.__kgmCheck(true); }, 15000);
 })();
 </script>
-<script src="js/config.js?v=2.4"></script>
-<script src="js/app.js?v=2.4"></script>
+<script src="js/config.js?v=2.5"></script>
+<script src="js/app.js?v=2.5"></script>
 <script>setTimeout(function () { window.__kgmCheck(false); }, 0);</script>
 </body>
 </html>
