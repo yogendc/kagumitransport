@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=2.3">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2216%22 fill=%22%23006C49%22/%3E%3Cpath d=%22M14 22h22v18H14zM36 28h8l6 6v6H36z%22 fill=%22white%22/%3E%3Ccircle cx=%2222%22 cy=%2243%22 r=%225%22 fill=%22white%22/%3E%3Ccircle cx=%2244%22 cy=%2243%22 r=%225%22 fill=%22white%22/%3E%3C/svg%3E">
 </head>
 <body>
@@ -114,6 +114,7 @@
       <a class="sb-link" data-page="ringkasan" href="javascript:void(0)"><i class="bi bi-grid-1x2"></i><span>Ringkasan</span></a>
       <a class="sb-link" data-page="sewa" href="javascript:void(0)"><i class="bi bi-truck-front"></i><span>Form Sewa Kendaraan</span></a>
       <a class="sb-link" data-page="kirim" href="javascript:void(0)"><i class="bi bi-truck"></i><span>Form Kirim Mobil</span></a>
+      <a class="sb-link" data-page="paket" href="javascript:void(0)"><i class="bi bi-box-seam"></i><span>Form Kirim Paket</span></a>
       <a class="sb-link" data-page="inspeksi" href="javascript:void(0)"><i class="bi bi-clipboard2-check"></i><span>Form Inspeksi</span></a>
       <a class="sb-link" data-page="rekap" href="javascript:void(0)"><i class="bi bi-journal-text"></i><span>Rekap Order</span><b class="sb-badge neutral" id="badgeDraf" hidden></b></a>
       <a class="sb-link" data-page="invoice" href="javascript:void(0)"><i class="bi bi-receipt"></i><span>Invoice &amp; Tagihan</span><b class="sb-badge danger" id="badgeInvoice" hidden></b></a>
@@ -344,6 +345,99 @@
         </form>
       </section>
 
+      <!-- ───────── FORM PAKET ───────── -->
+      <section class="page" id="page-paket" data-title="Form Kirim Paket">
+        <form id="formPaket" class="order-form" data-layanan="paket" novalidate autocomplete="off">
+          <div class="page-head">
+            <div class="ph-icon"><i class="bi bi-box-seam"></i></div>
+            <div>
+              <h1>Formulir Pengiriman Paket</h1>
+              <p class="muted">Isi pengirim, penerima, dan daftar barang. Nomor resi terbit saat order dikonfirmasi.</p>
+            </div>
+            <div class="ph-actions">
+              <button type="button" class="btn btn-ghost" data-act="new"><i class="bi bi-plus-lg"></i> Order baru</button>
+            </div>
+          </div>
+          <div class="lock-banner" hidden></div>
+          <div class="meta-strip">
+            <div><span class="label">Tanggal</span><div class="meta-val"><i class="bi bi-calendar-check"></i><span data-meta="Tanggal">Otomatis</span><span class="chip chip-soft">WIB</span></div></div>
+            <div><span class="label">No. resi</span><div class="meta-val strong"><i class="bi bi-upc-scan"></i><span data-meta="NoSJ">Terbit saat konfirmasi</span><i class="bi bi-lock-fill dim"></i></div></div>
+            <div><span class="label">Status</span><select class="input" name="Status"></select></div>
+            <div><span class="label">Kode unik <i class="bi bi-eye-slash" title="Tidak tercetak"></i></span><div class="meta-val mono"><span data-meta="NoUnik">—</span></div></div>
+          </div>
+
+          <div class="form-grid">
+            <div class="card">
+              <div class="card-h"><span class="num">1</span><div><h3>Pengirim</h3><p>Pilih pelanggan; nama, HP, dan alamat terisi otomatis dan boleh diubah.</p></div></div>
+              <div class="field">
+                <div class="label-row"><span class="label req">Pelanggan (penagihan)</span><button type="button" class="link-btn" data-add="pelanggan"><i class="bi bi-person-plus"></i> Tambah baru</button></div>
+                <div class="combo" data-combo="pelanggan" data-target="PelangganID"><i class="bi bi-search"></i><input class="input combo-input" placeholder="Cari nama pelanggan…"><input type="hidden" name="PelangganID"></div>
+              </div>
+              <label class="field"><span class="label req">ID pelanggan</span><select class="input" name="KodePelanggan"><option value="">Pilih pelanggan dulu</option></select></label>
+              <div class="loc-box">
+                <div class="loc-title"><i class="bi bi-box-arrow-up"></i> Data pengirim</div>
+                <div class="row-2">
+                  <label class="field"><span class="label req">Nama pengirim</span><input class="input" name="PengirimNama" maxlength="100"></label>
+                  <label class="field"><span class="label req">No. HP pengirim</span><input class="input" name="PengirimHP" inputmode="tel" maxlength="20"></label>
+                </div>
+                <label class="field"><span class="label req">Alamat pengirim</span><textarea class="input" name="PengirimAlamat" rows="2" maxlength="300"></textarea></label>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-h"><span class="num">2</span><div><h3>Penerima</h3><p>Tujuan pengiriman paket.</p></div></div>
+              <div class="loc-box">
+                <div class="loc-title"><i class="bi bi-box-arrow-in-down"></i> Data penerima</div>
+                <div class="row-2">
+                  <label class="field"><span class="label req">Nama penerima</span><input class="input" name="PenerimaNama" maxlength="100"></label>
+                  <label class="field"><span class="label req">No. HP penerima</span><input class="input" name="PenerimaHP" inputmode="tel" maxlength="20"></label>
+                </div>
+                <label class="field"><span class="label req">Kota tujuan</span><input class="input" name="KotaTujuan" list="dlKotaPaket" maxlength="60" placeholder="Contoh: Bandung"><small class="muted" data-kota-hint>Menentukan tarif dari Data Pelanggan.</small></label>
+                <datalist id="dlKotaPaket"></datalist>
+                <label class="field"><span class="label req">Alamat penerima</span><textarea class="input" name="PenerimaAlamat" rows="3" maxlength="300"></textarea></label>
+              </div>
+            </div>
+
+            <div class="card span-2">
+              <div class="card-h"><span class="num">3</span><div><h3>Detail kiriman</h3><p>Satu baris per jenis barang. Isi berat per koli, ukuran P × L × T (cm), atau keduanya. Volume = P × L × T ÷ 1.000.000 (m³).</p></div></div>
+              <input type="hidden" name="Barang">
+              <div class="items" data-items></div>
+              <div class="it-foot">
+                <button type="button" class="btn btn-secondary btn-sm it-add" data-it-add><i class="bi bi-plus-lg"></i> Tambah baris barang</button>
+                <div class="it-total">
+                  <div><span>Total koli</span><b data-tot="koli">0</b></div>
+                  <div><span>Total berat</span><b data-tot="kg">0 kg</b></div>
+                  <div><span>Total volume</span><b data-tot="m3">0 m³</b></div>
+                </div>
+              </div>
+              <div class="tarif-box">
+                <div class="tarif-head"><div><b>Dasar perhitungan ongkos kirim</b><small class="muted" data-tarif-src>Pilih pelanggan &amp; kota tujuan untuk mengisi tarif otomatis.</small></div></div>
+                <input type="hidden" name="DasarTarif" value="kg">
+                <div class="tarif-opts">
+                  <button type="button" class="tarif-opt" data-dasar="kg">
+                    <span class="to-top"><i class="bi bi-box-seam"></i> Berdasarkan berat</span>
+                    <span class="to-calc" data-to="kg">0 kg × Rp 0</span>
+                    <b class="to-sum" data-to-sum="kg">Rp 0</b>
+                  </button>
+                  <button type="button" class="tarif-opt" data-dasar="volume">
+                    <span class="to-top"><i class="bi bi-badge-3d"></i> Berdasarkan volume</span>
+                    <span class="to-calc" data-to="volume">0 m³ × Rp 0</span>
+                    <b class="to-sum" data-to-sum="volume">Rp 0</b>
+                  </button>
+                </div>
+                <div class="row-2">
+                  <label class="field"><span class="label">Tarif per kg</span><div class="prefix-input"><span>Rp</span><input class="input money" name="TarifKg" inputmode="numeric" placeholder="0"></div></label>
+                  <label class="field"><span class="label">Tarif per m³</span><div class="prefix-input"><span>Rp</span><input class="input money" name="TarifVolume" inputmode="numeric" placeholder="0"></div></label>
+                </div>
+              </div>
+            </div>
+
+            <div class="card pay-card" data-pay-block></div>
+          </div>
+          <div class="action-bar" data-actionbar></div>
+        </form>
+      </section>
+
       <!-- ───────── FORM INSPEKSI ───────── -->
       <section class="page" id="page-inspeksi" data-title="Form Inspeksi">
         <div class="page-head">
@@ -520,8 +614,8 @@
   setTimeout(function () { window.__kgmCheck(true); }, 15000);
 })();
 </script>
-<script src="js/config.js"></script>
-<script src="js/app.js"></script>
+<script src="js/config.js?v=2.3"></script>
+<script src="js/app.js?v=2.3"></script>
 <script>setTimeout(function () { window.__kgmCheck(false); }, 0);</script>
 </body>
 </html>

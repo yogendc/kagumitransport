@@ -216,7 +216,7 @@ function confirmDialog(o) {
     const finish = v => { box.hidden = true; box.onclick = null; resolve(v); };
     box.onclick = e => {
       const b = e.target.closest('[data-r]');
-      if (b) finish(b.dataset.r === '1' ? true : (b.dataset.r === 'alt' ? 'alt' : false));
+      if (b) finish(b.dataset.r === '1' ? true : (b.dataset.r === '0' ? false : b.dataset.r));
       else if (e.target.closest('[data-close]')) finish(false);
     };
     setTimeout(() => { const b = box.querySelector('[data-r="1"]'); if (b) b.focus(); }, 30);
@@ -412,7 +412,8 @@ function refreshData(silent) {
   }).finally(() => { refreshing = null; });
   return refreshing;
 }
-const isFormPage = p => p === 'sewa' || p === 'kirim' || p === 'inspeksi';
+const ORDER_PAGES = ['sewa', 'kirim', 'paket'];
+const isFormPage = p => ORDER_PAGES.includes(p) || p === 'inspeksi';
 setInterval(() => {
   if (S.booted && S.token && document.visibilityState === 'visible' && Date.now() - S.lastSync > 90000) refreshData(true).catch(() => {});
 }, 30000);
@@ -466,7 +467,7 @@ function navigateTo(page, opt) {
   $('#crumbTitle').textContent = sec.dataset.title || '';
   S.page = page;
   closeSidebar();
-  if (page === 'sewa' || page === 'kirim') {
+  if (ORDER_PAGES.includes(page)) {
     if (opt.order) loadOrderToForm(page, opt.order);
     else if (opt.fresh) newOrder(page);
     else refreshFormLists(page);
@@ -530,12 +531,12 @@ function bindGlobal() {
     }
     if (e.key === '/' && S.booted && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); $('#globalSearch').focus(); }
   });
-  window.addEventListener('beforeunload', e => { if (S.booted && (formDirty('sewa') || formDirty('kirim'))) { e.preventDefault(); e.returnValue = ''; } });
+  window.addEventListener('beforeunload', e => { if (S.booted && ORDER_PAGES.some(formDirty)) { e.preventDefault(); e.returnValue = ''; } });
 }
 function chooseNewOrder() {
-  confirmDialog({ title: 'Buat surat jalan baru', html: 'Pilih jenis layanan untuk order baru.', icon: 'bi-plus-lg',
-    extra: '<button class="btn btn-secondary" data-r="alt"><i class="bi bi-truck"></i> Kirim mobil</button>', cancel: 'Batal', ok: 'Sewa kendaraan', okIcon: 'bi-truck-front' })
-    .then(v => { if (v === true) navigateTo('sewa', { fresh: true }); if (v === 'alt') navigateTo('kirim', { fresh: true }); });
+  confirmDialog({ title: 'Buat order baru', html: 'Pilih jenis layanan untuk order baru.', icon: 'bi-plus-lg',
+    extra: '<button class="btn btn-secondary" data-r="paket"><i class="bi bi-box-seam"></i> Kirim paket</button><button class="btn btn-secondary" data-r="alt"><i class="bi bi-truck"></i> Kirim mobil</button>', cancel: 'Batal', ok: 'Sewa kendaraan', okIcon: 'bi-truck-front' })
+    .then(v => { if (v === true) navigateTo('sewa', { fresh: true }); if (v === 'alt') navigateTo('kirim', { fresh: true }); if (v === 'paket') navigateTo('paket', { fresh: true }); });
 }
 
 // ── Badge & notifikasi ─────────────────────────────────────
@@ -593,7 +594,7 @@ function bindSearch() {
     const q = input.value.trim().toLowerCase();
     if (q.length < 2) { pop.hidden = true; return; }
     const hit = (...v) => v.join(' ').toLowerCase().includes(q);
-    const ord = S.d.orders.filter(o => hit(o.NoSJ, o.NoUnik, o.NamaPelanggan, o.NoPol, o.NoPolMobil, o.PenerimaNama, o.PengemudiNama, o.UnitNoPol)).slice(0, 6)
+    const ord = S.d.orders.filter(o => hit(o.NoSJ, o.NoUnik, o.NamaPelanggan, o.NoPol, o.NoPolMobil, o.PenerimaNama, o.PengemudiNama, o.UnitNoPol, o.PengirimNama)).slice(0, 6)
       .map(o => ({ g: 'Order', ic: o.Layanan === 'sewa' ? 'bi-truck-front' : 'bi-truck', t: orderLabel(o), s: `${o.NamaPelanggan || '—'} · ${o.Layanan === 'sewa' ? (o.NoPol || '') : (o.NoPolMobil || '')}`, fn: () => openOrderDrawer(o.ID) }));
     const pel = S.d.pelanggan.filter(p => hit(p.Nama, p.IDSewa, p.IDKirim, p.NoHP)).slice(0, 3).map(p => ({ g: 'Pelanggan', ic: 'bi-buildings', t: p.Nama, s: p.IDSewa + ' · ' + p.IDKirim, fn: () => { S.ui.master.pelanggan = { q: p.Nama, page: 1 }; navigateTo('pelanggan'); } }));
     const kend = S.d.kendaraan.filter(k => hit(k.NoPol, k.Merk, k.Tipe, k.NoKa)).slice(0, 3).map(k => ({ g: 'Kendaraan', ic: 'bi-car-front', t: k.NoPol, s: k.JenisKendaraan + ' · ' + (k.Merk || ''), fn: () => { S.ui.master.kendaraan = { q: k.NoPol, page: 1 }; navigateTo('kendaraan'); } }));
@@ -628,18 +629,27 @@ function bindSearch() {
 function orderLabel(o) { return o.NoSJ || 'Draf ' + (o.NoUnik || ''); }
 function orderDate(o) { return o.Tanggal || o.DibuatPada || ''; }
 function statusBadge(s) { return `<span class="badge ${STATUS_CLS[s] || 'b-slate'}">${esc(s || '—')}</span>`; }
+const LAY_LABEL = { sewa: 'Sewa', kirim: 'Kirim', paket: 'Paket' };
+function docLabel(o) { return o && o.Layanan === 'paket' ? 'No. resi' : 'No. surat jalan'; }
 function svcChip(o) {
+  if (o.Layanan === 'paket') return `<span class="svc svc-paket">Paket · ${fnumDec(o.TotalKoli || 0)} koli</span>`;
   return o.Layanan === 'sewa' ? `<span class="svc svc-sewa">Sewa ${esc(o.JenisKendaraan || '')}</span>` : `<span class="svc svc-kirim">Kirim (${esc(o.JenisLayanan || '—')})</span>`;
 }
+// Paket: daftar barang (JSON) & format desimal Indonesia
+function barangOf(o) { try { const a = JSON.parse(o.Barang || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+function fnumDec(v, d) { const n = Number(v) || 0; return n.toLocaleString('id-ID', { maximumFractionDigits: d === undefined ? 2 : d }); }
+function paketRingkas(o) { return `${fnumDec(o.TotalKoli || 0)} koli · ${fnumDec(o.TotalBerat || 0)} kg · ${fnumDec(o.TotalVolume || 0, 4)} m³`; }
 function firstPart(s) { return String(s || '').split(/[,\n]/)[0].trim(); }
 function orderRoute(o) {
   if (o.Layanan === 'sewa') return [firstPart(o.MuatAlamat), firstPart(o.BongkarAlamat)];
+  if (o.Layanan === 'paket') return [firstPart(o.PengirimAlamat), o.KotaTujuan || firstPart(o.PenerimaAlamat)];
   const pel = byId('pelanggan', o.PelangganID);
   return [firstPart(o.AsalAlamat || (pel && pel.Alamat)), firstPart(o.PenerimaAlamat)];
 }
 function routeText(o) { const [a, b] = orderRoute(o); return a || b ? esc(a || '—') + ' → ' + esc(b || '—') : '—'; }
 function routeHTML(o) { const [a, b] = orderRoute(o); return a || b ? `<span class="route"><b>${esc(a || '—')}</b><i class="bi bi-arrow-right"></i><b>${esc(b || '—')}</b></span>` : '<span class="muted">—</span>'; }
 function armadaHTML(o) {
+  if (o.Layanan === 'paket') { const b = barangOf(o); return `<span class="t-strong">${esc(b.map(x => x.d).filter(Boolean).slice(0, 2).join(', ') || '—')}${b.length > 2 ? ' +' + (b.length - 2) : ''}</span><span class="t-sub">${esc(paketRingkas(o))}</span>`; }
   if (o.Layanan === 'sewa') return `<span class="t-strong mono">${esc(o.NoPol || '—')}</span><span class="t-sub">${esc(o.JenisMuatan || '')}</span>`;
   return `<span class="t-strong">${esc([o.Merk, o.Tipe].filter(Boolean).join(' ') || '—')}</span><span class="t-sub mono">${esc(o.NoPolMobil || '')}${o.Warna ? ' · ' + esc(o.Warna) : ''}</span>`;
 }
@@ -723,13 +733,14 @@ function renderRingkasan() {
       <p>Pantau surat jalan berjalan, tagihan jatuh tempo, dan kesiapan armada hari ini.</p>
     </div>
     <div class="hero-actions">
+      <button class="btn btn-secondary" data-go="paket" data-fresh="1"><i class="bi bi-box-seam"></i> Kirim paket</button>
       <button class="btn btn-secondary" data-go="kirim" data-fresh="1"><i class="bi bi-truck"></i> Kirim mobil</button>
       <button class="btn btn-primary" data-go="sewa" data-fresh="1"><i class="bi bi-plus-lg"></i> Surat jalan sewa</button>
     </div>
   </div>
   <div class="kpis">
     ${kpi('Order bulan ini', bulanIni.length + '<small>order</small>', 'bi-journal-text', 'ic-indigo', growth === null ? BLN_PANJANG[Number(mk.slice(5)) - 1] + ' ' + mk.slice(0, 4) : `<span class="badge ${growth >= 0 ? 'b-green' : 'b-red'} plain">${growth >= 0 ? '▲' : '▼'} ${Math.abs(growth)}%</span> dari bulan lalu`)}
-    ${kpi('Order berjalan', jalan.length + '<small>surat jalan</small>', 'bi-truck', 'ic-primary', `<span>${jalan.filter(o => o.Layanan === 'sewa').length} sewa</span>·<span>${jalan.filter(o => o.Layanan === 'kirim').length} kirim</span>`)}
+    ${kpi('Order berjalan', jalan.length + '<small>surat jalan</small>', 'bi-truck', 'ic-primary', `<span>${jalan.filter(o => o.Layanan === 'sewa').length} sewa</span>·<span>${jalan.filter(o => o.Layanan === 'kirim').length} kirim</span>·<span>${jalan.filter(o => o.Layanan === 'paket').length} paket</span>`)}
     ${kpi('Invoice jatuh tempo', due.length + '<small>tagihan</small>', 'bi-receipt', 'ic-red', telat.length ? `<span class="badge b-red">${telat.length} lewat jatuh tempo</span>` : 'Tidak ada yang terlambat', '', due.length ? 'danger' : '')}
     ${kpi('Legalitas perlu tindakan', legal.length + '<small>dokumen</small>', 'bi-shield-exclamation', 'ic-amber', `SIM, KIR & pajak ≤ ${esc(S.settings.peringatanHari || 30)} hari`)}
   </div>
@@ -804,7 +815,7 @@ function drawDashChart() {
 // REKAP ORDER
 // ============================================================
 const REKAP_COLS = [
-  { k: 'nosj', l: 'No. surat jalan', fixed: true }, { k: 'tgl', l: 'Tanggal' }, { k: 'layanan', l: 'Layanan' }, { k: 'pelanggan', l: 'Pelanggan' },
+  { k: 'nosj', l: 'No. SJ / resi', fixed: true }, { k: 'tgl', l: 'Tanggal' }, { k: 'layanan', l: 'Layanan' }, { k: 'pelanggan', l: 'Pelanggan' },
   { k: 'armada', l: 'Armada / muatan' }, { k: 'rute', l: 'Rute' }, { k: 'driver', l: 'Pengemudi / unit' }, { k: 'total', l: 'Total' },
   { k: 'status', l: 'Status', fixed: true }, { k: 'dok', l: 'Dokumen' }
 ];
@@ -826,7 +837,7 @@ function filterOrders() {
     if (f.dok === 'cetak' && String(o.Dicetak) !== 'true') return false;
     if (f.dok === 'belumcetak' && (o.StatusDok !== 'Terkonfirmasi' || String(o.Dicetak) === 'true')) return false;
     if (f.driver && o.PengemudiID !== f.driver && o.KendaraanID !== f.driver && o.UnitID !== f.driver) return false;
-    if (q && ![o.NoSJ, o.NoUnik, o.NamaPelanggan, o.NoPol, o.NoPolMobil, o.PenerimaNama, o.PengemudiNama, o.MuatPIC, o.BongkarPIC, o.MuatAlamat, o.BongkarAlamat, o.Merk, o.Tipe]
+    if (q && ![o.NoSJ, o.NoUnik, o.NamaPelanggan, o.NoPol, o.NoPolMobil, o.PenerimaNama, o.PengemudiNama, o.MuatPIC, o.BongkarPIC, o.MuatAlamat, o.BongkarAlamat, o.Merk, o.Tipe, o.PengirimNama, o.PenerimaAlamat, o.PengirimAlamat, o.Barang]
       .join(' ').toLowerCase().includes(q)) return false;
     return true;
   });
@@ -842,11 +853,11 @@ function renderRekap() {
   <div class="page-head">
     <div class="ph-icon"><i class="bi bi-journal-text"></i></div>
     <div><h1>Rekap Order &amp; Dokumen Perjalanan</h1><p class="muted">Semua transaksi sewa dan pengiriman. Klik baris untuk detail, cetak ulang, atau ubah status.</p></div>
-    <div class="mini-stats"><div><span>Terkonfirmasi</span><b>${conf.length}</b></div><div><span>Sewa</span><b>${conf.filter(o => o.Layanan === 'sewa').length}</b></div><div><span>Kirim</span><b>${conf.filter(o => o.Layanan === 'kirim').length}</b></div><div class="warn"><span>Belum selesai</span><b>${aktif}</b></div></div>
+    <div class="mini-stats"><div><span>Terkonfirmasi</span><b>${conf.length}</b></div><div><span>Sewa</span><b>${conf.filter(o => o.Layanan === 'sewa').length}</b></div><div><span>Kirim</span><b>${conf.filter(o => o.Layanan === 'kirim').length}</b></div><div><span>Paket</span><b>${conf.filter(o => o.Layanan === 'paket').length}</b></div><div class="warn"><span>Belum selesai</span><b>${aktif}</b></div></div>
   </div>
   <div class="card" style="margin-bottom:16px">
     <div class="toolbar" style="margin-bottom:0">
-      <div class="search grow"><i class="bi bi-search"></i><input class="input" id="rkQ" placeholder="Cari no. surat jalan, nopol, pelanggan, PIC…" value="${esc(f.q)}"></div>
+      <div class="search grow"><i class="bi bi-search"></i><input class="input" id="rkQ" placeholder="Cari no. surat jalan / resi, nopol, pelanggan, PIC…" value="${esc(f.q)}"></div>
       <div class="dd-wrap pos-rel"><button class="btn btn-secondary" id="rkCols"><i class="bi bi-layout-three-columns"></i> Atur kolom</button><div class="menu dd-menu col-menu" id="rkColMenu" hidden></div></div>
       ${drafts ? `<button class="btn btn-secondary" id="rkDrafts"><i class="bi bi-pencil"></i> Draf (${drafts})</button>` : ''}
       <button class="btn btn-primary" id="rkNew"><i class="bi bi-plus-lg"></i> Order baru</button>
@@ -854,7 +865,7 @@ function renderRekap() {
     <div class="filters">
       <label class="field"><span class="label">Dari tanggal</span><input class="input" type="date" id="rkFrom" value="${esc(f.from)}"></label>
       <label class="field"><span class="label">Sampai tanggal</span><input class="input" type="date" id="rkTo" value="${esc(f.to)}"></label>
-      <label class="field"><span class="label">Jenis layanan</span><select class="input" id="rkSvc"><option value="">Semua layanan</option><option value="sewa" ${f.svc === 'sewa' ? 'selected' : ''}>Sewa kendaraan</option><option value="kirim" ${f.svc === 'kirim' ? 'selected' : ''}>Kirim mobil</option></select></label>
+      <label class="field"><span class="label">Jenis layanan</span><select class="input" id="rkSvc"><option value="">Semua layanan</option><option value="sewa" ${f.svc === 'sewa' ? 'selected' : ''}>Sewa kendaraan</option><option value="kirim" ${f.svc === 'kirim' ? 'selected' : ''}>Kirim mobil</option><option value="paket" ${f.svc === 'paket' ? 'selected' : ''}>Kirim paket</option></select></label>
       <label class="field"><span class="label">Status pengiriman</span><select class="input" id="rkStatus"><option value="">Semua status</option>${STATUS.map(s => `<option ${f.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select></label>
       <label class="field"><span class="label">Dokumen</span><select class="input" id="rkDok"><option value="">Semua</option><option value="draf" ${f.dok === 'draf' ? 'selected' : ''}>Draf</option><option value="konfirm" ${f.dok === 'konfirm' ? 'selected' : ''}>Terkonfirmasi</option><option value="belumcetak" ${f.dok === 'belumcetak' ? 'selected' : ''}>Belum dicetak</option><option value="cetak" ${f.dok === 'cetak' ? 'selected' : ''}>Sudah dicetak</option></select></label>
       <label class="field"><span class="label">Pengemudi / unit</span><select class="input" id="rkDrv"><option value="">Semua pengemudi &amp; unit</option>${drvOpts}</select></label>
@@ -894,7 +905,7 @@ function renderRekapTable() {
       case 'nosj': return `<td class="sticky-col card-title" data-label="No. SJ"><span class="t-link">${esc(orderLabel(o))}</span>${String(o.Dicetak) === 'true' ? ' <i class="bi bi-printer" title="Sudah dicetak" style="color:var(--primary)"></i>' : ''}<span class="t-sub">${tglPendek(orderDate(o))}</span></td>`;
       case 'tgl': return `<td data-label="Tanggal" class="mono">${tglPendek(orderDate(o))}</td>`;
       case 'layanan': return `<td data-label="Layanan">${svcChip(o)}</td>`;
-      case 'pelanggan': return `<td data-label="Pelanggan" style="min-width:150px"><span class="t-strong">${esc(o.NamaPelanggan || '—')}</span>${o.Layanan === 'kirim' && o.PenerimaNama ? `<span class="t-sub">ke ${esc(o.PenerimaNama)}</span>` : ''}</td>`;
+      case 'pelanggan': return `<td data-label="Pelanggan" style="min-width:150px"><span class="t-strong">${esc(o.NamaPelanggan || '—')}</span>${o.Layanan !== 'sewa' && o.PenerimaNama ? `<span class="t-sub">ke ${esc(o.PenerimaNama)}</span>` : ''}</td>`;
       case 'armada': return `<td data-label="Armada">${armadaHTML(o)}</td>`;
       case 'rute': { const [a, b] = orderRoute(o); return `<td data-label="Rute" class="t-route"><span class="t-clip"><i class="bi bi-geo-alt" style="color:var(--primary)"></i> ${esc(a || '—')}</span><span class="t-clip t-sub"><i class="bi bi-flag" style="color:var(--red)"></i> ${esc(b || '—')}</span></td>`; }
       case 'driver': return `<td data-label="Pengemudi">${driverHTML(o)}</td>`;
@@ -960,10 +971,16 @@ function openOrderDrawer(id) {
   const dl = rows => '<dl class="dl">' + rows.filter(r => r[1] !== undefined && r[1] !== null && r[1] !== '').map(r => `<dt>${esc(r[0])}</dt><dd>${r[2] ? r[1] : esc(r[1])}</dd>`).join('') + '</dl>';
   const conf = o.StatusDok === 'Terkonfirmasi';
   let body = `<div class="chips-row" style="margin-bottom:16px">${svcChip(o)} ${conf ? statusBadge(o.Status) : statusBadge('Draf')} ${docBadge(o)}</div>`;
-  body += '<div class="sec-title">Dokumen</div>' + dl([['No. surat jalan', o.NoSJ || 'Terbit saat konfirmasi'], ['No. unik (internal)', o.NoUnik], ['Tanggal', tglJam(orderDate(o))],
+  body += '<div class="sec-title">Dokumen</div>' + dl([[docLabel(o), o.NoSJ || 'Terbit saat konfirmasi'], ['No. unik (internal)', o.NoUnik], ['Tanggal', tglJam(orderDate(o))],
     ['Dibuat oleh', o.DibuatOleh], ['Dikonfirmasi', o.DikonfirmasiOleh ? o.DikonfirmasiOleh + ' · ' + tglJam(o.DikonfirmasiPada) : ''], ['Dicetak', String(o.Dicetak) === 'true' ? tglJam(o.WaktuCetak) + ' · ' + (o.ModeCetak || '') : 'Belum']]);
   body += '<div class="sec-title">Pelanggan</div>' + dl([['Nama', o.NamaPelanggan], ['ID pelanggan', o.KodePelanggan]]);
-  if (o.Layanan === 'sewa') {
+  if (o.Layanan === 'paket') {
+    const b = barangOf(o);
+    body += '<div class="sec-title">Pengirim & penerima</div>' + dl([['Pengirim', `${esc(o.PengirimNama)} · ${esc(o.PengirimHP)}<br><span class="muted">${esc(o.PengirimAlamat)}</span>`, 1],
+      ['Penerima', `${esc(o.PenerimaNama)} · ${esc(o.PenerimaHP)}<br><span class="muted">${esc(o.PenerimaAlamat)}</span>`, 1], ['Kota tujuan', o.KotaTujuan],
+      ['Dasar tarif', o.DasarTarif === 'volume' ? 'Volume' : 'Berat'], ['Perhitungan', basisText(o)]]);
+    body += '<div class="sec-title">Isi kiriman</div>' + (b.length ? `<div class="table-wrap" style="margin-bottom:8px"><table class="table compact"><thead><tr><th>Detail</th><th class="t-num">Qty</th><th class="t-num">Kg</th><th class="t-num">m³</th></tr></thead><tbody>${b.map(x => `<tr><td>${esc(x.d)}</td><td class="t-num">${fnumDec(x.q)}</td><td class="t-num">${fnumDec(x.q * x.kg)}</td><td class="t-num">${fnumDec(x.q * x.p * x.l * x.t / 1e6, 4)}</td></tr>`).join('')}</tbody></table></div>` : '') + dl([['Total', paketRingkas(o)]]);
+  } else if (o.Layanan === 'sewa') {
     body += '<div class="sec-title">Rute & muatan</div>' + dl([['Muat', `${esc(o.MuatPIC)} · ${esc(o.MuatHP)}<br><span class="muted">${esc(o.MuatAlamat)}</span>`, 1],
       ['Bongkar', `${esc(o.BongkarPIC)} · ${esc(o.BongkarHP)}<br><span class="muted">${esc(o.BongkarAlamat)}</span>`, 1], ['Kendaraan', (o.NoPol || '') + ' · ' + (o.JenisKendaraan || '')],
       ['Pengemudi', o.PengemudiNama], ['Muatan', o.JenisMuatan], ['Jumlah / berat', [o.Kuantitas ? o.Kuantitas + ' ' + (o.Satuan || '') : '', o.Berat].filter(Boolean).join(' · ')], ['No. segel', o.NoSegel]]);
@@ -983,7 +1000,7 @@ function openOrderDrawer(id) {
   } else {
     foot = `<button class="btn btn-secondary" data-d="edit"><i class="bi ${isSA() ? 'bi-pencil' : 'bi-eye'}"></i> ${isSA() ? 'Buka &amp; edit' : 'Buka form'}</button>` +
       (o.Layanan === 'kirim' ? `<button class="btn btn-secondary" data-d="insp"><i class="bi bi-clipboard2-check"></i> Inspeksi</button><button class="btn btn-secondary" data-d="tt"><i class="bi bi-receipt-cutoff"></i> Tanda terima</button>` : '') +
-      `<button class="btn btn-primary" data-d="print"><i class="bi bi-printer"></i> Cetak surat jalan</button>`;
+      `<button class="btn btn-primary" data-d="print"><i class="bi bi-printer"></i> ${o.Layanan === 'paket' ? 'Cetak resi' : 'Cetak surat jalan'}</button>`;
   }
   openDrawer({ title: orderLabel(o), sub: esc(o.NamaPelanggan || ''), body, foot });
   $('#drawerFoot').onclick = e => {
@@ -1073,7 +1090,7 @@ function renderInvoiceTable() {
     ${rows.map(i => `<tr class="clickable ${i.Status === 'Belum Lunas' && i.JatuhTempo < t ? 'row-danger' : ''} ${i.Status === 'Batal' ? 'row-muted' : ''}" data-id="${esc(i.ID)}" ${f.sel === i.ID ? 'style="box-shadow:inset 3px 0 0 var(--primary)"' : ''}>
       <td class="card-title" data-label="Invoice"><span class="t-link">${esc(i.NoInvoice)}</span><span class="t-sub">SJ ${esc(i.NoSJ)} · ${esc(i.Pembayaran)}${i.Pembayaran === 'Termin' ? ' ' + esc(i.TerminHari) + ' hari' : ''}</span></td>
       <td data-label="Pelanggan" class="t-strong">${esc(i.NamaPelanggan)}</td>
-      <td data-label="Layanan"><span class="svc ${i.Layanan === 'sewa' ? 'svc-sewa' : 'svc-kirim'}">${i.Layanan === 'sewa' ? 'Sewa' : 'Kirim'}</span></td>
+      <td data-label="Layanan"><span class="svc svc-${esc(i.Layanan || 'kirim')}">${LAY_LABEL[i.Layanan] || 'Kirim'}</span></td>
       <td data-label="Jatuh tempo"><span class="mono">${tglPendek(i.JatuhTempo)}</span><br>${dueTag(i)}</td>
       <td data-label="Tagihan" class="t-num t-strong">${rp(i.Tagihan)}</td>
       <td class="t-actions">${i.Status === 'Belum Lunas' ? `<button class="icon-btn" data-wa="${esc(i.ID)}" title="Kirim WhatsApp" style="color:#16A34A"><i class="bi bi-whatsapp"></i></button><button class="icon-btn" data-mail="${esc(i.ID)}" title="Kirim email"><i class="bi bi-envelope"></i></button><button class="icon-btn" data-paid="${esc(i.ID)}" title="Tandai lunas" aria-label="Tandai lunas" style="color:var(--primary)"><i class="bi bi-check2-circle"></i></button>` : ''}<button class="icon-btn" data-pinv="${esc(i.ID)}" title="Cetak invoice"><i class="bi bi-printer"></i></button></td>
@@ -1190,7 +1207,7 @@ const MASTERS = {
   pelanggan: {
     title: 'Data Master Pelanggan', sub: 'Satu pelanggan memiliki dua ID: untuk layanan sewa dan pengiriman.', icon: 'bi-buildings', add: 'Tambah pelanggan', list: 'pelanggan',
     canEdit: () => isSA(), canDel: () => isSA(), label: r => r.Nama,
-    search: r => [r.Nama, r.IDSewa, r.IDKirim, r.NoHP, r.NPWP, r.Email, r.Alamat].join(' '),
+    search: r => [r.Nama, r.IDSewa, r.IDKirim, r.NoHP, r.NPWP, r.Email, r.Alamat, tarifList(r).map(t => t.kota).join(' ')].join(' '),
     chips: [['', 'Semua'], ['termin', 'Pembayaran termin', r => r.PembayaranBawaan === 'Termin'], ['npwp', 'Ber-NPWP', r => !!r.NPWP], ['aktif', 'Ada order aktif', r => S.d.orders.some(o => o.PelangganID === r.ID && o.StatusDok === 'Terkonfirmasi' && (o.Status === 'Dijadwalkan' || o.Status === 'Dikirim'))]],
     cols: [
       ['ID & akun', r => `<span class="chip chip-soft mono">${esc(r.IDSewa)}</span><span class="t-sub mono">Kirim: ${esc(r.IDKirim)}</span>`, 'card-title'],
@@ -1198,6 +1215,7 @@ const MASTERS = {
       ['Kontak', r => `${r.NoHP ? `<span class="mono">${esc(r.NoHP)}</span>` : '—'}${r.Email ? `<span class="t-sub">${esc(r.Email)}</span>` : ''}`],
       ['NPWP', r => r.NPWP ? `<span class="mono">${esc(r.NPWP)}</span><span class="t-sub"><i class="bi bi-check2-circle"></i> Format valid</span>` : '<span class="muted">—</span>'],
       ['Pembayaran bawaan', r => r.PembayaranBawaan ? `<span class="badge ${r.PembayaranBawaan === 'Termin' ? 'b-indigo' : r.PembayaranBawaan === 'DP' ? 'b-amber' : 'b-slate'} plain">${esc(r.PembayaranBawaan)}${r.PembayaranBawaan === 'Termin' ? ' ' + esc(r.TerminHari) + ' hari' : ''}</span>` : '<span class="muted">—</span>'],
+      ['Tarif paket', r => { const t = tarifList(r); return t.length ? `<b>${t.length}</b> kota<span class="t-sub">${esc(t.slice(0, 2).map(x => x.kota || 'Semua kota').join(', '))}${t.length > 2 ? '…' : ''}</span>` : '<span class="muted">—</span>'; }],
       ['Order', r => { const n = S.d.orders.filter(o => o.PelangganID === r.ID && o.StatusDok === 'Terkonfirmasi').length; return `<b class="mono">${n}</b><span class="t-sub">surat jalan</span>`; }]
     ],
     sections: [
@@ -1212,7 +1230,8 @@ const MASTERS = {
       { t: 'Pembayaran bawaan', f: [
         { k: 'PembayaranBawaan', l: 'Metode bawaan', t: 'select', opts: [''].concat(METODE), optLabel: v => v || 'Tidak ada', help: 'Terisi otomatis di form order, tetap bisa diubah.' },
         { k: 'TerminHari', l: 'Jumlah hari termin', t: 'number', ph: '30', show: d => d.PembayaranBawaan === 'Termin' },
-        { k: 'Catatan', l: 'Catatan', t: 'textarea', full: true }] }
+        { k: 'Catatan', l: 'Catatan', t: 'textarea', full: true }] },
+      { t: 'Tarif pengiriman paket per kota tujuan', f: [{ k: 'TarifPaket', t: 'tarif', full: true }] }
     ]
   },
   kendaraan: {
@@ -1399,6 +1418,17 @@ function openMasterModal(type, rec, opt) {
       return `<div class="field full"><div class="readonly" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><i class="bi bi-info-circle muted"></i><span class="muted" style="font-size:12.5px">ID otomatis:</span>
         <span class="chip b-indigo mono"><i class="bi bi-lock"></i> Sewa: ${esc(d.IDSewa || 'CUST-otomatis')}</span><span class="chip b-indigo mono"><i class="bi bi-lock"></i> Kirim: ${esc(d.IDKirim || 'KRM-otomatis')}</span></div></div>`;
     }
+    if (f.t === 'tarif') {
+      const rows = tarifList({ TarifPaket: v });
+      return `<div class="field full" data-f="${f.k}"><input type="hidden" name="${f.k}" value="${esc(v)}">
+        <small class="muted" style="margin-bottom:6px">Terisi otomatis di Form Kirim Paket sesuai kota tujuan. Kosongkan nama kota untuk tarif umum (semua kota).</small>
+        <div class="tf-table" data-tf-table>
+          <div class="tf-row tf-head"><span>Kota tujuan</span><span>Tarif per kg (Rp)</span><span>Tarif per m³ (Rp)</span><span></span></div>
+          ${(rows.length ? rows : [{}]).map(t => tarifRowHTML(t, ro)).join('')}
+        </div>
+        ${ro ? '' : '<button type="button" class="btn btn-secondary btn-sm" data-tf-add style="margin-top:8px;justify-self:start"><i class="bi bi-plus-lg"></i> Tambah kota</button>'}
+        <div class="err-msg" data-err="${f.k}" hidden></div></div>`;
+    }
     if (f.t === 'textarea') ctrl = `<textarea class="${cls}" ${attrs} rows="2">${esc(v)}</textarea>`;
     else if (f.t === 'select') ctrl = `<select class="${cls}" ${attrs}>${f.opts.map(o => `<option value="${esc(o)}" ${o === v ? 'selected' : ''}>${esc(f.optLabel ? f.optLabel(o) : o)}</option>`).join('')}</select>`;
     else if (f.t === 'year') ctrl = `<select class="${cls}" ${attrs}><option value="">Pilih tahun</option>${Array.from({ length: thisYear - 1979 }, (_, i) => thisYear + 1 - i).map(y => `<option ${String(y) === v ? 'selected' : ''}>${y}</option>`).join('')}</select>`;
@@ -1437,8 +1467,37 @@ function openMasterModal(type, rec, opt) {
     if (np) { const n = digits(vals.NPWP).length; np.className = 'badge plain ' + (!n ? '' : (n === 15 || n === 16) ? 'b-green' : 'b-red'); np.textContent = !n ? '' : (n === 15 || n === 16) ? 'Format valid: ' + n + ' digit' : n + ' digit (harus 15/16)'; }
   };
   form.addEventListener('input', live); form.addEventListener('change', live); live();
+  if (type === 'pelanggan') bindTarifEditor(form);
   const save = $('#mfSave');
   if (save) save.onclick = e => { e.preventDefault(); submitMaster(type, rec, form, save, opt); };
+}
+// ── Tarif paket pelanggan: [{kota, kg, m3}] ───────────────
+function tarifList(p) { try { const a = JSON.parse((p && p.TarifPaket) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+function cariTarif(p, kota) {
+  const list = tarifList(p), k = String(kota || '').trim().toLowerCase();
+  return (k && list.find(t => String(t.kota || '').trim().toLowerCase() === k)) || list.find(t => !String(t.kota || '').trim()) || null;
+}
+function tarifRowHTML(t, ro) {
+  const m = v => (num(v) ? num(v).toLocaleString('id-ID') : '');
+  return `<div class="tf-row" data-tf-row><input class="input tf-kota" data-tf="kota" maxlength="60" placeholder="Semua kota" value="${esc(t.kota || '')}" ${ro ? 'readonly' : ''}>
+    <input class="input t-right" data-tf="kg" inputmode="numeric" placeholder="0" value="${m(t.kg)}" ${ro ? 'readonly' : ''}>
+    <input class="input t-right" data-tf="m3" inputmode="numeric" placeholder="0" value="${m(t.m3)}" ${ro ? 'readonly' : ''}>
+    ${ro ? '<span></span>' : '<button type="button" class="icon-btn" data-tf-del title="Hapus kota" aria-label="Hapus kota"><i class="bi bi-trash"></i></button>'}</div>`;
+}
+function bindTarifEditor(form) {
+  const table = form.querySelector('[data-tf-table]'), hidden = form.querySelector('[name=TarifPaket]');
+  if (!table) return;
+  const sync = () => {
+    const rows = $$('[data-tf-row]', table).map(r => ({ kota: r.querySelector('[data-tf=kota]').value.trim(), kg: num(r.querySelector('[data-tf=kg]').value), m3: num(r.querySelector('[data-tf=m3]').value) }))
+      .filter(t => t.kota || t.kg || t.m3);
+    hidden.value = rows.length ? JSON.stringify(rows) : '';
+  };
+  table.addEventListener('input', e => { if (e.target.dataset.tf === 'kg' || e.target.dataset.tf === 'm3') formatMoneyInput(e.target); sync(); });
+  form.addEventListener('click', e => {
+    if (e.target.closest('[data-tf-add]')) { table.insertAdjacentHTML('beforeend', tarifRowHTML({}, false)); const r = $$('[data-tf-row]', table); r[r.length - 1].querySelector('[data-tf=kota]').focus(); }
+    const del = e.target.closest('[data-tf-del]');
+    if (del) { const rows = $$('[data-tf-row]', table); if (rows.length > 1) del.closest('[data-tf-row]').remove(); else rows[0].querySelectorAll('input').forEach(i => { i.value = ''; }); sync(); }
+  });
 }
 function formValues(form) {
   const v = {};
@@ -1462,6 +1521,7 @@ function validateMasterLocal(type, v, rec) {
     if (dup) errs.NoSIM = 'No. SIM sudah terdaftar atas nama ' + dup.Nama + ' (' + dup.Kode + ').';
   }
   if (type === 'pelanggan' && v.PembayaranBawaan === 'Termin' && !(num(v.TerminHari) > 0)) errs.TerminHari = 'Isi jumlah hari termin.';
+  if (type === 'pelanggan') { const ks = tarifList(v).map(t => String(t.kota || '').trim().toLowerCase()); const dup = ks.find((k, i) => ks.indexOf(k) !== i); if (dup !== undefined) errs.TarifPaket = 'Kota "' + (dup || 'Semua kota') + '" tercantum dua kali.'; }
   return errs;
 }
 function submitMaster(type, rec, form, btn, opt) {
@@ -1575,14 +1635,17 @@ function comboSet(el, id) { if (el && el._set) el._set(id); }
 // ============================================================
 const FORMS = {};
 const MONEY = ['Harga', 'Pajak', 'Penyesuaian', 'DP'];
+const METODE_PAKET = [['Lunas', 'Lunas'], ['Termin', 'Invoice (termin)'], ['Invoice Surat Kembali', 'Invoice surat kembali']];
+const FORM_SEL = { sewa: '#formSewa', kirim: '#formKirim', paket: '#formPaket' };
 const REQ = {
+  paket: [['PelangganID', 'Pelanggan'], ['KodePelanggan', 'ID pelanggan'], ['PengirimNama', 'Nama pengirim'], ['PengirimHP', 'No. HP pengirim'], ['PengirimAlamat', 'Alamat pengirim'], ['PenerimaNama', 'Nama penerima'], ['PenerimaHP', 'No. HP penerima'], ['KotaTujuan', 'Kota tujuan'], ['PenerimaAlamat', 'Alamat penerima'], ['Pembayaran', 'Metode pembayaran'], ['Harga', 'Ongkos kirim']],
   sewa: [['PelangganID', 'Pelanggan'], ['KodePelanggan', 'ID pelanggan'], ['MuatPIC', 'Nama PIC muat'], ['MuatHP', 'No. HP PIC muat'], ['MuatAlamat', 'Alamat muat'], ['BongkarPIC', 'Nama PIC bongkar'], ['BongkarHP', 'No. HP PIC bongkar'], ['BongkarAlamat', 'Alamat bongkar'], ['JenisKendaraan', 'Jenis kendaraan'], ['KendaraanID', 'Unit kendaraan'], ['PengemudiID', 'Pengemudi'], ['JenisMuatan', 'Jenis muatan'], ['Pembayaran', 'Metode pembayaran'], ['Harga', 'Harga']],
   kirim: [['PelangganID', 'Pelanggan'], ['KodePelanggan', 'ID pelanggan'], ['JenisLayanan', 'Jenis layanan'], ['PenerimaID', 'Penerima'], ['NoPolMobil', 'No. polisi'], ['Warna', 'Warna'], ['Merk', 'Merk'], ['Tahun', 'Tahun pembuatan'], ['Pembayaran', 'Metode pembayaran'], ['Harga', 'Harga']]
 };
 function payBlockHTML(lay) {
-  return `<div class="card-h"><span class="num">${lay === 'sewa' ? '3' : '04'}</span><div><h3>Rincian pembayaran &amp; tarif</h3><p>Nominal hanya tercetak bila memilih <b>cetak dengan nominal</b>.</p></div></div>
+  return `<div class="card-h"><span class="num">${({ sewa: '3', kirim: '04', paket: '4' })[lay]}</span><div><h3>Rincian pembayaran &amp; tarif</h3><p>Nominal hanya tercetak bila memilih <b>cetak dengan nominal</b>.</p></div></div>
   <div class="row-2">
-    <label class="field"><span class="label req">Metode pembayaran</span><select class="input" name="Pembayaran"><option value="">Pilih metode</option>${METODE.map(m => `<option>${m}</option>`).join('')}</select></label>
+    <label class="field"><span class="label req">Metode pembayaran</span><select class="input" name="Pembayaran"><option value="">Pilih metode</option>${lay === 'paket' ? METODE_PAKET.map(([v, l]) => `<option value="${v}">${l}</option>`).join('') : METODE.map(m => `<option>${m}</option>`).join('')}</select></label>
     <label class="field" data-pay="hari" hidden><span class="label req" data-pay-hari-label>Jumlah hari termin</span><input class="input" name="TerminHari" inputmode="numeric" placeholder="14" maxlength="3"></label>
   </div>
   <div class="pay-hint" data-pay="due" hidden></div>
@@ -1593,7 +1656,7 @@ function payBlockHTML(lay) {
     </div>
   </div>
   <div class="row-2">
-    <label class="field"><span class="label req">Harga dasar</span><div class="prefix-input"><span>Rp</span><input class="input money" name="Harga" inputmode="numeric" placeholder="0"></div></label>
+    <label class="field"><span class="label req">${lay === 'paket' ? 'Ongkos kirim' : 'Harga dasar'} <span class="pay-auto" data-harga-auto hidden>· otomatis dari tarif</span></span><div class="prefix-input"><span>Rp</span><input class="input money" name="Harga" inputmode="numeric" placeholder="0"></div></label>
     <div class="field"><label class="label" for="pp-${lay}">Pajak <small class="muted">(% dari harga dasar)</small></label><div class="suffix-input"><input class="input" id="pp-${lay}" name="PajakPersen" inputmode="decimal" placeholder="0" maxlength="6" autocomplete="off"><span>%</span></div>
       <input type="hidden" name="Pajak"><div class="tax-row"><small class="muted mono" data-calc="PajakRp">= Rp 0</small><span class="tax-chips">${['0', '1,1', '2', '11'].map(v => `<button type="button" class="chip-btn" data-pajak="${v}">${v}%</button>`).join('')}</span></div></div>
   </div>
@@ -1608,7 +1671,7 @@ function actionBarHTML(lay) {
     <button type="button" class="btn btn-indigo" data-act="draft"><i class="bi bi-save"></i> <span>Simpan draf</span></button>
     <button type="button" class="btn btn-primary" data-act="confirm"><i class="bi bi-check2-circle"></i> Konfirmasi order (kunci)</button>
     <div class="split dd-wrap pos-rel" data-ab="print" hidden>
-      <button type="button" class="btn btn-primary" data-act="print-tanpa"><i class="bi bi-printer"></i> Cetak surat jalan</button>
+      <button type="button" class="btn btn-primary" data-act="print-tanpa"><i class="bi bi-printer"></i> ${lay === 'paket' ? 'Cetak resi' : 'Cetak surat jalan'}</button>
       <button type="button" class="btn btn-primary caret" data-act="print-menu" aria-label="Pilihan cetak"><i class="bi bi-chevron-up"></i></button>
       <div class="menu dd-menu" style="bottom:calc(100% + 6px);top:auto" hidden>
         <button type="button" data-act="print-tanpa"><i class="bi bi-file-earmark"></i> Cetak tanpa nominal (bawaan)</button>
@@ -1618,17 +1681,17 @@ function actionBarHTML(lay) {
     </div>`;
 }
 function initForms() {
-  if (initForms.done) { ['sewa', 'kirim'].forEach(refreshFormLists); return; }
+  if (initForms.done) { ORDER_PAGES.forEach(refreshFormLists); return; }
   initForms.done = true;
-  ['sewa', 'kirim'].forEach(setupForm);
+  ORDER_PAGES.forEach(setupForm);
   setupInspeksi();
 }
 function setupForm(lay) {
-  const form = $(lay === 'sewa' ? '#formSewa' : '#formKirim');
+  const form = $(FORM_SEL[lay]);
   const st = FORMS[lay] = { el: form, rec: null, dirty: false };
   form.querySelector('[name=Status]').innerHTML = STATUS.map(s => `<option>${s}</option>`).join('');
   if (lay === 'sewa') form.querySelector('[name=JenisKendaraan]').innerHTML = '<option value="">Pilih jenis</option>' + JENIS_KENDARAAN.map(j => `<option>${j}</option>`).join('');
-  else {
+  else if (lay === 'kirim') {
     form.querySelector('[name=JenisLayanan]').innerHTML = '<option value="">Pilih layanan</option>' + LAYANAN_KIRIM.map(j => `<option>${j}</option>`).join('');
     form.querySelector('[name=Merk]').innerHTML = '<option value="">Pilih merk</option>' + MERK.map(j => `<option>${j}</option>`).join('');
     const y = Number(today().slice(0, 4));
@@ -1640,6 +1703,11 @@ function setupForm(lay) {
   refreshFormLists(lay);
 
   form.addEventListener('click', e => {
+    if (lay === 'paket' && !form.classList.contains('locked')) {
+      if (e.target.closest('[data-it-add]')) { addItemRow(lay); return; }
+      const del = e.target.closest('[data-it-del]'); if (del) { removeItemRow(lay, Number(del.dataset.itDel)); return; }
+      const ds = e.target.closest('[data-dasar]'); if (ds) { form.querySelector('[name=DasarTarif]').value = ds.dataset.dasar; markDirty(lay); recalc(lay); return; }
+    }
     const b = e.target.closest('[data-pajak]'); if (!b || form.classList.contains('locked')) return;
     const inp = form.querySelector('[name=PajakPersen]'); inp.value = b.dataset.pajak; inp.classList.remove('invalid');
     markDirty(lay); recalc(lay);
@@ -1647,6 +1715,12 @@ function setupForm(lay) {
   form.addEventListener('input', e => {
     if (e.target.classList.contains('money')) formatMoneyInput(e.target);
     if (e.target.name === 'PajakPersen') { const v = e.target.value.replace(/[^\d.,]/g, ''); if (v !== e.target.value) e.target.value = v; }
+    if (e.target.name === 'KotaTujuan') applyTarif(lay);
+    if (e.target.matches('[data-f]')) {
+      const f = e.target.dataset.f;
+      if (f !== 'd') { const v = f === 'q' ? e.target.value.replace(/\D/g, '') : e.target.value.replace(/[^\d.,]/g, ''); if (v !== e.target.value) e.target.value = v; }
+      syncItems(lay);
+    }
     if (e.target.name === 'NoPolMobil' || e.target.name === 'NoRangka') { const p = e.target.selectionStart; e.target.value = e.target.value.toUpperCase(); e.target.setSelectionRange(p, p); }
     if (e.target.classList.contains('invalid')) e.target.classList.remove('invalid');
     if (e.target.name === 'Status') return;
@@ -1687,7 +1761,7 @@ function setupForm(lay) {
       fillForm(lay, base);
       applyValues(lay, saved.data);
       st.dirty = true; updateActionBar(lay);
-      setTimeout(() => toast('info', 'Isian dipulihkan', 'Form ' + (lay === 'sewa' ? 'sewa' : 'kirim') + ' yang belum disimpan dikembalikan.'), 600);
+      setTimeout(() => toast('info', 'Isian dipulihkan', 'Form ' + ({ sewa: 'sewa', kirim: 'kirim mobil', paket: 'kirim paket' })[lay] + ' yang belum disimpan dikembalikan.'), 600);
       return;
     }
   }
@@ -1702,7 +1776,7 @@ function refreshFormLists(lay) {
   updateCustomerInfo(lay); updateWarnings(lay);
 }
 function syncOpenForms() {
-  ['sewa', 'kirim'].forEach(lay => {
+  ORDER_PAGES.forEach(lay => {
     const st = FORMS[lay]; if (!st) return;
     refreshFormLists(lay);
     if (st.rec && !st.dirty) {
@@ -1750,16 +1824,18 @@ function applyValues(lay, data) {
     else el.value = v === undefined || v === null ? '' : v;
   });
   st.loading = false;
+  if (lay === 'paket') renderItems(lay);
   updateCustomerInfo(lay, data && data.KodePelanggan); updateWarnings(lay); recalc(lay);
 }
 function fillForm(lay, rec) {
   const st = FORMS[lay]; const form = st.el;
   st.rec = rec ? Object.assign({}, rec) : null;
   st.loading = true;
-  form.querySelectorAll('[name]').forEach(el => { if (el.type !== 'hidden' || el.closest('.combo') || el.name === 'Pajak') el.value = ''; el.classList.remove('invalid'); });
+  form.querySelectorAll('[name]').forEach(el => { if (el.type !== 'hidden' || el.closest('.combo') || ['Pajak', 'Barang', 'DasarTarif'].includes(el.name)) el.value = ''; el.classList.remove('invalid'); });
   form.querySelectorAll('.combo').forEach(c => comboSet(c, ''));
   form.querySelector('[name=Status]').value = 'Dijadwalkan';
   if (rec) applyValues(lay, rec);
+  if (lay === 'paket') renderItems(lay);
   st.loading = false;
   const m = k => form.querySelector(`[data-meta="${k}"]`);
   m('Tanggal').textContent = rec ? tglJam(orderDate(rec)) : 'Otomatis saat disimpan';
@@ -1790,7 +1866,7 @@ function applyLock(lay) {
   const conf = rec && rec.StatusDok === 'Terkonfirmasi';
   const locked = conf && !isSA();
   form.classList.toggle('locked', !!locked);
-  form.querySelectorAll('.card [name], .combo-input').forEach(el => {
+  form.querySelectorAll('.card [name], .card [data-f], .combo-input').forEach(el => {
     if (el.name === 'Status') return;
     if (el.tagName === 'SELECT') el.disabled = !!locked; else el.readOnly = !!locked;
   });
@@ -1819,7 +1895,7 @@ function updateActionBar(lay) {
   if (st.dirty) info.textContent = conf ? 'Ada perubahan belum disimpan' : 'Isian tersimpan sementara di perangkat ini';
   else if (!rec) info.textContent = 'Order baru · isi lalu simpan draf atau konfirmasi';
   else if (!conf) info.textContent = 'Draf tersimpan · ' + tglJam(rec.DiubahPada);
-  else info.textContent = (String(rec.Dicetak) === 'true' ? 'Dicetak ' + tglJam(rec.WaktuCetak) : 'Terkonfirmasi, siap dicetak') + ' · No. SJ ' + rec.NoSJ;
+  else info.textContent = (String(rec.Dicetak) === 'true' ? 'Dicetak ' + tglJam(rec.WaktuCetak) : 'Terkonfirmasi, siap dicetak') + (lay === 'paket' ? ' · No. resi ' : ' · No. SJ ') + rec.NoSJ;
 }
 function onComboPick(lay, target, id) {
   const st = FORMS[lay], form = st.el;
@@ -1829,7 +1905,9 @@ function onComboPick(lay, target, id) {
     const kode = form.querySelector('[name=KodePelanggan]');
     if (p) kode.value = lay === 'sewa' ? p.IDSewa : p.IDKirim;
     const pay = form.querySelector('[name=Pembayaran]');
-    if (p && p.PembayaranBawaan && !pay.value) { pay.value = p.PembayaranBawaan; if (p.PembayaranBawaan === 'Termin') form.querySelector('[name=TerminHari]').value = p.TerminHari || ''; }
+    if (lay === 'paket' && p) [['PengirimNama', 'Nama'], ['PengirimHP', 'NoHP'], ['PengirimAlamat', 'Alamat']].forEach(([f, k]) => { const el = form.querySelector(`[name=${f}]`); el.value = p[k] || ''; el.classList.remove('invalid'); });
+    if (lay === 'paket') { updateKotaList(lay); applyTarif(lay); }
+    if (p && p.PembayaranBawaan && !pay.value && [...pay.options].some(o => o.value === p.PembayaranBawaan)) { pay.value = p.PembayaranBawaan; if (p.PembayaranBawaan === 'Termin') form.querySelector('[name=TerminHari]').value = p.TerminHari || ''; }
   }
   if (target === 'KendaraanID' && lay === 'sewa') {
     const k = byId('kendaraan', id), j = form.querySelector('[name=JenisKendaraan]');
@@ -1845,13 +1923,14 @@ function updateCustomerInfo(lay, prefer) {
   if (p) kode.value = cur === p.IDSewa || cur === p.IDKirim ? cur : (lay === 'sewa' ? p.IDSewa : p.IDKirim);
   const set = (k, v) => { const el = form.querySelector(`[data-info="${k}"]`); if (el) el.textContent = v || '—'; };
   set('NoHP', p && p.NoHP); set('NPWP', p && p.NPWP); set('Alamat', p && p.Alamat);
+  if (lay === 'paket') updateKotaList(lay);
   if (lay === 'kirim') {
     const r = byId('penerima', form.querySelector('[name=PenerimaID]').value);
     set('PenerimaHP', r && (r.NoHP + (r.NamaPIC ? ' · PIC ' + r.NamaPIC : ''))); set('PenerimaAlamat', r && [r.Alamat, r.Kota].filter(Boolean).join(', '));
   }
 }
 function updateWarnings(lay) {
-  const st = FORMS[lay]; if (!st) return; const form = st.el;
+  const st = FORMS[lay]; if (!st || lay === 'paket') return; const form = st.el;
   const kv = form.querySelector(lay === 'sewa' ? '[name=KendaraanID]' : '[name=UnitID]').value;
   const k = byId('kendaraan', kv), wk = form.querySelector('[data-warn="kendaraan"]');
   const al = k ? vehicleAlerts(k) : [];
@@ -1869,6 +1948,7 @@ function recalc(lay) {
   const st = FORMS[lay]; if (!st) return; const form = st.el;
   const v = n => num(form.querySelector(`[name="${n}"]`).value);
   const pay = form.querySelector('[name=Pembayaran]').value;
+  if (lay === 'paket') hitungOngkos(lay);
   const ppEl = form.querySelector('[name=PajakPersen]'), pp = persenNum(ppEl.value);
   const pajak = Math.round(v('Harga') * pp / 100);
   form.querySelector('[name=Pajak]').value = ppEl.value.trim() === '' ? '' : String(pajak);
@@ -1876,7 +1956,7 @@ function recalc(lay) {
   form.querySelectorAll('[data-pajak]').forEach(b => b.classList.toggle('on', ppEl.value.trim() !== '' && persenNum(b.dataset.pajak.replace(',', '.')) === pp));
   const total = v('Harga') + pajak + v('Penyesuaian');
   form.querySelector('[data-calc="Total"]').textContent = rp(total);
-  form.querySelector('[data-calc="TotalText"]').textContent = pay ? 'Metode: ' + pay : 'Harga + pajak + penyesuaian';
+  form.querySelector('[data-calc="TotalText"]').textContent = pay ? 'Metode: ' + (lay === 'paket' ? (METODE_PAKET.find(m => m[0] === pay) || [, pay])[1] : pay) : 'Harga + pajak + penyesuaian';
   const hari = form.querySelector('[data-pay="hari"]'), dp = form.querySelector('[data-pay="dp"]'), due = form.querySelector('[data-pay="due"]');
   hari.hidden = !(pay === 'Termin' || pay === 'DP');
   form.querySelector('[data-pay-hari-label]').textContent = pay === 'DP' ? 'Pelunasan sisa dalam (hari)' : 'Jumlah hari termin';
@@ -1886,7 +1966,7 @@ function recalc(lay) {
   const base = st.rec && st.rec.NoSJ ? String(st.rec.Tanggal).slice(0, 10) : today();
   const h = v('TerminHari');
   if ((pay === 'Termin' || pay === 'DP') && h > 0) { due.hidden = false; due.innerHTML = `<i class="bi bi-calendar-event"></i> Jatuh tempo: <b>${tgl(addDays(base, h), true)}</b>${st.rec && st.rec.NoSJ ? '' : ' (dihitung dari tanggal konfirmasi)'}`; }
-  else if (pay === 'COD' || pay === 'Invoice Surat Kembali') { due.hidden = false; due.innerHTML = '<i class="bi bi-info-circle"></i> Invoice dibuat otomatis dan ditagih saat surat jalan terbit.'; }
+  else if (pay === 'COD' || pay === 'Invoice Surat Kembali') { due.hidden = false; due.innerHTML = `<i class="bi bi-info-circle"></i> Invoice dibuat otomatis dan ditagih saat ${lay === 'paket' ? 'resi' : 'surat jalan'} terbit.`; }
   else if (pay === 'Lunas') { due.hidden = false; due.innerHTML = '<i class="bi bi-check2-circle"></i> Langsung tercatat sebagai pemasukan saat konfirmasi.'; }
   else due.hidden = true;
 }
@@ -1897,9 +1977,23 @@ function validateForm(lay) {
   const ppRaw = String(data.PajakPersen || '').trim();
   if (ppRaw !== '' && (!/^\d{1,3}([.,]\d{1,2})?$/.test(ppRaw) || parseFloat(ppRaw.replace(',', '.')) > 100)) miss.push(['PajakPersen', 'Pajak (0–100%, maks. 2 desimal)']);
   if (data.Pembayaran === 'Termin' && !(num(data.TerminHari) > 0)) miss.push(['TerminHari', 'Jumlah hari termin']);
+  if (lay === 'paket') {
+    const rows = $$('.it-row', form), list = itemsOf(lay);
+    let ok = 0;
+    list.forEach((b, i) => {
+      const row = rows[i]; if (!row) return;
+      const empty = !b.d && !b.q && !b.kg && !b.p && !b.l && !b.t; if (empty) return;
+      const bad = [];
+      if (!b.d) bad.push('d'); if (!(b.q > 0)) bad.push('q');
+      if (!(b.kg > 0) && !(b.p > 0 && b.l > 0 && b.t > 0)) bad.push('kg', 'p', 'l', 't');
+      bad.forEach(f => row.querySelector(`[data-f="${f}"]`).classList.add('invalid'));
+      if (bad.length) miss.push(['', 'Barang baris ' + (i + 1)]); else ok++;
+    });
+    if (!ok && !miss.some(m => m[1].startsWith('Barang'))) { const d = form.querySelector('.it-row [data-f="d"]'); if (d) d.classList.add('invalid'); miss.push(['', 'Minimal satu barang kiriman']); }
+  }
   if (data.Pembayaran === 'DP') { const tot = num(data.Harga) + num(data.Pajak) + num(data.Penyesuaian); if (!(num(data.DP) > 0) || num(data.DP) > tot) miss.push(['DP', 'Nominal DP (≤ total)']); }
   if (!miss.length) return true;
-  miss.forEach(([k]) => { const el = form.querySelector(`[name="${k}"]`); const target = el && el.type === 'hidden' ? el.closest('.combo').querySelector('.combo-input') : el; if (target) target.classList.add('invalid'); });
+  miss.forEach(([k]) => { if (!k) return; const el = form.querySelector(`[name="${k}"]`); const target = el && el.type === 'hidden' ? el.closest('.combo').querySelector('.combo-input') : el; if (target) target.classList.add('invalid'); });
   const first = form.querySelector('.invalid');
   if (first) { first.scrollIntoView({ behavior: 'smooth', block: 'center' }); setTimeout(() => first.focus({ preventScroll: true }), 300); }
   toast('warning', 'Lengkapi data dulu', miss.map(m => m[1]).join(', '));
@@ -1917,7 +2011,7 @@ function saveForm(lay, action, btn) {
       saveCache(); updateBadges(); clearLocalDraft(lay);
       fillForm(lay, byId('orders', o.ID));
       if (action === 'confirm') {
-        const t = toast('success', 'Surat jalan ' + o.NoSJ + ' terbit', 'Order terkunci. Klik di sini untuk mencetak.', 8000);
+        const t = toast('success', (lay === 'paket' ? 'Resi ' : 'Surat jalan ') + o.NoSJ + ' terbit', 'Order terkunci. Klik di sini untuk mencetak.', 8000);
         t.style.cursor = 'pointer'; t.onclick = e => { if (!e.target.closest('.x')) printOrder(o.ID, 'tanpa'); };
       } else ok(r.message);
     }).catch(err => fail(err, action === 'confirm' ? 'Konfirmasi gagal' : 'Gagal menyimpan')).finally(() => btnBusy(btn, false));
@@ -1929,14 +2023,129 @@ function saveForm(lay, action, btn) {
   if (!validateForm(lay)) return;
   const p = byId('pelanggan', data.PelangganID);
   const total = num(data.Harga) + num(data.Pajak) + num(data.Penyesuaian);
-  const rows = lay === 'sewa'
+  const rows = lay === 'paket'
+    ? [['Pelanggan', p && p.Nama], ['Pengirim', data.PengirimNama], ['Penerima', data.PenerimaNama + ' · ' + firstPart(data.PenerimaAlamat)], ['Isi kiriman', paketRingkas(itemTotals(itemsOf(lay)))]]
+    : lay === 'sewa'
     ? [['Pelanggan', p && p.Nama], ['Unit', (byId('kendaraan', data.KendaraanID) || {}).NoPol], ['Pengemudi', (byId('pengemudi', data.PengemudiID) || {}).Nama], ['Rute', firstPart(data.MuatAlamat) + ' → ' + firstPart(data.BongkarAlamat)]]
     : [['Pelanggan', p && p.Nama], ['Penerima', (byId('penerima', data.PenerimaID) || {}).Nama], ['Mobil', [data.Merk, data.Tipe, data.NoPolMobil].filter(Boolean).join(' ')], ['Layanan', data.JenisLayanan]];
   rows.push(['Pembayaran', data.Pembayaran + (data.Pembayaran === 'Termin' ? ' ' + data.TerminHari + ' hari' : '')], ['Total', rp(total)]);
   confirmDialog({
     title: 'Konfirmasi & kunci order?', icon: 'bi-lock', ok: 'Konfirmasi & terbitkan', okIcon: 'bi-check2-circle',
-    html: `Nomor surat jalan akan diterbitkan. Setelah dikonfirmasi, Admin hanya dapat mengubah status.<div class="confirm-sum">${rows.map(r => `<div><span>${esc(r[0])}</span><b>${esc(r[1] || '—')}</b></div>`).join('')}</div>`
+    html: `Nomor ${lay === 'paket' ? 'resi' : 'surat jalan'} akan diterbitkan. Setelah dikonfirmasi, Admin hanya dapat mengubah status.<div class="confirm-sum">${rows.map(r => `<div><span>${esc(r[0])}</span><b>${esc(r[1] || '—')}</b></div>`).join('')}</div>`
   }).then(v => { if (v === true) run(); });
+}
+// ── Paket: tabel barang multi-baris ─────────────────────────
+// Disimpan sebagai JSON di input tersembunyi name="Barang": [{d, q, kg, p, l, t}]
+// Volume per koli = P × L × T (cm) / 1.000.000 → m³. Total dihitung ulang di server.
+function decNum(v) { const n = parseFloat(String(v === undefined || v === null ? '' : v).replace(',', '.')); return isFinite(n) && n > 0 ? n : 0; }
+function itemsOf(lay) { const h = FORMS[lay] && FORMS[lay].el.querySelector('[name=Barang]'); try { const a = JSON.parse((h && h.value) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+function itemTotals(list) {
+  return list.reduce((t, b) => { const q = Number(b.q) || 0; t.TotalKoli += q; t.TotalBerat += q * (Number(b.kg) || 0); t.TotalVolume += q * (Number(b.p) || 0) * (Number(b.l) || 0) * (Number(b.t) || 0) / 1e6; return t; }, { TotalKoli: 0, TotalBerat: 0, TotalVolume: 0 });
+}
+function itemRowHTML(b, i) {
+  const v = k => (b[k] ? String(b[k]).replace('.', ',') : '');
+  return `<div class="it-row" data-i="${i}">
+    <span class="it-no">${i + 1}</span>
+    <label class="it-c it-d"><span>Detail kiriman</span><input class="input" data-f="d" maxlength="200" value="${esc(b.d || '')}" placeholder="Contoh: Dus sparepart motor"></label>
+    <label class="it-c it-q"><span>Qty (koli)</span><input class="input t-right" data-f="q" inputmode="numeric" maxlength="6" value="${v('q')}" placeholder="0"></label>
+    <label class="it-c it-kg"><span>Kg / koli</span><input class="input t-right" data-f="kg" inputmode="decimal" maxlength="9" value="${v('kg')}" placeholder="0"></label>
+    <div class="it-c it-dim"><span>P × L × T (cm)</span><div class="dim3"><input class="input" data-f="p" inputmode="decimal" maxlength="7" value="${v('p')}" placeholder="P" aria-label="Panjang cm"><i>×</i><input class="input" data-f="l" inputmode="decimal" maxlength="7" value="${v('l')}" placeholder="L" aria-label="Lebar cm"><i>×</i><input class="input" data-f="t" inputmode="decimal" maxlength="7" value="${v('t')}" placeholder="T" aria-label="Tinggi cm"></div></div>
+    <div class="it-c it-sum"><span>Subtotal</span><b data-it="kg">0 kg</b><small data-it="m3">0 m³</small></div>
+    <button type="button" class="icon-btn it-del" data-it-del="${i}" title="Hapus baris" aria-label="Hapus baris ${i + 1}"><i class="bi bi-trash"></i></button>
+  </div>`;
+}
+function renderItems(lay) {
+  const st = FORMS[lay]; if (!st) return;
+  const box = st.el.querySelector('[data-items]'); if (!box) return;
+  let list = itemsOf(lay); if (!list.length) list = [{}];
+  box.innerHTML = list.map(itemRowHTML).join('');
+  if (st.el.classList.contains('locked')) $$('[data-f]', box).forEach(el => { el.readOnly = true; });
+  updateItemTotals(lay);
+}
+function readItems(lay) {
+  return $$('.it-row', FORMS[lay].el).map(row => {
+    const g = f => row.querySelector(`[data-f="${f}"]`).value;
+    return { d: g('d').trim(), q: Math.round(decNum(g('q'))), kg: decNum(g('kg')), p: decNum(g('p')), l: decNum(g('l')), t: decNum(g('t')) };
+  });
+}
+function syncItems(lay) {
+  const list = readItems(lay);
+  const filled = list.filter(b => b.d || b.q || b.kg || b.p || b.l || b.t);
+  FORMS[lay].el.querySelector('[name=Barang]').value = filled.length ? JSON.stringify(list) : '';
+  updateItemTotals(lay, list);
+}
+function updateItemTotals(lay, list) {
+  const form = FORMS[lay].el; list = list || readItems(lay);
+  $$('.it-row', form).forEach((row, i) => {
+    const b = list[i] || {}, q = b.q || 0;
+    row.querySelector('[data-it="kg"]').textContent = fnumDec(q * (b.kg || 0)) + ' kg';
+    row.querySelector('[data-it="m3"]').textContent = fnumDec(q * (b.p || 0) * (b.l || 0) * (b.t || 0) / 1e6, 4) + ' m³';
+  });
+  const t = itemTotals(list);
+  form.querySelector('[data-tot="koli"]').textContent = fnumDec(t.TotalKoli);
+  form.querySelector('[data-tot="kg"]').textContent = fnumDec(t.TotalBerat) + ' kg';
+  form.querySelector('[data-tot="m3"]').textContent = fnumDec(t.TotalVolume, 4) + ' m³';
+  $$('.it-del', form).forEach(b => { b.disabled = $$('.it-row', form).length === 1; });
+}
+function addItemRow(lay) {
+  const list = readItems(lay); list.push({});
+  FORMS[lay].el.querySelector('[name=Barang]').value = JSON.stringify(list);
+  renderItems(lay); markDirty(lay);
+  const rows = $$('.it-row', FORMS[lay].el); rows[rows.length - 1].querySelector('[data-f="d"]').focus();
+}
+function removeItemRow(lay, i) {
+  const list = readItems(lay); if (list.length <= 1) return;
+  list.splice(i, 1);
+  FORMS[lay].el.querySelector('[name=Barang]').value = JSON.stringify(list);
+  renderItems(lay); markDirty(lay); recalc(lay);
+}
+// ── Paket: tarif kg / volume dari Data Pelanggan ────────────
+function updateKotaList(lay) {
+  const form = FORMS[lay].el, p = byId('pelanggan', form.querySelector('[name=PelangganID]').value);
+  $('#dlKotaPaket').innerHTML = tarifList(p).filter(t => t.kota).map(t => `<option value="${esc(t.kota)}">${esc(rp(t.kg))}/kg · ${esc(rp(t.m3))}/m³</option>`).join('');
+}
+/** Isi tarif/kg & tarif/m³ dari pelanggan + kota tujuan (dipanggil saat pengguna mengubah pelanggan/kota). */
+function applyTarif(lay) {
+  const form = FORMS[lay].el, p = byId('pelanggan', form.querySelector('[name=PelangganID]').value);
+  const kota = form.querySelector('[name=KotaTujuan]').value.trim();
+  const t = p ? cariTarif(p, kota) : null;
+  setMoney(form.querySelector('[name=TarifKg]'), t && num(t.kg) ? t.kg : '');
+  setMoney(form.querySelector('[name=TarifVolume]'), t && num(t.m3) ? t.m3 : '');
+  if (t && num(t.m3) && !num(t.kg)) form.querySelector('[name=DasarTarif]').value = 'volume';
+  if (t && num(t.kg) && !num(t.m3)) form.querySelector('[name=DasarTarif]').value = 'kg';
+  form.dataset.tarifSrc = !p ? '' : t ? (t.kota ? 'kota' : 'umum') : 'none';
+}
+function hitungOngkos(lay) {
+  const form = FORMS[lay].el, q = s => form.querySelector(s);
+  const t = itemTotals(itemsOf(lay));
+  const kg = Math.round(t.TotalBerat * 100) / 100, m3 = Math.round(t.TotalVolume * 10000) / 10000;
+  const rk = num(q('[name=TarifKg]').value), rv = num(q('[name=TarifVolume]').value);
+  const dasar = q('[name=DasarTarif]').value === 'volume' ? 'volume' : 'kg';
+  const sum = { kg: Math.round(kg * rk), volume: Math.round(m3 * rv) };
+  q('[data-to="kg"]').textContent = `${fnumDec(kg)} kg × ${rp(rk)}`;
+  q('[data-to="volume"]').textContent = `${fnumDec(m3, 4)} m³ × ${rp(rv)}`;
+  q('[data-to-sum="kg"]').textContent = rp(sum.kg); q('[data-to-sum="volume"]').textContent = rp(sum.volume);
+  $$('[data-dasar]', form).forEach(b => { b.classList.toggle('on', b.dataset.dasar === dasar); b.disabled = form.classList.contains('locked'); });
+  const rate = dasar === 'volume' ? rv : rk, harga = q('[name=Harga]');
+  const auto = rate > 0;
+  if (auto) setMoney(harga, sum[dasar]);
+  harga.readOnly = auto || form.classList.contains('locked');
+  q('[data-harga-auto]').hidden = !auto;
+  const p = byId('pelanggan', q('[name=PelangganID]').value), kota = q('[name=KotaTujuan]').value.trim();
+  const src = q('[data-tarif-src]'), hint = q('[data-kota-hint]');
+  const found = p ? cariTarif(p, kota) : null;
+  if (!p) src.textContent = 'Pilih pelanggan & kota tujuan untuk mengisi tarif otomatis.';
+  else if (found && found.kota) src.textContent = `Tarif ${p.Nama} untuk ${found.kota}. Bisa diubah khusus untuk order ini.`;
+  else if (found) src.textContent = `Tarif umum ${p.Nama} (semua kota). Bisa diubah khusus untuk order ini.`;
+  else src.textContent = `${p.Nama} belum punya tarif${kota ? ' untuk ' + kota : ''}. Isi tarif manual atau tambahkan di Data Pelanggan.`;
+  hint.textContent = !p ? 'Menentukan tarif dari Data Pelanggan.' : found ? `Tarif: ${rp(found.kg)}/kg · ${rp(found.m3)}/m³${found.kota ? '' : ' (umum)'}` : (kota ? 'Belum ada tarif untuk kota ini.' : 'Ketik atau pilih kota dari daftar tarif pelanggan.');
+  hint.className = found ? 'pay-auto' : 'muted';
+}
+function basisText(o) {
+  if (o.Layanan !== 'paket') return '';
+  const vol = o.DasarTarif === 'volume', rate = num(vol ? o.TarifVolume : o.TarifKg);
+  if (!rate) return '';
+  return vol ? `${fnumDec(o.TotalVolume, 4)} m³ × ${rp(rate)}` : `${fnumDec(o.TotalBerat)} kg × ${rp(rate)}`;
 }
 function goInspeksi(lay) {
   const st = FORMS[lay];
@@ -2137,12 +2346,12 @@ function renderFinance() {
   const fin = S.d.finance.filter(x => x.Status !== 'Batal' && x.Tanggal >= from && x.Tanggal <= to);
   const sum = (fn) => fin.filter(fn).reduce((a, x) => a + num(x.Nominal), 0);
   const masuk = sum(x => x.Jenis === 'Pemasukan'), keluar = sum(x => x.Jenis === 'Pengeluaran');
-  const masukSewa = sum(x => x.Jenis === 'Pemasukan' && x.Layanan === 'Sewa'), masukKirim = sum(x => x.Jenis === 'Pemasukan' && x.Layanan === 'Kirim');
+  const masukSewa = sum(x => x.Jenis === 'Pemasukan' && x.Layanan === 'Sewa'), masukKirim = sum(x => x.Jenis === 'Pemasukan' && x.Layanan === 'Kirim'), masukPaket = sum(x => x.Jenis === 'Pemasukan' && x.Layanan === 'Paket');
   const piutangInv = S.d.invoices.filter(i => i.Status === 'Belum Lunas');
   const piutang = piutangInv.reduce((a, i) => a + num(i.Tagihan), 0) + S.d.finance.filter(x => x.Jenis === 'Piutang' && x.Status === 'Belum Lunas').reduce((a, x) => a + num(x.Nominal), 0);
   const utang = S.d.finance.filter(x => x.Jenis === 'Utang' && x.Status === 'Belum Lunas').reduce((a, x) => a + num(x.Nominal), 0);
   const laba = masuk - keluar;
-  const tabs = [['semua', 'Semua transaksi', () => true], ['sewa', 'Pemasukan sewa', x => x.Jenis === 'Pemasukan' && x.Layanan === 'Sewa'], ['kirim', 'Pemasukan kirim', x => x.Jenis === 'Pemasukan' && x.Layanan === 'Kirim'],
+  const tabs = [['semua', 'Semua transaksi', () => true], ['sewa', 'Pemasukan sewa', x => x.Jenis === 'Pemasukan' && x.Layanan === 'Sewa'], ['kirim', 'Pemasukan kirim', x => x.Jenis === 'Pemasukan' && x.Layanan === 'Kirim'], ['paket', 'Pemasukan paket', x => x.Jenis === 'Pemasukan' && x.Layanan === 'Paket'],
     ['ops', 'Operasional & pengeluaran', x => x.Jenis === 'Pengeluaran'], ['up', 'Utang & piutang', x => x.Jenis === 'Utang' || x.Jenis === 'Piutang']];
   const biaya = Object.entries(fin.filter(x => x.Jenis === 'Pengeluaran').reduce((m, x) => { m[x.Kategori || 'Lainnya'] = (m[x.Kategori || 'Lainnya'] || 0) + num(x.Nominal); return m; }, {})).sort((a, b) => b[1] - a[1]);
   const perRek = S.d.rekening.map(r => ({ r, inn: fin.filter(x => x.RekeningID === r.ID && x.Jenis === 'Pemasukan').reduce((a, x) => a + num(x.Nominal), 0), out: fin.filter(x => x.RekeningID === r.ID && x.Jenis === 'Pengeluaran').reduce((a, x) => a + num(x.Nominal), 0) })).filter(x => x.inn || x.out || String(x.r.Aktif) === 'true');
@@ -2159,7 +2368,7 @@ function renderFinance() {
     ${f.period === 'custom' ? `<input class="input" type="date" id="finFrom" value="${esc(f.from)}" style="width:auto"><span class="muted">s/d</span><input class="input" type="date" id="finTo" value="${esc(f.to)}" style="width:auto">` : `<span class="muted" style="font-size:12.5px"><i class="bi bi-calendar3"></i> ${f.period === 'semua' ? 'Seluruh periode' : tgl(from) + ' – ' + tgl(to)}</span>`}
   </div></div>
   <div class="kpis five">
-    ${kpi('Pemasukan', rp(masuk), 'bi-graph-up-arrow', 'ic-green', `Sewa ${rp(masukSewa)} · Kirim ${rp(masukKirim)}`, 'money')}
+    ${kpi('Pemasukan', rp(masuk), 'bi-graph-up-arrow', 'ic-green', `Sewa ${rp(masukSewa)} · Kirim ${rp(masukKirim)} · Paket ${rp(masukPaket)}`, 'money')}
     ${kpi('Pengeluaran', rp(keluar), 'bi-fuel-pump', 'ic-red', masuk ? Math.round(keluar / masuk * 100) + '% dari pemasukan' : 'BBM, tol, uang jalan, servis', 'money')}
     ${kpi('Laba operasional', rp(laba), 'bi-piggy-bank', 'ic-primary', masuk ? 'Margin ' + Math.round(laba / masuk * 100) + '% · sebelum pajak' : 'Sebelum pajak & depresiasi', 'money', laba >= 0 ? 'ok' : 'danger')}
     ${kpi('Piutang belum lunas', rp(piutang), 'bi-hourglass-split', 'ic-amber', piutangInv.length + ' invoice + piutang manual', 'money')}
@@ -2286,22 +2495,22 @@ function reportData() {
   const inRange = d => { const x = String(d || '').slice(0, 10); return x >= from && x <= to; };
   if (f.jenis === 'order') {
     const list = sortOrders(S.d.orders.filter(o => o.StatusDok === 'Terkonfirmasi' && inRange(o.Tanggal) && (!f.svc || o.Layanan === f.svc) && (!f.status || o.Status === f.status)));
-    return { title: 'Rekap Order & Surat Jalan', head: ['No. SJ', 'Tanggal', 'Layanan', 'Pelanggan', 'Armada / mobil', 'Pengemudi', 'Rute', 'Status', 'Pembayaran', 'Total'],
-      rows: list.map(o => [o.NoSJ, tglPendek(o.Tanggal), o.Layanan === 'sewa' ? 'Sewa ' + (o.JenisKendaraan || '') : 'Kirim ' + (o.JenisLayanan || ''), o.NamaPelanggan, o.Layanan === 'sewa' ? o.NoPol : [o.Merk, o.Tipe, o.NoPolMobil].filter(Boolean).join(' '), o.PengemudiNama || '', orderRoute(o).filter(Boolean).join(' → '), o.Status, o.Pembayaran, num(o.Total)]),
-      money: [9], kpi: [['Surat jalan', fnum(list.length)], ['Sewa', fnum(list.filter(o => o.Layanan === 'sewa').length)], ['Kirim', fnum(list.filter(o => o.Layanan === 'kirim').length)], ['Nilai order', rp(list.filter(o => o.Status !== 'Dibatalkan').reduce((a, o) => a + num(o.Total), 0))]],
-      chart: () => { const ms = Array.from(new Set(list.map(o => monthKey(o.Tanggal)))).sort().slice(-12); return { type: 'bar', money: false, data: { labels: ms.map(monthLabel), datasets: [{ label: 'Sewa', data: ms.map(m => list.filter(o => o.Layanan === 'sewa' && monthKey(o.Tanggal) === m).length), backgroundColor: chartColors().primary, borderRadius: 5 }, { label: 'Kirim', data: ms.map(m => list.filter(o => o.Layanan === 'kirim' && monthKey(o.Tanggal) === m).length), backgroundColor: chartColors().indigo, borderRadius: 5 }] } }; } };
+    return { title: 'Rekap Order & Surat Jalan', head: ['No. SJ / resi', 'Tanggal', 'Layanan', 'Pelanggan', 'Armada / mobil / isi', 'Pengemudi', 'Rute', 'Status', 'Pembayaran', 'Total'],
+      rows: list.map(o => [o.NoSJ, tglPendek(o.Tanggal), o.Layanan === 'sewa' ? 'Sewa ' + (o.JenisKendaraan || '') : o.Layanan === 'paket' ? 'Paket' : 'Kirim ' + (o.JenisLayanan || ''), o.NamaPelanggan, o.Layanan === 'sewa' ? o.NoPol : o.Layanan === 'paket' ? paketRingkas(o) : [o.Merk, o.Tipe, o.NoPolMobil].filter(Boolean).join(' '), o.PengemudiNama || '', orderRoute(o).filter(Boolean).join(' → '), o.Status, o.Pembayaran, num(o.Total)]),
+      money: [9], kpi: [['Surat jalan', fnum(list.length)], ['Sewa', fnum(list.filter(o => o.Layanan === 'sewa').length)], ['Kirim / paket', fnum(list.filter(o => o.Layanan === 'kirim').length) + ' / ' + fnum(list.filter(o => o.Layanan === 'paket').length)], ['Nilai order', rp(list.filter(o => o.Status !== 'Dibatalkan').reduce((a, o) => a + num(o.Total), 0))]],
+      chart: () => { const ms = Array.from(new Set(list.map(o => monthKey(o.Tanggal)))).sort().slice(-12); return { type: 'bar', money: false, data: { labels: ms.map(monthLabel), datasets: [{ label: 'Sewa', data: ms.map(m => list.filter(o => o.Layanan === 'sewa' && monthKey(o.Tanggal) === m).length), backgroundColor: chartColors().primary, borderRadius: 5 }, { label: 'Kirim', data: ms.map(m => list.filter(o => o.Layanan === 'kirim' && monthKey(o.Tanggal) === m).length), backgroundColor: chartColors().indigo, borderRadius: 5 }, { label: 'Paket', data: ms.map(m => list.filter(o => o.Layanan === 'paket' && monthKey(o.Tanggal) === m).length), backgroundColor: chartColors().amber || '#F59E0B', borderRadius: 5 }] } }; } };
   }
   if (f.jenis === 'invoice') {
     const st = f.status;
     const list = S.d.invoices.filter(i => inRange(i.Tanggal) && (!f.svc || i.Layanan === f.svc) && (!st || i.Status === st)).sort((a, b) => String(a.JatuhTempo).localeCompare(String(b.JatuhTempo)));
     const t = today();
     return { title: 'Invoice & Piutang', head: ['No. invoice', 'No. SJ', 'Pelanggan', 'Layanan', 'Tanggal', 'Jatuh tempo', 'Metode', 'Status', 'Tgl bayar', 'Tagihan'],
-      rows: list.map(i => [i.NoInvoice, i.NoSJ, i.NamaPelanggan, i.Layanan === 'sewa' ? 'Sewa' : 'Kirim', tglPendek(i.Tanggal), tglPendek(i.JatuhTempo), i.Pembayaran, i.Status === 'Belum Lunas' && i.JatuhTempo < t ? 'Lewat jatuh tempo' : i.Status, i.TglBayar ? tglPendek(i.TglBayar) : '', num(i.Tagihan)]),
+      rows: list.map(i => [i.NoInvoice, i.NoSJ, i.NamaPelanggan, LAY_LABEL[i.Layanan] || 'Kirim', tglPendek(i.Tanggal), tglPendek(i.JatuhTempo), i.Pembayaran, i.Status === 'Belum Lunas' && i.JatuhTempo < t ? 'Lewat jatuh tempo' : i.Status, i.TglBayar ? tglPendek(i.TglBayar) : '', num(i.Tagihan)]),
       money: [9], kpi: [['Invoice', fnum(list.length)], ['Belum lunas', rp(list.filter(i => i.Status === 'Belum Lunas').reduce((a, i) => a + num(i.Tagihan), 0))], ['Lewat jatuh tempo', rp(list.filter(i => i.Status === 'Belum Lunas' && i.JatuhTempo < t).reduce((a, i) => a + num(i.Tagihan), 0))], ['Sudah lunas', rp(list.filter(i => i.Status === 'Lunas').reduce((a, i) => a + num(i.Tagihan), 0))]],
       chart: null };
   }
   if (f.jenis === 'finance') {
-    const list = S.d.finance.filter(x => x.Status !== 'Batal' && inRange(x.Tanggal) && (!f.svc || x.Layanan === (f.svc === 'sewa' ? 'Sewa' : 'Kirim'))).sort((a, b) => String(a.Tanggal).localeCompare(String(b.Tanggal)));
+    const list = S.d.finance.filter(x => x.Status !== 'Batal' && inRange(x.Tanggal) && (!f.svc || x.Layanan === LAY_LABEL[f.svc])).sort((a, b) => String(a.Tanggal).localeCompare(String(b.Tanggal)));
     const inn = list.filter(x => x.Jenis === 'Pemasukan').reduce((a, x) => a + num(x.Nominal), 0), out = list.filter(x => x.Jenis === 'Pengeluaran').reduce((a, x) => a + num(x.Nominal), 0);
     return { title: 'Arus Kas & Buku Besar', head: ['Tanggal', 'Kode unik', 'Jenis', 'Kategori', 'Layanan', 'Pihak', 'Keterangan', 'Akun', 'Status', 'Nominal'],
       rows: list.map(x => [tglPendek(x.Tanggal), x.KodeRef, x.Jenis, x.Kategori, x.Layanan, x.Pihak, x.Keterangan, rekName(x.RekeningID), x.Status, (x.Jenis === 'Pengeluaran' || x.Jenis === 'Utang' ? -1 : 1) * num(x.Nominal)]),
@@ -2332,7 +2541,7 @@ function renderLaporan() {
     ${f.jenis !== 'legalitas' ? `<div class="filters">
       <label class="field"><span class="label">Dari tanggal</span><input class="input" type="date" id="lapFrom" value="${esc(f.from)}"></label>
       <label class="field"><span class="label">Sampai tanggal</span><input class="input" type="date" id="lapTo" value="${esc(f.to)}"></label>
-      <label class="field"><span class="label">Layanan</span><select class="input" id="lapSvc"><option value="">Semua layanan</option><option value="sewa" ${f.svc === 'sewa' ? 'selected' : ''}>Sewa</option><option value="kirim" ${f.svc === 'kirim' ? 'selected' : ''}>Kirim</option></select></label>
+      <label class="field"><span class="label">Layanan</span><select class="input" id="lapSvc"><option value="">Semua layanan</option><option value="sewa" ${f.svc === 'sewa' ? 'selected' : ''}>Sewa</option><option value="kirim" ${f.svc === 'kirim' ? 'selected' : ''}>Kirim</option><option value="paket" ${f.svc === 'paket' ? 'selected' : ''}>Paket</option></select></label>
       ${statusOpts.length ? `<label class="field"><span class="label">Status</span><select class="input" id="lapStatus"><option value="">Semua status</option>${statusOpts.map(s => `<option ${f.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select></label>` : '<div></div>'}
     </div><div class="chips-row" style="margin-top:12px">${[['Bulan ini', 'bulan'], ['Bulan lalu', 'bulanlalu'], ['3 bulan', '3bulan'], ['Tahun ini', 'tahun'], ['Semua', 'semua']].map(([l, k]) => `<button class="fchip" data-per="${k}">${l}</button>`).join('')}</div>` : ''}
   </div>
@@ -2674,13 +2883,14 @@ function bankBox(list) {
 }
 function priceTable(o) {
   return `<table class="t" style="margin-top:7px"><tr><th>Rincian biaya</th><th class="num">Jumlah</th></tr>
-    <tr><td>Harga dasar ${o.Layanan === 'sewa' ? 'sewa' : 'pengiriman'}</td><td class="num">${rp(o.Harga)}</td></tr>
+    <tr><td>${o.Layanan === 'paket' ? 'Ongkos kirim' + (basisText(o) ? ' (' + esc(basisText(o)) + ')' : '') : 'Harga dasar ' + (o.Layanan === 'sewa' ? 'sewa' : 'pengiriman')}</td><td class="num">${rp(o.Harga)}</td></tr>
     ${num(o.Pajak) ? `<tr><td>${esc(labelPajak(o))}</td><td class="num">${rp(o.Pajak)}</td></tr>` : ''}
     ${num(o.Penyesuaian) ? `<tr><td>Penyesuaian tarif</td><td class="num">${rp(o.Penyesuaian)}</td></tr>` : ''}
     <tr><td style="font-weight:700">TOTAL · ${esc(o.Pembayaran === 'Termin' ? 'Pembayaran termin' : o.Pembayaran)}</td><td class="num" style="font-weight:700;font-size:12px">${rp(o.Total)}</td></tr>
     ${o.Pembayaran === 'DP' ? `<tr><td>DP diterima</td><td class="num">${rp(o.DP)}</td></tr><tr><td>Sisa tagihan</td><td class="num">${rp(o.Sisa)}</td></tr>` : ''}</table>`;
 }
 function docSuratJalan(o, nominal, forPdf) {
+  if (o.Layanan === 'paket') return docResiPaket(o, nominal, forPdf);
   const st = S.settings, acc = st.kopAccent === 'mono' ? '#0F172A' : st.themeColor;
   const head = `${kopHTML(st, nominal)}
     <table style="margin:8px 0 7px"><tr><td><div class="title">SURAT JALAN ${o.Layanan === 'sewa' ? 'SEWA KENDARAAN' : 'PENGIRIMAN KENDARAAN'}</div><div class="muted">${o.Layanan === 'sewa' ? 'Sewa kendaraan dengan pengemudi' : esc(o.JenisLayanan || '')}${nominal ? ' · Lembar dengan nominal' : ''}</div></td>
@@ -2718,6 +2928,23 @@ function docSuratJalan(o, nominal, forPdf) {
     if (insp && insp.Status === 'Disahkan') pages += `<div class="sheet a5">${inspeksiBody(insp, o, true)}${docFooter('Lampiran form inspeksi · ' + esc(o.NoSJ))}</div>`;
   }
   return docShell('Surat Jalan ' + o.NoSJ, pages, 'A5 landscape', forPdf);
+}
+function docResiPaket(o, nominal, forPdf) {
+  const st = S.settings, acc = st.kopAccent === 'mono' ? '#0F172A' : st.themeColor;
+  const b = barangOf(o), t = { koli: num(o.TotalKoli), kg: Number(o.TotalBerat) || 0, m3: Number(o.TotalVolume) || 0 };
+  const head = `${kopHTML(st, nominal)}
+    <table style="margin:8px 0 7px"><tr><td><div class="title">RESI PENGIRIMAN PAKET</div><div class="muted">Bukti penerimaan barang kiriman${nominal ? ' · Lembar dengan nominal' : ''}</div></td>
+    <td style="text-align:right;width:44%"><div class="box" style="display:inline-block;text-align:left;min-width:220px;border-color:${acc}"><table><tr><td><div class="lbl">No. resi</div><div style="font:700 15px Arial;color:${acc}">${esc(o.NoSJ)}</div></td><td style="padding-left:14px"><div class="lbl">Tanggal</div><div class="val">${tgl(o.Tanggal, true)}</div></td></tr></table></div></td></tr></table>`;
+  const parties = `<table style="margin-bottom:7px"><tr>
+      <td style="width:50%;padding-right:6px;vertical-align:top"><div class="box"><div class="lbl">▲ Pengirim</div><div class="val">${esc(o.PengirimNama)}</div><div>${esc(o.PengirimAlamat)}</div><div class="muted">Telp. ${esc(o.PengirimHP)}</div></div></td>
+      <td style="vertical-align:top"><div class="box"><div class="lbl">▼ Penerima${o.KotaTujuan ? ' · ' + esc(String(o.KotaTujuan).toUpperCase()) : ''}</div><div class="val">${esc(o.PenerimaNama)}</div><div>${esc(o.PenerimaAlamat)}</div><div class="muted">Telp. ${esc(o.PenerimaHP)}</div></div></td></tr></table>`;
+  const items = `<table class="t"><tr><th style="width:4%">No</th><th>Detail kiriman</th><th class="num" style="width:9%">Qty</th><th class="num" style="width:11%">Kg/koli</th><th style="width:17%">P × L × T (cm)</th><th class="num" style="width:11%">Total kg</th><th class="num" style="width:11%">Volume m³</th></tr>
+    ${b.map((x, i) => `<tr><td>${i + 1}</td><td>${esc(x.d)}</td><td class="num">${fnumDec(x.q)}</td><td class="num">${x.kg ? fnumDec(x.kg) : '—'}</td><td>${x.p && x.l && x.t ? fnumDec(x.p) + ' × ' + fnumDec(x.l) + ' × ' + fnumDec(x.t) : '—'}</td><td class="num">${fnumDec(x.q * x.kg)}</td><td class="num">${fnumDec(x.q * x.p * x.l * x.t / 1e6, 4)}</td></tr>`).join('')}
+    <tr><td colspan="2" style="font-weight:700">TOTAL</td><td class="num" style="font-weight:700">${fnumDec(t.koli)}</td><td></td><td></td><td class="num" style="font-weight:700">${fnumDec(t.kg)}</td><td class="num" style="font-weight:700">${fnumDec(t.m3, 4)}</td></tr></table>`;
+  const money = nominal ? priceTable(o) + bankBox(payAccountsFor(o)) : '';
+  const sign = `<table class="sign" style="margin-top:8px"><tr>${[['Pengirim', o.PengirimNama], ['Petugas', ''], ['Penerima', o.PenerimaNama]].map(([l, n]) => `<td><div style="text-align:left;font-weight:700;font-size:9.5px;color:#475569;margin-bottom:46px">${esc(l)}</div><div class="who">( ${esc(n || '............................')} )</div></td>`).join('')}</tr></table>`;
+  const klausul = `<div class="muted" style="font-size:8.5px;margin-top:6px">Isi kiriman dinyatakan oleh pengirim. Penerima wajib memeriksa jumlah koli dan kondisi kemasan sebelum menandatangani resi ini.</div>`;
+  return docShell('Resi ' + o.NoSJ, `<div class="sheet a5">${head}${parties}${items}${money}${sign}${klausul}${docFooter('Resi paket · ' + esc(st.companyName || ''))}</div>`, 'A5 landscape', forPdf);
 }
 function inspeksiBody(insp, o, compact) {
   let cl = []; try { cl = JSON.parse(insp.Checklist || '[]'); } catch (e) { cl = []; }
@@ -2758,14 +2985,14 @@ function docInvoice(i, forPdf) {
   const st = S.settings, acc = st.kopAccent === 'mono' ? '#0F172A' : st.themeColor;
   const o = byId('orders', i.OrderID) || {};
   const pel = byId('pelanggan', i.PelangganID) || {};
-  const desc = o.Layanan === 'sewa' ? `Sewa ${esc(o.JenisKendaraan || '')} ${esc(o.NoPol || '')}<br><span class="muted">${esc(orderRoute(o).filter(Boolean).join(' → '))}${o.JenisMuatan ? ' · ' + esc(o.JenisMuatan) : ''}</span>`
+  const desc = o.Layanan === 'paket' ? `Pengiriman paket ${esc(paketRingkas(o))}${basisText(o) ? '<br>Tarif: ' + esc(basisText(o)) : ''}<br><span class="muted">${esc(orderRoute(o).filter(Boolean).join(' → '))} · ke ${esc(o.PenerimaNama || '')}</span>` : o.Layanan === 'sewa' ? `Sewa ${esc(o.JenisKendaraan || '')} ${esc(o.NoPol || '')}<br><span class="muted">${esc(orderRoute(o).filter(Boolean).join(' → '))}${o.JenisMuatan ? ' · ' + esc(o.JenisMuatan) : ''}</span>`
     : `Pengiriman ${esc([o.Merk, o.Tipe].filter(Boolean).join(' '))} (${esc(o.NoPolMobil || '')})<br><span class="muted">${esc(o.JenisLayanan || '')} · ${esc(orderRoute(o).filter(Boolean).join(' → '))}</span>`;
   const body = `<div class="sheet a4">${kopHTML(st, true)}
     <table style="margin:18px 0 12px"><tr><td style="vertical-align:top"><div style="font:800 30px Arial;color:${acc};letter-spacing:.02em">INVOICE</div><div style="font:700 13px Arial;color:${acc}">${esc(i.NoInvoice)}</div><div class="muted" style="margin-top:2px">Tagihan jasa angkutan &amp; sewa armada</div>
       <div class="box" style="margin-top:12px;max-width:330px"><div class="lbl">Kepada yth.</div><div class="val" style="font-size:13px">${esc(i.NamaPelanggan)}</div>${pel.Alamat ? `<div>${esc(pel.Alamat)}</div>` : ''}${pel.NPWP ? `<div class="muted">NPWP ${esc(pel.NPWP)}</div>` : ''}</div></td>
       <td style="width:42%;vertical-align:top"><table class="t"><tr><td class="muted">Tanggal terbit</td><td class="num"><b>${tgl(i.Tanggal, true)}</b></td></tr><tr><td class="muted">Jatuh tempo</td><td class="num"><b>${tgl(i.JatuhTempo, true)}</b></td></tr><tr><td class="muted">Metode</td><td class="num">${esc(i.Pembayaran)}</td></tr><tr><td class="muted">Status</td><td class="num"><b>${esc(i.Status)}</b></td></tr></table>
       ${i.Status === 'Lunas' ? `<div style="text-align:right;margin-top:12px"><span class="stamp">LUNAS ${tglPendek(i.TglBayar)}</span></div>` : ''}</td></tr></table>
-    <table class="t"><tr><th style="width:4%">No</th><th style="width:13%">No. SJ</th><th style="width:12%">Tanggal</th><th>Layanan / rute &amp; keterangan</th><th class="num">Harga</th><th class="num">Pajak</th><th class="num">Penyesuaian</th><th class="num">Total</th></tr>
+    <table class="t"><tr><th style="width:4%">No</th><th style="width:13%">${o.Layanan === 'paket' ? 'No. resi' : 'No. SJ'}</th><th style="width:12%">Tanggal</th><th>Layanan / rute &amp; keterangan</th><th class="num">Harga</th><th class="num">Pajak</th><th class="num">Penyesuaian</th><th class="num">Total</th></tr>
       <tr><td>1</td><td><b>${esc(i.NoSJ)}</b></td><td>${tglPendek(o.Tanggal || i.Tanggal)}</td><td>${desc}</td><td class="num">${fnum(o.Harga)}</td><td class="num">${fnum(o.Pajak)}</td><td class="num">${fnum(o.Penyesuaian)}</td><td class="num"><b>${fnum(i.Total)}</b></td></tr></table>
     <table style="margin-top:10px"><tr><td style="vertical-align:top;padding-right:16px"><div class="box"><div class="lbl">Terbilang</div><i>${esc(terbilang(i.Tagihan))}</i></div>${bankBox(payAccountsFor(o))}</td>
       <td style="width:40%;vertical-align:top"><table class="t"><tr><td>Subtotal</td><td class="num">${rp(o.Harga)}</td></tr><tr><td>${esc(labelPajak(o))}</td><td class="num">${rp(o.Pajak)}</td></tr><tr><td>Penyesuaian tarif</td><td class="num">${rp(o.Penyesuaian)}</td></tr><tr><td>Total</td><td class="num">${rp(i.Total)}</td></tr>
@@ -2815,7 +3042,7 @@ function printOrder(id, mode) {
     return;
   }
   openPrint({
-    title: 'Surat Jalan ' + o.NoSJ, sub: o.NamaPelanggan + ' · A5 landscape', current: mode === 'nominal' ? 'nominal' : 'tanpa',
+    title: (o.Layanan === 'paket' ? 'Resi ' : 'Surat Jalan ') + o.NoSJ, sub: o.NamaPelanggan + ' · A5 landscape', current: mode === 'nominal' ? 'nominal' : 'tanpa',
     variants: [{ k: 'tanpa', l: 'Tanpa nominal' }, { k: 'nominal', l: 'Dengan nominal' }],
     build: v => docSuratJalan(byId('orders', id), v === 'nominal', false), pdfBuild: v => docSuratJalan(byId('orders', id), v === 'nominal', true),
     onPrint: (v, html) => {

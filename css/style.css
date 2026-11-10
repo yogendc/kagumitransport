@@ -362,7 +362,7 @@ select.input{appearance:none;padding-right:34px;cursor:pointer;
 .insp-box{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;border:1px dashed var(--field-border);background:var(--surface-2);flex-wrap:wrap}
 .insp-box b{display:block;font-size:13.5px} .insp-box .muted{font-size:12.5px}
 .pay-total{display:flex;justify-content:space-between;align-items:center;padding:16px;border-radius:12px;background:var(--primary-soft);margin:4px 0 14px;gap:12px}
-.pay-total b{font-family:var(--head);font-size:26px;color:var(--primary);font-variant-numeric:tabular-nums}
+.pay-total b{font-family:var(--head);font-size:26px;color:var(--primary);font-variant-numeric:tabular-nums;white-space:nowrap}
 .pay-total span{font-size:12px;color:var(--muted)}
 .pay-total .label{font-size:11px;letter-spacing:.06em;text-transform:uppercase}
 .pay-box{border:1px solid var(--border);border-radius:12px;padding:14px 14px 2px;background:var(--surface-2);margin-bottom:12px}
@@ -618,7 +618,7 @@ select.input{appearance:none;padding-right:34px;cursor:pointer;
   .kpis{gap:10px} .kpi{padding:14px} .kpi-val{font-size:24px} .kpi-val.money{font-size:18px} .kpi-ic{width:34px;height:34px;font-size:15px}
   .row-2,.row-3,.info-grid{grid-template-columns:1fr;gap:0}
   .filters{grid-template-columns:1fr}
-  .meta-strip{grid-template-columns:1fr 1fr;gap:10px}
+  .meta-strip{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .meta-val{height:36px;font-size:13px;padding:0 10px}
   .card{padding:16px}
   .login-card{padding:28px 22px;border-radius:18px}
@@ -683,4 +683,56 @@ select.input{appearance:none;padding-right:34px;cursor:pointer;
 .chip-btn:hover{border-color:var(--primary);color:var(--primary)}
 .chip-btn.on{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
 .locked .tax-chips{display:none}
+/* ── Paket: tabel barang ── */
+.span-2{grid-column:1/-1}
+.svc-paket{background:var(--amber-soft,#FEF3C7);color:var(--amber-text,#92400E)}
+.t-right{text-align:right;font-variant-numeric:tabular-nums}
+.items{display:grid;gap:10px}
+.it-row{display:grid;grid-template-columns:26px minmax(160px,1fr) 84px 96px 236px 112px 36px;gap:10px;align-items:end;padding:12px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface)}
+.it-no{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;background:var(--primary-soft,#E6F2EC);color:var(--primary);margin-bottom:8px}
+.it-c{display:grid;gap:5px;min-width:0}
+.it-c>span{font-size:11.5px;font-weight:600;color:var(--muted)}
+.dim3{display:flex;align-items:center;gap:4px}
+.dim3 .input{text-align:center;padding-left:4px;padding-right:4px;min-width:0}
+.dim3 i{font-style:normal;color:var(--muted);font-size:12px}
+.it-sum{align-self:center;text-align:right}
+.it-sum b{font-variant-numeric:tabular-nums;font-size:14px}
+.it-sum small{color:var(--muted);font-variant-numeric:tabular-nums}
+.it-del{margin-bottom:4px;color:var(--red)}
+.it-del:disabled{opacity:.35;cursor:not-allowed}
+.it-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px}
+.it-total{display:flex;gap:8px;flex-wrap:wrap}
+.it-total>div{padding:8px 14px;border-radius:var(--r);background:var(--primary-soft,#E6F2EC);display:grid;min-width:110px}
+.it-total span{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.it-total b{font-size:16px;color:var(--primary);font-variant-numeric:tabular-nums}
+.locked .it-add,.locked .it-del{display:none}
+@media (max-width:1279px){.it-row{grid-template-columns:26px minmax(0,1fr) 84px 96px 36px;grid-template-areas:"no d q kg del" ". dim dim sum sum"}
+  .it-no{grid-area:no}.it-d{grid-area:d}.it-q{grid-area:q}.it-kg{grid-area:kg}.it-dim{grid-area:dim}.it-sum{grid-area:sum}.it-del{grid-area:del}}
+@media (max-width:640px){.it-row{grid-template-columns:26px minmax(0,1fr) minmax(0,1fr) 36px;grid-template-areas:"no d d del" ". q kg kg" ". dim dim dim" ". sum sum sum";padding:10px}
+  .it-sum{display:flex;justify-content:flex-end;gap:10px;align-items:baseline}.it-sum>span{margin-right:auto}
+  .it-total{width:100%}.it-total>div{flex:1;min-width:0}.it-add{width:100%}}
+/* Ringkasan konfirmasi: teks panjang dibungkus, dialog tidak melebar di layar HP */
+.confirm-sum div>span{flex:none} .confirm-sum div>b{min-width:0;text-align:right;overflow-wrap:anywhere}
+.modal-box{min-width:0} .confirm-b{min-width:0;overflow-wrap:anywhere}
+/* ── Paket: dasar tarif kg / volume ── */
+.tarif-box{margin-top:16px;padding:14px;border:1px dashed var(--border-strong,var(--border));border-radius:var(--r);background:var(--surface-2)}
+.tarif-head{display:flex;justify-content:space-between;gap:12px;margin-bottom:10px}
+.tarif-head small{display:block;margin-top:2px}
+.tarif-opts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:12px}
+.tarif-opt{display:grid;gap:4px;text-align:left;padding:12px 14px;border-radius:var(--r);border:1.5px solid var(--border);background:var(--surface);cursor:pointer;font:inherit;color:inherit;transition:border-color .15s,box-shadow .15s}
+.tarif-opt:hover{border-color:var(--primary)}
+.tarif-opt.on{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+.tarif-opt .to-top{font-size:12px;font-weight:700;color:var(--muted);display:flex;gap:6px;align-items:center}
+.tarif-opt.on .to-top{color:var(--primary)}
+.tarif-opt .to-calc{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.tarif-opt .to-sum{font-family:var(--head);font-size:18px;font-variant-numeric:tabular-nums}
+.tarif-opt.on .to-sum{color:var(--primary)}
+.tarif-opt:disabled{cursor:default}
+.pay-auto{font-size:11.5px;color:var(--primary);font-weight:600}
+/* Editor tarif di Data Pelanggan */
+.tf-table{display:grid;gap:8px}
+.tf-row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) 36px;gap:8px;align-items:center}
+.tf-head{font-size:11.5px;font-weight:600;color:var(--muted)}
+.tf-row .icon-btn{color:var(--red)}
+@media (max-width:640px){.tarif-opts{grid-template-columns:1fr}.tf-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 36px}.tf-row .tf-kota{grid-column:1/-1}.tf-head{display:none}}
 :root{--kgm-css-end:1}
