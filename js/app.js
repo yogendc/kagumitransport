@@ -10,6 +10,7 @@
    ============================================================ */
 
 // ── Konstanta ──────────────────────────────────────────────
+const APP_VERSI = '2.4'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
 const LS = { token: 'kgm_token', theme: 'kgm_theme', cache: 'kgm_cache_v1', cols: 'kgm_rekap_cols', draft: 'kgm_draft_', master: 'kgm_master_open', login: 'kgm_login_ctx' };
 const STATUS = ['Dijadwalkan', 'Dikirim', 'Diterima', 'Dibatalkan'];
 const STATUS_CLS = { Dijadwalkan: 'b-indigo', Dikirim: 'b-amber', Diterima: 'b-green', Dibatalkan: 'b-red', Draf: 'b-slate' };
@@ -323,7 +324,8 @@ function showLogin(msg) {
   try { const lc = JSON.parse(lsGet(LS.login, 'null')); if (lc) { S.settings = Object.assign({}, S.settings, lc); applyBranding(lc); } } catch (e) { lsDel(LS.login); }
   api('getLoginContext').then(r => {
     const c = r.data || {};
-    const simpan = Object.assign({}, c); delete simpan.googleEmail; delete simpan.siap; lsSet(LS.login, JSON.stringify(simpan));
+    const simpan = Object.assign({}, c); delete simpan.googleEmail; delete simpan.siap; delete simpan.apiVersi; lsSet(LS.login, JSON.stringify(simpan));
+    cekVersiServer(c.apiVersi || '2.0');
     S.settings = Object.assign({}, S.settings, c);
     applyBranding(c);
     $('#loginCopy').textContent = '© ' + new Date().getFullYear() + ' ' + (c.companyName || c.appName || 'KAGUMI Transport');
@@ -395,9 +397,18 @@ function saveCache() {
   lsSet(LS.cache, JSON.stringify(c));
 }
 let refreshing = null;
+// Peringatan bila Kode.gs di Apps Script belum diperbarui (versi server ≠ versi tampilan)
+function cekVersiServer(v) {
+  if (!v || v === APP_VERSI || $('#verWarn')) return;
+  const d = document.createElement('div'); d.id = 'verWarn'; d.className = 'ver-warn'; d.setAttribute('role', 'alert');
+  d.innerHTML = `<i class="bi bi-exclamation-triangle-fill"></i><div><b>Server Apps Script masih versi ${esc(v)}</b>, tampilan versi ${esc(APP_VERSI)}. Data baru bisa tidak tersimpan. Tempel Kode.gs terbaru lalu <b>Kelola penerapan → Edit → Versi baru → Terapkan</b>.</div><button type="button" aria-label="Tutup">×</button>`;
+  d.querySelector('button').onclick = () => d.remove();
+  document.body.appendChild(d);
+}
 function refreshData(silent) {
   if (refreshing) return refreshing;
   refreshing = api('getBootstrap', S.token).then(r => {
+    cekVersiServer(r.data.apiVersi || '2.0');
     const wasSA = isSA();
     hydrate(r.data, false);
     saveCache();
@@ -632,10 +643,12 @@ function statusBadge(s) { return `<span class="badge ${STATUS_CLS[s] || 'b-slate
 const LAY_LABEL = { sewa: 'Sewa', kirim: 'Kirim', paket: 'Paket' };
 function docLabel(o) { return o && o.Layanan === 'paket' ? 'No. resi' : 'No. surat jalan'; }
 function svcChip(o) {
-  if (o.Layanan === 'paket') return `<span class="svc svc-paket">Paket · ${fnumDec(o.TotalKoli || 0)} koli</span>`;
+  if (o.Layanan === 'paket') return `<span class="svc svc-paket">Paket ${esc(o.Jalur || 'Darat')} · ${fnumDec(o.TotalKoli || 0)} koli</span>`;
   return o.Layanan === 'sewa' ? `<span class="svc svc-sewa">Sewa ${esc(o.JenisKendaraan || '')}</span>` : `<span class="svc svc-kirim">Kirim (${esc(o.JenisLayanan || '—')})</span>`;
 }
 // Paket: daftar barang (JSON) & format desimal Indonesia
+// Pihak yang ditagih invoice: pelanggan, atau penerima (paket yang ongkosnya ditanggung penerima)
+function pihakTagihan(id) { return byId('pelanggan', id) || byId('penerima', id); }
 function barangOf(o) { try { const a = JSON.parse(o.Barang || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
 function fnumDec(v, d) { const n = Number(v) || 0; return n.toLocaleString('id-ID', { maximumFractionDigits: d === undefined ? 2 : d }); }
 function paketRingkas(o) { return `${fnumDec(o.TotalKoli || 0)} koli · ${fnumDec(o.TotalBerat || 0)} kg · ${fnumDec(o.TotalVolume || 0, 4)} m³`; }
@@ -978,6 +991,7 @@ function openOrderDrawer(id) {
     const b = barangOf(o);
     body += '<div class="sec-title">Pengirim & penerima</div>' + dl([['Pengirim', `${esc(o.PengirimNama)} · ${esc(o.PengirimHP)}<br><span class="muted">${esc(o.PengirimAlamat)}</span>`, 1],
       ['Penerima', `${esc(o.PenerimaNama)} · ${esc(o.PenerimaHP)}<br><span class="muted">${esc(o.PenerimaAlamat)}</span>`, 1], ['Kota tujuan', o.KotaTujuan],
+      ['Jalur', o.Jalur || 'Darat'], ['Ongkos ditanggung', o.Pembayar === 'penerima' ? 'Penerima' : 'Pengirim'],
       ['Dasar tarif', o.DasarTarif === 'volume' ? 'Volume' : 'Berat'], ['Perhitungan', basisText(o)]]);
     body += '<div class="sec-title">Isi kiriman</div>' + (b.length ? `<div class="table-wrap" style="margin-bottom:8px"><table class="table compact"><thead><tr><th>Detail</th><th class="t-num">Qty</th><th class="t-num">Kg</th><th class="t-num">m³</th></tr></thead><tbody>${b.map(x => `<tr><td>${esc(x.d)}</td><td class="t-num">${fnumDec(x.q)}</td><td class="t-num">${fnumDec(x.q * x.kg)}</td><td class="t-num">${fnumDec(x.q * x.p * x.l * x.t / 1e6, 4)}</td></tr>`).join('')}</tbody></table></div>` : '') + dl([['Total', paketRingkas(o)]]);
   } else if (o.Layanan === 'sewa') {
@@ -1088,7 +1102,7 @@ function renderInvoiceTable() {
   const wrap = $('#invTable');
   wrap.innerHTML = rows.length ? `<div class="table-wrap"><table class="table cards"><thead><tr><th>No. invoice &amp; order</th><th>Pelanggan</th><th>Layanan</th><th>Jatuh tempo</th><th class="t-num">Tagihan</th><th class="t-actions">Aksi</th></tr></thead><tbody>
     ${rows.map(i => `<tr class="clickable ${i.Status === 'Belum Lunas' && i.JatuhTempo < t ? 'row-danger' : ''} ${i.Status === 'Batal' ? 'row-muted' : ''}" data-id="${esc(i.ID)}" ${f.sel === i.ID ? 'style="box-shadow:inset 3px 0 0 var(--primary)"' : ''}>
-      <td class="card-title" data-label="Invoice"><span class="t-link">${esc(i.NoInvoice)}</span><span class="t-sub">SJ ${esc(i.NoSJ)} · ${esc(i.Pembayaran)}${i.Pembayaran === 'Termin' ? ' ' + esc(i.TerminHari) + ' hari' : ''}</span></td>
+      <td class="card-title" data-label="Invoice"><span class="t-link">${esc(i.NoInvoice)}</span><span class="t-sub">${i.Layanan === 'paket' ? 'Resi' : 'SJ'} ${esc(i.NoSJ)} · ${esc(i.Pembayaran)}${i.Pembayaran === 'Termin' ? ' ' + esc(i.TerminHari) + ' hari' : ''}</span></td>
       <td data-label="Pelanggan" class="t-strong">${esc(i.NamaPelanggan)}</td>
       <td data-label="Layanan"><span class="svc svc-${esc(i.Layanan || 'kirim')}">${LAY_LABEL[i.Layanan] || 'Kirim'}</span></td>
       <td data-label="Jatuh tempo"><span class="mono">${tglPendek(i.JatuhTempo)}</span><br>${dueTag(i)}</td>
@@ -1117,7 +1131,7 @@ function renderInvoiceSide() {
   const side = $('#invSide'); if (!side) return;
   const i = byId('invoices', S.ui.inv.sel);
   const reks = payAccounts();
-  const pel = i ? byId('pelanggan', i.PelangganID) : null;
+  const pel = i ? pihakTagihan(i.PelangganID) : null;
   side.innerHTML = `
   <div class="card">
     <div class="card-title-row"><div><h3><i class="bi bi-whatsapp" style="color:#16A34A"></i> Pratinjau pesan WA</h3><p class="muted">${i ? esc(i.NoInvoice) + ' · ' + esc(i.NamaPelanggan) : 'Pilih invoice di tabel'}</p></div></div>
@@ -1148,7 +1162,7 @@ function copyText(t, msg) {
 }
 function openWhatsApp(id) {
   const i = byId('invoices', id); if (!i) return;
-  const pel = byId('pelanggan', i.PelangganID);
+  const pel = pihakTagihan(i.PelangganID);
   if (!pel || !pel.NoHP) { toast('warning', 'No. HP belum ada', 'Lengkapi no. HP pelanggan di Data Pelanggan.'); return; }
   const a = document.createElement('a');
   a.href = 'https://wa.me/' + waNumber(pel.NoHP) + '?text=' + encodeURIComponent(waText(i));
@@ -1159,7 +1173,7 @@ function openWhatsApp(id) {
 }
 function sendEmailReminder(id, btn) {
   const i = byId('invoices', id); if (!i) return;
-  const pel = byId('pelanggan', i.PelangganID);
+  const pel = pihakTagihan(i.PelangganID);
   if (!pel || !pel.Email) { toast('warning', 'Email belum ada', 'Lengkapi email pelanggan di Data Pelanggan.'); return; }
   confirmDialog({ title: 'Kirim email pengingat?', html: `Email pengingat ${esc(i.NoInvoice)} (${rp(i.Tagihan)}) akan dikirim ke <b>${esc(pel.Email)}</b>.`, icon: 'bi-envelope', ok: 'Kirim email', okIcon: 'bi-send' }).then(v => {
     if (v !== true) return;
@@ -1290,7 +1304,7 @@ const MASTERS = {
     ]
   },
   penerima: {
-    title: 'Data Master Penerima', sub: 'Tujuan drop-off pengiriman kendaraan.', icon: 'bi-geo-alt', add: 'Tambah penerima', list: 'penerima',
+    title: 'Data Master Penerima', sub: 'Tujuan drop-off pengiriman kendaraan & penerima paket.', icon: 'bi-geo-alt', add: 'Tambah penerima', list: 'penerima',
     canEdit: () => true, canDel: () => isSA(), label: r => r.Nama,
     search: r => [r.Nama, r.Kode, r.Kota, r.Alamat, r.NoHP, r.NamaPIC].join(' '),
     chips: [['', 'Semua'], ['b2b', 'Perusahaan', r => r.TipeEntitas !== 'Perorangan'], ['pribadi', 'Perorangan', r => r.TipeEntitas === 'Perorangan']],
@@ -1300,7 +1314,8 @@ const MASTERS = {
       ['PIC & kontak', r => `${esc(r.NamaPIC || '—')}<span class="t-sub mono">${esc(r.NoHP)}</span>`],
       ['Alamat drop-off', r => `<span>${esc(r.Kota || '')}</span><span class="t-sub">${esc(firstPart(r.Alamat))}</span>`],
       ['Jam operasional', r => esc(r.JamOperasional || '—')],
-      ['Pengiriman', r => `<b class="mono">${S.d.orders.filter(o => o.PenerimaID === r.ID && o.StatusDok === 'Terkonfirmasi').length}</b><span class="t-sub">surat jalan</span>`]
+      ['Tarif paket', r => { const t = tarifList(r); return t.length ? `<b>${t.length}</b> kota<span class="t-sub">${esc(t.slice(0, 2).map(x => x.kota || 'Semua kota').join(', '))}${t.length > 2 ? '…' : ''}</span>` : '<span class="muted">—</span>'; }],
+      ['Pengiriman', r => `<b class="mono">${S.d.orders.filter(o => o.PenerimaID === r.ID && o.StatusDok === 'Terkonfirmasi').length}</b><span class="t-sub">surat jalan / resi</span>`]
     ],
     sections: [
       { t: 'Identitas penerima', f: [
@@ -1314,7 +1329,8 @@ const MASTERS = {
       { t: 'Alamat drop-off', f: [
         { k: 'Kota', l: 'Kota / wilayah', ph: 'Surabaya, Jawa Timur' },
         { k: 'Alamat', l: 'Alamat lengkap', t: 'textarea', req: true, full: true },
-        { k: 'Catatan', l: 'Catatan khusus bongkar', t: 'textarea', full: true }] }
+        { k: 'Catatan', l: 'Catatan khusus bongkar', t: 'textarea', full: true }] },
+      { t: 'Tarif paket (bila ongkos ditanggung penerima)', f: [{ k: 'TarifPaket', t: 'tarif', full: true }] }
     ]
   },
   rekening: {
@@ -1467,7 +1483,7 @@ function openMasterModal(type, rec, opt) {
     if (np) { const n = digits(vals.NPWP).length; np.className = 'badge plain ' + (!n ? '' : (n === 15 || n === 16) ? 'b-green' : 'b-red'); np.textContent = !n ? '' : (n === 15 || n === 16) ? 'Format valid: ' + n + ' digit' : n + ' digit (harus 15/16)'; }
   };
   form.addEventListener('input', live); form.addEventListener('change', live); live();
-  if (type === 'pelanggan') bindTarifEditor(form);
+  if (type === 'pelanggan' || type === 'penerima') bindTarifEditor(form);
   const save = $('#mfSave');
   if (save) save.onclick = e => { e.preventDefault(); submitMaster(type, rec, form, save, opt); };
 }
@@ -1521,7 +1537,7 @@ function validateMasterLocal(type, v, rec) {
     if (dup) errs.NoSIM = 'No. SIM sudah terdaftar atas nama ' + dup.Nama + ' (' + dup.Kode + ').';
   }
   if (type === 'pelanggan' && v.PembayaranBawaan === 'Termin' && !(num(v.TerminHari) > 0)) errs.TerminHari = 'Isi jumlah hari termin.';
-  if (type === 'pelanggan') { const ks = tarifList(v).map(t => String(t.kota || '').trim().toLowerCase()); const dup = ks.find((k, i) => ks.indexOf(k) !== i); if (dup !== undefined) errs.TarifPaket = 'Kota "' + (dup || 'Semua kota') + '" tercantum dua kali.'; }
+  if (type === 'pelanggan' || type === 'penerima') { const ks = tarifList(v).map(t => String(t.kota || '').trim().toLowerCase()); const dup = ks.find((k, i) => ks.indexOf(k) !== i); if (dup !== undefined) errs.TarifPaket = 'Kota "' + (dup || 'Semua kota') + '" tercantum dua kali.'; }
   return errs;
 }
 function submitMaster(type, rec, form, btn, opt) {
@@ -1707,6 +1723,8 @@ function setupForm(lay) {
       if (e.target.closest('[data-it-add]')) { addItemRow(lay); return; }
       const del = e.target.closest('[data-it-del]'); if (del) { removeItemRow(lay, Number(del.dataset.itDel)); return; }
       const ds = e.target.closest('[data-dasar]'); if (ds) { form.querySelector('[name=DasarTarif]').value = ds.dataset.dasar; markDirty(lay); recalc(lay); return; }
+      const jl = e.target.closest('[data-jalur]'); if (jl) { form.querySelector('[name=Jalur]').value = jl.dataset.jalur; markDirty(lay); recalc(lay); return; }
+      const by = e.target.closest('[data-bayar]'); if (by) { form.querySelector('[name=Pembayar]').value = by.dataset.bayar; updateKotaList(lay); applyTarif(lay); markDirty(lay); recalc(lay); return; }
     }
     const b = e.target.closest('[data-pajak]'); if (!b || form.classList.contains('locked')) return;
     const inp = form.querySelector('[name=PajakPersen]'); inp.value = b.dataset.pajak; inp.classList.remove('invalid');
@@ -1831,7 +1849,7 @@ function fillForm(lay, rec) {
   const st = FORMS[lay]; const form = st.el;
   st.rec = rec ? Object.assign({}, rec) : null;
   st.loading = true;
-  form.querySelectorAll('[name]').forEach(el => { if (el.type !== 'hidden' || el.closest('.combo') || ['Pajak', 'Barang', 'DasarTarif'].includes(el.name)) el.value = ''; el.classList.remove('invalid'); });
+  form.querySelectorAll('[name]').forEach(el => { if (el.type !== 'hidden' || el.closest('.combo') || ['Pajak', 'Barang', 'DasarTarif', 'Pembayar', 'Jalur'].includes(el.name)) el.value = ''; el.classList.remove('invalid'); });
   form.querySelectorAll('.combo').forEach(c => comboSet(c, ''));
   form.querySelector('[name=Status]').value = 'Dijadwalkan';
   if (rec) applyValues(lay, rec);
@@ -1909,6 +1927,11 @@ function onComboPick(lay, target, id) {
     if (lay === 'paket') { updateKotaList(lay); applyTarif(lay); }
     if (p && p.PembayaranBawaan && !pay.value && [...pay.options].some(o => o.value === p.PembayaranBawaan)) { pay.value = p.PembayaranBawaan; if (p.PembayaranBawaan === 'Termin') form.querySelector('[name=TerminHari]').value = p.TerminHari || ''; }
   }
+  if (target === 'PenerimaID' && lay === 'paket') {
+    const r = byId('penerima', id);
+    if (r) [['PenerimaNama', 'Nama'], ['PenerimaHP', 'NoHP'], ['PenerimaAlamat', 'Alamat'], ['KotaTujuan', 'Kota']].forEach(([f, k]) => { const el = form.querySelector(`[name=${f}]`); el.value = r[k] || el.value; el.classList.remove('invalid'); });
+    updateKotaList(lay); applyTarif(lay);
+  }
   if (target === 'KendaraanID' && lay === 'sewa') {
     const k = byId('kendaraan', id), j = form.querySelector('[name=JenisKendaraan]');
     if (k && JENIS_KENDARAAN.includes(k.JenisKendaraan)) j.value = k.JenisKendaraan;
@@ -1977,6 +2000,7 @@ function validateForm(lay) {
   const ppRaw = String(data.PajakPersen || '').trim();
   if (ppRaw !== '' && (!/^\d{1,3}([.,]\d{1,2})?$/.test(ppRaw) || parseFloat(ppRaw.replace(',', '.')) > 100)) miss.push(['PajakPersen', 'Pajak (0–100%, maks. 2 desimal)']);
   if (data.Pembayaran === 'Termin' && !(num(data.TerminHari) > 0)) miss.push(['TerminHari', 'Jumlah hari termin']);
+  if (lay === 'paket' && data.Pembayar === 'penerima' && !data.PenerimaID) { const c = form.querySelector('[data-combo="penerima"] .combo-input'); if (c) c.classList.add('invalid'); miss.push(['', 'Penerima dari Data Penerima (ongkos ditanggung penerima)']); }
   if (lay === 'paket') {
     const rows = $$('.it-row', form), list = itemsOf(lay);
     let ok = 0;
@@ -2024,7 +2048,7 @@ function saveForm(lay, action, btn) {
   const p = byId('pelanggan', data.PelangganID);
   const total = num(data.Harga) + num(data.Pajak) + num(data.Penyesuaian);
   const rows = lay === 'paket'
-    ? [['Pelanggan', p && p.Nama], ['Pengirim', data.PengirimNama], ['Penerima', data.PenerimaNama + ' · ' + firstPart(data.PenerimaAlamat)], ['Isi kiriman', paketRingkas(itemTotals(itemsOf(lay)))]]
+    ? [['Pelanggan', p && p.Nama], ['Pengirim', data.PengirimNama], ['Penerima', data.PenerimaNama + ' · ' + firstPart(data.PenerimaAlamat)], ['Isi kiriman', paketRingkas(itemTotals(itemsOf(lay)))], ['Jalur', data.Jalur || 'Darat'], ['Ongkos ditanggung', data.Pembayar === 'penerima' ? 'Penerima' : 'Pengirim']]
     : lay === 'sewa'
     ? [['Pelanggan', p && p.Nama], ['Unit', (byId('kendaraan', data.KendaraanID) || {}).NoPol], ['Pengemudi', (byId('pengemudi', data.PengemudiID) || {}).Nama], ['Rute', firstPart(data.MuatAlamat) + ' → ' + firstPart(data.BongkarAlamat)]]
     : [['Pelanggan', p && p.Nama], ['Penerima', (byId('penerima', data.PenerimaID) || {}).Nama], ['Mobil', [data.Merk, data.Tipe, data.NoPolMobil].filter(Boolean).join(' ')], ['Layanan', data.JenisLayanan]];
@@ -2100,13 +2124,20 @@ function removeItemRow(lay, i) {
   renderItems(lay); markDirty(lay); recalc(lay);
 }
 // ── Paket: tarif kg / volume dari Data Pelanggan ────────────
+/** Pihak yang menanggung ongkos (sumber tarif): pelanggan/pengirim atau penerima. */
+function payerOf(lay) {
+  const form = FORMS[lay].el;
+  return form.querySelector('[name=Pembayar]').value === 'penerima'
+    ? byId('penerima', form.querySelector('[name=PenerimaID]').value)
+    : byId('pelanggan', form.querySelector('[name=PelangganID]').value);
+}
 function updateKotaList(lay) {
-  const form = FORMS[lay].el, p = byId('pelanggan', form.querySelector('[name=PelangganID]').value);
+  const form = FORMS[lay].el, p = payerOf(lay);
   $('#dlKotaPaket').innerHTML = tarifList(p).filter(t => t.kota).map(t => `<option value="${esc(t.kota)}">${esc(rp(t.kg))}/kg · ${esc(rp(t.m3))}/m³</option>`).join('');
 }
 /** Isi tarif/kg & tarif/m³ dari pelanggan + kota tujuan (dipanggil saat pengguna mengubah pelanggan/kota). */
 function applyTarif(lay) {
-  const form = FORMS[lay].el, p = byId('pelanggan', form.querySelector('[name=PelangganID]').value);
+  const form = FORMS[lay].el, p = payerOf(lay);
   const kota = form.querySelector('[name=KotaTujuan]').value.trim();
   const t = p ? cariTarif(p, kota) : null;
   setMoney(form.querySelector('[name=TarifKg]'), t && num(t.kg) ? t.kg : '');
@@ -2131,14 +2162,17 @@ function hitungOngkos(lay) {
   if (auto) setMoney(harga, sum[dasar]);
   harga.readOnly = auto || form.classList.contains('locked');
   q('[data-harga-auto]').hidden = !auto;
-  const p = byId('pelanggan', q('[name=PelangganID]').value), kota = q('[name=KotaTujuan]').value.trim();
+  const byr = q('[name=Pembayar]').value === 'penerima' ? 'penerima' : 'pengirim', jalur = q('[name=Jalur]').value || 'Darat';
+  $$('[data-bayar]', form).forEach(b => { b.classList.toggle('on', b.dataset.bayar === byr); b.disabled = form.classList.contains('locked'); });
+  $$('[data-jalur]', form).forEach(b => { b.classList.toggle('on', b.dataset.jalur === jalur); b.disabled = form.classList.contains('locked'); });
+  const p = payerOf(lay), kota = q('[name=KotaTujuan]').value.trim();
   const src = q('[data-tarif-src]'), hint = q('[data-kota-hint]');
   const found = p ? cariTarif(p, kota) : null;
-  if (!p) src.textContent = 'Pilih pelanggan & kota tujuan untuk mengisi tarif otomatis.';
+  if (!p) src.textContent = byr === 'penerima' ? 'Ongkos ditanggung penerima: pilih penerima dari Data Penerima untuk mengisi tarif.' : 'Pilih pelanggan & kota tujuan untuk mengisi tarif otomatis.';
   else if (found && found.kota) src.textContent = `Tarif ${p.Nama} untuk ${found.kota}. Bisa diubah khusus untuk order ini.`;
   else if (found) src.textContent = `Tarif umum ${p.Nama} (semua kota). Bisa diubah khusus untuk order ini.`;
-  else src.textContent = `${p.Nama} belum punya tarif${kota ? ' untuk ' + kota : ''}. Isi tarif manual atau tambahkan di Data Pelanggan.`;
-  hint.textContent = !p ? 'Menentukan tarif dari Data Pelanggan.' : found ? `Tarif: ${rp(found.kg)}/kg · ${rp(found.m3)}/m³${found.kota ? '' : ' (umum)'}` : (kota ? 'Belum ada tarif untuk kota ini.' : 'Ketik atau pilih kota dari daftar tarif pelanggan.');
+  else src.textContent = `${p.Nama} belum punya tarif${kota ? ' untuk ' + kota : ''}. Isi tarif manual atau tambahkan di Data ${byr === 'penerima' ? 'Penerima' : 'Pelanggan'}.`;
+  hint.textContent = !p ? 'Menentukan tarif dari data pihak yang menanggung ongkos.' : found ? `Tarif: ${rp(found.kg)}/kg · ${rp(found.m3)}/m³${found.kota ? '' : ' (umum)'}` : (kota ? 'Belum ada tarif untuk kota ini.' : 'Ketik atau pilih kota dari daftar tarif pelanggan.');
   hint.className = found ? 'pay-auto' : 'muted';
 }
 function basisText(o) {
@@ -2933,7 +2967,7 @@ function docResiPaket(o, nominal, forPdf) {
   const st = S.settings, acc = st.kopAccent === 'mono' ? '#0F172A' : st.themeColor;
   const b = barangOf(o), t = { koli: num(o.TotalKoli), kg: Number(o.TotalBerat) || 0, m3: Number(o.TotalVolume) || 0 };
   const head = `${kopHTML(st, nominal)}
-    <table style="margin:8px 0 7px"><tr><td><div class="title">RESI PENGIRIMAN PAKET</div><div class="muted">Bukti penerimaan barang kiriman${nominal ? ' · Lembar dengan nominal' : ''}</div></td>
+    <table style="margin:8px 0 7px"><tr><td><div class="title">RESI PENGIRIMAN PAKET</div><div class="muted">Jalur ${esc(o.Jalur || 'Darat')} · Ongkos ditanggung ${o.Pembayar === 'penerima' ? 'penerima' : 'pengirim'}${nominal ? ' · Lembar dengan nominal' : ''}</div></td>
     <td style="text-align:right;width:44%"><div class="box" style="display:inline-block;text-align:left;min-width:220px;border-color:${acc}"><table><tr><td><div class="lbl">No. resi</div><div style="font:700 15px Arial;color:${acc}">${esc(o.NoSJ)}</div></td><td style="padding-left:14px"><div class="lbl">Tanggal</div><div class="val">${tgl(o.Tanggal, true)}</div></td></tr></table></div></td></tr></table>`;
   const parties = `<table style="margin-bottom:7px"><tr>
       <td style="width:50%;padding-right:6px;vertical-align:top"><div class="box"><div class="lbl">▲ Pengirim</div><div class="val">${esc(o.PengirimNama)}</div><div>${esc(o.PengirimAlamat)}</div><div class="muted">Telp. ${esc(o.PengirimHP)}</div></div></td>
@@ -2984,7 +3018,7 @@ function docTandaTerima(o, forPdf) {
 function docInvoice(i, forPdf) {
   const st = S.settings, acc = st.kopAccent === 'mono' ? '#0F172A' : st.themeColor;
   const o = byId('orders', i.OrderID) || {};
-  const pel = byId('pelanggan', i.PelangganID) || {};
+  const pel = pihakTagihan(i.PelangganID) || {};
   const desc = o.Layanan === 'paket' ? `Pengiriman paket ${esc(paketRingkas(o))}${basisText(o) ? '<br>Tarif: ' + esc(basisText(o)) : ''}<br><span class="muted">${esc(orderRoute(o).filter(Boolean).join(' → '))} · ke ${esc(o.PenerimaNama || '')}</span>` : o.Layanan === 'sewa' ? `Sewa ${esc(o.JenisKendaraan || '')} ${esc(o.NoPol || '')}<br><span class="muted">${esc(orderRoute(o).filter(Boolean).join(' → '))}${o.JenisMuatan ? ' · ' + esc(o.JenisMuatan) : ''}</span>`
     : `Pengiriman ${esc([o.Merk, o.Tipe].filter(Boolean).join(' '))} (${esc(o.NoPolMobil || '')})<br><span class="muted">${esc(o.JenisLayanan || '')} · ${esc(orderRoute(o).filter(Boolean).join(' → '))}</span>`;
   const body = `<div class="sheet a4">${kopHTML(st, true)}

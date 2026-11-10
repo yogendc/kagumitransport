@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=2.3">
+  <link rel="stylesheet" href="css/style.css?v=2.4">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2216%22 fill=%22%23006C49%22/%3E%3Cpath d=%22M14 22h22v18H14zM36 28h8l6 6v6H36z%22 fill=%22white%22/%3E%3Ccircle cx=%2222%22 cy=%2243%22 r=%225%22 fill=%22white%22/%3E%3Ccircle cx=%2244%22 cy=%2243%22 r=%225%22 fill=%22white%22/%3E%3C/svg%3E">
 </head>
 <body>
@@ -385,7 +385,11 @@
             </div>
 
             <div class="card">
-              <div class="card-h"><span class="num">2</span><div><h3>Penerima</h3><p>Tujuan pengiriman paket.</p></div></div>
+              <div class="card-h"><span class="num">2</span><div><h3>Penerima</h3><p>Pilih dari Data Penerima atau ketik langsung. Wajib dipilih bila ongkos ditanggung penerima.</p></div></div>
+              <div class="field">
+                <div class="label-row"><span class="label">Penerima (Data Penerima)</span><button type="button" class="link-btn" data-add="penerima"><i class="bi bi-person-plus"></i> Tambah baru</button></div>
+                <div class="combo" data-combo="penerima" data-target="PenerimaID"><i class="bi bi-search"></i><input class="input combo-input" placeholder="Cari nama penerima… (opsional)"><input type="hidden" name="PenerimaID"></div>
+              </div>
               <div class="loc-box">
                 <div class="loc-title"><i class="bi bi-box-arrow-in-down"></i> Data penerima</div>
                 <div class="row-2">
@@ -400,6 +404,15 @@
 
             <div class="card span-2">
               <div class="card-h"><span class="num">3</span><div><h3>Detail kiriman</h3><p>Satu baris per jenis barang. Isi berat per koli, ukuran P × L × T (cm), atau keduanya. Volume = P × L × T ÷ 1.000.000 (m³).</p></div></div>
+              <div class="field">
+                <span class="label">Jalur pengiriman</span>
+                <input type="hidden" name="Jalur" value="Darat">
+                <div class="seg" role="group" aria-label="Jalur pengiriman">
+                  <button type="button" class="seg-btn" data-jalur="Darat"><i class="bi bi-truck"></i> Darat</button>
+                  <button type="button" class="seg-btn" data-jalur="Laut"><i class="bi bi-water"></i> Laut</button>
+                  <button type="button" class="seg-btn" data-jalur="Kereta"><i class="bi bi-train-front"></i> Kereta</button>
+                </div>
+              </div>
               <input type="hidden" name="Barang">
               <div class="items" data-items></div>
               <div class="it-foot">
@@ -411,7 +424,9 @@
                 </div>
               </div>
               <div class="tarif-box">
-                <div class="tarif-head"><div><b>Dasar perhitungan ongkos kirim</b><small class="muted" data-tarif-src>Pilih pelanggan &amp; kota tujuan untuk mengisi tarif otomatis.</small></div></div>
+                <div class="tarif-head"><div><b>Dasar perhitungan ongkos kirim</b><small class="muted" data-tarif-src>Pilih pelanggan &amp; kota tujuan untuk mengisi tarif otomatis.</small></div>
+                  <div class="tarif-payer"><span class="label">Ongkos ditanggung</span><input type="hidden" name="Pembayar" value="pengirim">
+                    <div class="seg" role="group" aria-label="Ongkos ditanggung"><button type="button" class="seg-btn" data-bayar="pengirim"><i class="bi bi-box-arrow-up"></i> Pengirim</button><button type="button" class="seg-btn" data-bayar="penerima"><i class="bi bi-box-arrow-in-down"></i> Penerima</button></div></div></div>
                 <input type="hidden" name="DasarTarif" value="kg">
                 <div class="tarif-opts">
                   <button type="button" class="tarif-opt" data-dasar="kg">
@@ -614,8 +629,8 @@
   setTimeout(function () { window.__kgmCheck(true); }, 15000);
 })();
 </script>
-<script src="js/config.js?v=2.3"></script>
-<script src="js/app.js?v=2.3"></script>
+<script src="js/config.js?v=2.4"></script>
+<script src="js/app.js?v=2.4"></script>
 <script>setTimeout(function () { window.__kgmCheck(false); }, 0);</script>
 </body>
 </html>
