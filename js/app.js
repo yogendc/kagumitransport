@@ -138,8 +138,17 @@ const API_TIMEOUT = { markPrinted: 120000, exportPdf: 120000, runBackupNow: 3000
 // Semua panggilan memakai POST text/plain → tidak memicu preflight CORS di Apps Script.
 function apiUrl() { return String((window.KAGUMI_CONFIG && window.KAGUMI_CONFIG.GAS_URL) || '').trim(); }
 function apiUrlValid() { return /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(apiUrl()) || /^(https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?)?\/[\w\/-]*exec$/.test(apiUrl()); }
+// Aksi yang aman diulang otomatis bila koneksi putus sesaat (tidak menggandakan data)
+const API_RETRY = ['getBootstrap', 'getLoginContext', 'getLogs', 'getFotoThumb', 'getSystemStatus', 'markInvoicePaid', 'updateOrderStatus', 'updateEkspedisi'];
 function api(fn) {
   const args = Array.prototype.slice.call(arguments, 1);
+  if (!API_RETRY.includes(fn)) return apiSekali(fn, args);
+  return apiSekali(fn, args).catch(err => {
+    if (!err || !err.jaringan) throw err;
+    return new Promise(res => setTimeout(res, 1500)).then(() => apiSekali(fn, args));
+  });
+}
+function apiSekali(fn, args) {
   pending++; setSync('busy');
   const ms = API_TIMEOUT[fn] || 45000;
   const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
@@ -158,8 +167,10 @@ function api(fn) {
     }
     return r;
   }), err => {
-    if (err && err.name === 'AbortError') throw new Error('Server tidak merespons dalam ' + Math.round(ms / 1000) + ' detik. Periksa koneksi lalu coba lagi.');
-    throw new Error(navigator.onLine === false ? 'Anda sedang offline. Periksa koneksi internet.' : 'Tidak dapat terhubung ke server. Periksa internet, URL di js/config.js, dan akses penerapan "Siapa saja".');
+    if (err && err.name === 'AbortError') { const e = new Error('Server tidak merespons dalam ' + Math.round(ms / 1000) + ' detik. Periksa koneksi lalu coba lagi.'); e.jaringan = true; throw e; }
+    const e = new Error(navigator.onLine === false ? 'Anda sedang offline. Periksa koneksi internet.'
+      : S.lastSync ? 'Koneksi ke server terputus sesaat. Silakan coba lagi.' : 'Tidak dapat terhubung ke server. Periksa internet, URL di js/config.js, dan akses penerapan "Siapa saja".');
+    e.jaringan = true; throw e;
   }).then(r => {
     selesai(true);
     if (!r) throw new Error('Server tidak mengirim respons.');
@@ -1206,7 +1217,17 @@ function openPaidModal(id) {
     api('markInvoicePaid', S.token, id, tglBayar, rek).then(r => {
       upsert('invoices', r.data.invoice); (r.data.finance || []).forEach(f => upsert('finance', f));
       saveCache(); updateBadges(); renderPage(S.page); ok('Invoice lunas', r.message);
-    }).catch(err => { upsert('invoices', old); updateBadges(); renderPage(S.page); fail(err, 'Pelunasan gagal disimpan'); });
+    }).catch(err => {
+      // Koneksi putus / sudah lunas: cek ulang ke server dulu, karena pelunasan mungkin sudah tercatat.
+      if (err && (err.jaringan || /sudah lunas/i.test(err.message))) {
+        return refreshData(true).then(() => {
+          const now = byId('invoices', id);
+          if (now && now.Status === 'Lunas') { updateBadges(); renderPage(S.page); ok('Invoice lunas', 'Pelunasan sudah tercatat di server.'); }
+          else { updateBadges(); renderPage(S.page); fail(err, 'Pelunasan gagal disimpan'); }
+        }).catch(() => { upsert('invoices', old); updateBadges(); renderPage(S.page); fail(err, 'Pelunasan gagal disimpan'); });
+      }
+      upsert('invoices', old); updateBadges(); renderPage(S.page); fail(err, 'Pelunasan gagal disimpan');
+    });
   };
 }
 
