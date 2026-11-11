@@ -10,7 +10,7 @@
    ============================================================ */
 
 // ── Konstanta ──────────────────────────────────────────────
-const APP_VERSI = '2.5'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
+const APP_VERSI = '2.7'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
 const LS = { token: 'kgm_token', theme: 'kgm_theme', cache: 'kgm_cache_v1', cols: 'kgm_rekap_cols', draft: 'kgm_draft_', master: 'kgm_master_open', login: 'kgm_login_ctx' };
 const STATUS = ['Dijadwalkan', 'Dikirim', 'Diterima', 'Dibatalkan'];
 const STATUS_CLS = { Dijadwalkan: 'b-indigo', Dikirim: 'b-amber', Diterima: 'b-green', Dibatalkan: 'b-red', Draf: 'b-slate' };
@@ -37,7 +37,8 @@ const CDN = {
 // ── State aplikasi (memori) ────────────────────────────────
 const S = {
   token: null, me: null, settings: {}, booted: false, lastSync: 0,
-  d: { pelanggan: [], penerima: [], ekspedisi: [], kendaraan: [], pengemudi: [], rekening: [], orders: [], invoices: [], inspeksi: [], finance: [], users: [] },
+  d: { pelanggan: [], penerima: [], ekspedisi: [], kendaraan: [], pengemudi: [], rekening: [], orders: [], invoices: [], inspeksi: [], finance: [], users: [], pertanyaan: [], berita: [] },
+  web: null,
   page: 'ringkasan',
   ui: {
     rekap: { q: '', from: '', to: '', svc: '', status: '', dok: '', driver: '', page: 1, sort: { k: 'tgl', dir: -1 } },
@@ -46,11 +47,14 @@ const S = {
     fin: { period: 'bulan', from: '', to: '', tab: 'semua', q: '', rek: '', page: 1 },
     lap: { jenis: 'order', from: '', to: '', svc: '', status: '', page: 1 },
     set: { tab: 'akun' },
+    web: { tab: 'beranda' },
+    pty: { f: 'aktif', q: '' },
     insp: { orderId: '', rec: null, photos: [] }
   },
   thumbs: {},
   charts: {}
 };
+const SA_PAGES = ['finance', 'laporan', 'pengaturan', 'website'];
 const isSA = () => !!(S.me && S.me.role === 'SUPER_ADMIN');
 
 // ── Utilitas ───────────────────────────────────────────────
@@ -397,14 +401,14 @@ function logout() {
 function hydrate(d, fromCache) {
   S.me = d.me || S.me;
   S.settings = Object.assign({}, d.settings || {});
-  ['pelanggan', 'penerima', 'ekspedisi', 'kendaraan', 'pengemudi', 'rekening', 'orders', 'invoices', 'inspeksi'].forEach(k => { if (d[k]) S.d[k] = d[k]; });
-  if (!fromCache) { S.d.finance = d.finance || []; S.d.users = d.users || []; S.lastSync = Date.now(); }
+  ['pelanggan', 'penerima', 'ekspedisi', 'kendaraan', 'pengemudi', 'rekening', 'orders', 'invoices', 'inspeksi', 'pertanyaan'].forEach(k => { if (d[k]) S.d[k] = d[k]; });
+  if (!fromCache) { S.d.finance = d.finance || []; S.d.users = d.users || []; S.d.berita = d.berita || []; S.web = d.webKonten || null; S.lastSync = Date.now(); }
   applyBranding(S.settings);
 }
 function saveCache() {
   // Data keuangan & pengguna tidak disimpan di perangkat
   const c = { me: S.me, settings: S.settings, t: Date.now() };
-  ['pelanggan', 'penerima', 'ekspedisi', 'kendaraan', 'pengemudi', 'rekening', 'orders', 'invoices', 'inspeksi'].forEach(k => { c[k] = S.d[k]; });
+  ['pelanggan', 'penerima', 'ekspedisi', 'kendaraan', 'pengemudi', 'rekening', 'orders', 'invoices', 'inspeksi', 'pertanyaan'].forEach(k => { c[k] = S.d[k]; });
   lsSet(LS.cache, JSON.stringify(c));
 }
 let refreshing = null;
@@ -425,7 +429,7 @@ function refreshData(silent) {
     saveCache();
     if (S.booted) {
       applyRole();
-      if (wasSA !== isSA() && !isSA() && ['finance', 'laporan', 'pengaturan'].includes(S.page)) navigateTo('ringkasan');
+      if (wasSA !== isSA() && !isSA() && SA_PAGES.includes(S.page)) navigateTo('ringkasan');
       updateBadges();
       if (!isFormPage(S.page)) renderPage(S.page); else syncOpenForms();
     }
@@ -455,7 +459,7 @@ function showApp() {
   updateBadges();
   const d = new Date(today() + 'T00:00:00');
   $('#todayChip span').textContent = HARI[d.getDay()] + ', ' + tgl(today());
-  navigateTo(S.page && (isSA() || !['finance', 'laporan', 'pengaturan'].includes(S.page)) ? S.page : 'ringkasan', { force: true });
+  navigateTo(S.page && (isSA() || !SA_PAGES.includes(S.page)) ? S.page : 'ringkasan', { force: true });
   hideSplash();
 }
 function applyRole() {
@@ -474,6 +478,7 @@ const RENDER = {
   pelanggan: () => renderMaster('pelanggan'), kendaraan: () => renderMaster('kendaraan'),
   pengemudi: () => renderMaster('pengemudi'), penerima: () => renderMaster('penerima'), ekspedisi: () => renderMaster('ekspedisi'),
   finance: renderFinance, laporan: renderLaporan, pengaturan: renderPengaturan,
+  website: renderWebsite, pertanyaan: renderPertanyaan,
   inspeksi: renderInspeksiPage
 };
 function renderPage(p) { try { if (RENDER[p]) RENDER[p](); } catch (e) { console.error(e); fail(e, 'Gagal menampilkan halaman'); } }
@@ -481,7 +486,7 @@ function renderPage(p) { try { if (RENDER[p]) RENDER[p](); } catch (e) { console
 /** Satu-satunya cara berpindah halaman (tanpa reload, tanpa ubah URL). */
 function navigateTo(page, opt) {
   opt = opt || {};
-  if (['finance', 'laporan', 'pengaturan'].includes(page) && !isSA()) { toast('warning', 'Akses ditolak', 'Halaman ini khusus Super Admin.'); return; }
+  if (SA_PAGES.includes(page) && !isSA()) { toast('warning', 'Akses ditolak', 'Halaman ini khusus Super Admin.'); return; }
   const sec = $('#page-' + page); if (!sec) return;
   $$('.page').forEach(p => p.classList.toggle('active', p === sec));
   $$('.sb-link[data-page]').forEach(a => a.classList.toggle('active', a.dataset.page === page));
@@ -595,6 +600,8 @@ function updateBadges() {
   set('#badgeDraf', drafts, drafts + ' draf');
   set('#badgeArmada', armada);
   set('#badgeDriver', driver);
+  const pty = S.d.pertanyaan.filter(q => q.Status === 'Baru').length;
+  set('#badgePty', pty, pty + ' baru');
   $('#bellDot').hidden = !(due || armada || driver);
 }
 function renderNotif() {
@@ -4497,6 +4504,215 @@ function printInspeksi() {
   const build = pdf => docShell('Inspeksi ' + (o.NoSJ || ''), `<div class="sheet a4">${inspeksiBody(tmp, o, false)}${docFooter('Form inspeksi body kendaraan')}</div>`, 'A4 portrait', pdf);
   openPrint({ title: 'Form Inspeksi ' + (o.NoSJ || 'draf'), sub: (o.NoPolMobil || '') + ' · A4 portrait', build: () => build(false), pdfBuild: () => build(true),
     onPrint: (v, html, pdf) => api('markPrinted', S.token, 'kirim', ui.rec.ID || o.ID, 'tanpa', html, 'insp', !!pdf) });
+}
+
+// ============================================================
+// WEBSITE PERUSAHAAN: Pertanyaan Masuk (semua staf) & Kelola Website (Super Admin)
+// ============================================================
+const PTY_STATUS = { Baru: 'b-red', Diproses: 'b-amber', Selesai: 'b-green' };
+function renderPertanyaan() {
+  const el = $('#page-pertanyaan'), st = S.ui.pty, rows = S.d.pertanyaan || [];
+  const chips = [['aktif', 'Perlu ditindak', q => q.Status !== 'Selesai'], ['Baru', 'Baru', q => q.Status === 'Baru'],
+    ['Diproses', 'Diproses', q => q.Status === 'Diproses'], ['Selesai', 'Selesai', q => q.Status === 'Selesai'], ['semua', 'Semua', null]];
+  el.innerHTML = `
+  <div class="page-head">
+    <div class="ph-icon"><i class="bi bi-chat-left-text"></i></div>
+    <div><h1>Pertanyaan Masuk</h1><p class="muted">Pesan dari formulir "Hubungi Kami" di website. Salinan juga dikirim ke email perusahaan.</p></div>
+  </div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="toolbar"><div class="search grow"><i class="bi bi-search"></i><input class="input" id="ptyQ" placeholder="Cari nama, no. HP, perusahaan, isi pesan…" value="${esc(st.q)}"></div>
+      <button class="btn btn-secondary" id="ptyRefresh"><i class="bi bi-arrow-clockwise"></i> Muat ulang</button></div>
+    <div class="chips-row">${chips.map(c => `<button class="fchip ${st.f === c[0] ? 'active' : ''}" data-pf="${c[0]}">${c[1]}<span class="cnt">${c[2] ? rows.filter(c[2]).length : rows.length}</span></button>`).join('')}</div>
+  </div>
+  <div id="ptyList"></div>`;
+  const draw = () => {
+    const chip = chips.find(c => c[0] === st.f), q = st.q.trim().toLowerCase();
+    const list = rows.filter(r => (!chip || !chip[2] || chip[2](r)) && (!q || [r.Nama, r.NoHP, r.Email, r.Perusahaan, r.Pesan, r.Layanan].join(' ').toLowerCase().includes(q)))
+      .sort((a, b) => String(b.Waktu).localeCompare(String(a.Waktu)));
+    $('#ptyList').innerHTML = list.length ? list.map(ptyCard).join('') : `<div class="card">${emptyHTML('bi-inbox', st.f === 'aktif' ? 'Tidak ada pertanyaan yang perlu ditindak' : 'Belum ada pertanyaan', 'Pertanyaan dari website akan muncul di sini.')}</div>`;
+  };
+  $('#ptyQ').addEventListener('input', debounce(e => { st.q = e.target.value; draw(); }, 120));
+  el.querySelectorAll('[data-pf]').forEach(b => b.onclick = () => { st.f = b.dataset.pf; renderPertanyaan(); });
+  $('#ptyRefresh').onclick = e => { const b = e.currentTarget; btnBusy(b, true); refreshData(true).catch(fail).finally(() => btnBusy(b, false)); };
+  $('#ptyList').onclick = e => {
+    const b = e.target.closest('[data-ps]'); if (!b) return;
+    const r = byId('pertanyaan', b.dataset.id); if (!r) return;
+    if (b.dataset.ps === 'Selesai') return ptySelesai(r);
+    ptySet(r, b.dataset.ps, undefined, b);
+  };
+  draw();
+}
+function ptyCard(r) {
+  const st = S.settings || {};
+  const wa = `https://wa.me/${waNumber(r.NoHP)}?text=${encodeURIComponent('Halo ' + r.Nama + ', terima kasih telah menghubungi ' + (st.companyName || st.appName || '') + '. ')}`;
+  return `<div class="card pty-card ${r.Status === 'Baru' ? 'is-new' : ''}">
+    <div class="pty-top"><div><b class="t-strong">${esc(r.Nama)}</b>${r.Perusahaan ? ` <span class="muted">· ${esc(r.Perusahaan)}</span>` : ''}
+      <div class="t-sub">${tglJam(r.Waktu)}${r.Layanan ? ' · ' + esc(r.Layanan) : ''}</div></div>
+      <span class="badge ${PTY_STATUS[r.Status] || 'b-slate'}">${esc(r.Status)}</span></div>
+    <p class="pty-msg">${esc(r.Pesan)}</p>
+    <div class="pty-contact"><a href="${wa}" target="_blank" rel="noopener" class="mono"><i class="bi bi-whatsapp"></i> ${esc(r.NoHP)}</a>${r.Email ? `<a href="mailto:${esc(r.Email)}"><i class="bi bi-envelope"></i> ${esc(r.Email)}</a>` : ''}</div>
+    ${r.Catatan || r.DitanganiOleh ? `<div class="pty-note"><i class="bi bi-journal-check"></i><div>${r.Catatan ? esc(r.Catatan) : ''}<small class="muted">${r.DitanganiOleh ? (r.Catatan ? ' — ' : '') + 'ditangani ' + esc(r.DitanganiOleh) + ', ' + tglJam(r.DiubahPada) : ''}</small></div></div>` : ''}
+    <div class="chips-row pty-act">
+      <a class="btn btn-secondary btn-sm" href="${wa}" target="_blank" rel="noopener"><i class="bi bi-whatsapp"></i> Balas WA</a>
+      ${r.Status !== 'Diproses' && r.Status !== 'Selesai' ? `<button class="btn btn-secondary btn-sm" data-ps="Diproses" data-id="${esc(r.ID)}"><i class="bi bi-hourglass-split"></i> Tandai diproses</button>` : ''}
+      ${r.Status !== 'Selesai' ? `<button class="btn btn-primary btn-sm" data-ps="Selesai" data-id="${esc(r.ID)}"><i class="bi bi-check2"></i> Selesai</button>` : `<button class="btn btn-ghost btn-sm" data-ps="Baru" data-id="${esc(r.ID)}"><i class="bi bi-arrow-counterclockwise"></i> Buka lagi</button>`}
+    </div></div>`;
+}
+function ptySet(r, status, catatan, btn) {
+  btnBusy(btn, true);
+  return api('setPertanyaan', S.token, r.ID, status, catatan).then(res => {
+    upsert('pertanyaan', res.data); saveCache(); updateBadges(); ok(res.message); closeModal(); renderPertanyaan();
+  }).catch(fail).finally(() => btnBusy(btn, false));
+}
+function ptySelesai(r) {
+  openModal({ title: 'Tandai selesai', sub: r.Nama + ' · ' + r.NoHP, icon: 'bi-check2-circle',
+    body: `<label class="field"><span class="label">Catatan tindak lanjut (opsional)</span><textarea class="input" id="ptyNote" rows="3" maxlength="1000" placeholder="mis. Sudah dikirim penawaran via WA, harga Rp…">${esc(r.Catatan || '')}</textarea></label>`,
+    foot: '<button class="btn btn-secondary" data-close>Batal</button><button class="btn btn-primary" id="ptyOk"><i class="bi bi-check2"></i> Simpan &amp; selesai</button>' });
+  $('#ptyOk').onclick = e => ptySet(r, 'Selesai', $('#ptyNote').value, e.currentTarget);
+}
+
+// ── Kelola Website (Super Admin) ──
+const WEB_TABS = [['beranda', 'bi-house', 'Beranda'], ['tentang', 'bi-building', 'Tentang kami'], ['layanan', 'bi-truck', 'Produk & layanan'],
+  ['kontak', 'bi-telephone', 'Hubungi kami'], ['berita', 'bi-megaphone', 'Informasi terbaru']];
+function renderWebsite() {
+  const el = $('#page-website'), ui = S.ui.web;
+  if (!S.web) {
+    el.innerHTML = `<div class="card">${emptyHTML('bi-hourglass-split', 'Memuat isi website…', 'Sebentar, data sedang diambil dari server.')}</div>`;
+    refreshData(true).catch(fail);
+    return;
+  }
+  if (!ui.draft) ui.draft = JSON.parse(JSON.stringify(S.web));
+  const d = ui.draft, t = ui.tab;
+  el.innerHTML = `
+  <div class="page-head">
+    <div class="ph-icon"><i class="bi bi-globe2"></i></div>
+    <div><h1>Kelola Website</h1><p class="muted">Isi halaman website perusahaan. Nama, logo, warna, alamat, telepon, dan email diambil dari Pengaturan → Branding &amp; Kop dokumen.</p></div>
+  </div>
+  <div class="tabs">${WEB_TABS.map(([k, i, l]) => `<button class="tab ${t === k ? 'active' : ''}" data-wt="${k}"><i class="bi ${i}"></i> ${l}</button>`).join('')}</div>
+  <div id="webBody"></div>
+  ${t !== 'berita' ? `<div class="web-save card"><span class="muted" id="webDirty">${ui.dirty ? 'Ada perubahan yang belum disimpan.' : 'Semua perubahan sudah tersimpan.'}</span>
+    <div class="chips-row"><button class="btn btn-ghost" id="webReset" ${ui.dirty ? '' : 'disabled'}>Batalkan perubahan</button><button class="btn btn-primary" id="webSave"><i class="bi bi-check2"></i> Simpan isi website</button></div></div>` : ''}`;
+  el.querySelectorAll('[data-wt]').forEach(b => b.onclick = () => { ui.tab = b.dataset.wt; renderWebsite(); });
+  const body = $('#webBody');
+  const fld = (key, label, val, o) => {
+    o = o || {};
+    const input = o.rows ? `<textarea class="input" data-wk="${key}" rows="${o.rows}" maxlength="${o.max || 1000}">${esc(val)}</textarea>`
+      : `<input class="input" data-wk="${key}" maxlength="${o.max || 200}" value="${esc(val)}"${o.ph ? ` placeholder="${esc(o.ph)}"` : ''}>`;
+    return `<label class="field"><span class="label">${label}</span>${input}${o.help ? `<small class="muted">${o.help}</small>` : ''}</label>`;
+  };
+  const card = (icon, title, sub, inner) => `<div class="card"><div class="card-h"><span class="num"><i class="bi ${icon}"></i></span><div><h3>${title}</h3><p>${sub}</p></div></div>${inner}</div>`;
+  const pairRows = (key, a, b, labels) => `<div class="web-rows" data-rows="${key}">${(d[key] || []).map((x, i) => `<div class="web-row">
+      <input class="input" data-rk="${key}" data-i="${i}" data-f="${a}" maxlength="100" placeholder="${labels[0]}" value="${esc(x[a])}">
+      ${key === 'keunggulan' ? `<textarea class="input" data-rk="${key}" data-i="${i}" data-f="${b}" rows="2" maxlength="300" placeholder="${labels[1]}">${esc(x[b])}</textarea>`
+        : `<input class="input" data-rk="${key}" data-i="${i}" data-f="${b}" maxlength="100" placeholder="${labels[1]}" value="${esc(x[b])}">`}
+      <button class="icon-btn" data-rdel="${key}" data-i="${i}" title="Hapus baris"><i class="bi bi-trash"></i></button></div>`).join('')}
+    <button class="btn btn-secondary btn-sm" data-radd="${key}"><i class="bi bi-plus-lg"></i> Tambah baris</button></div>`;
+  const perBaris = '<small class="muted">Satu poin per baris.</small>';
+
+  if (t === 'beranda') {
+    body.innerHTML = `<div class="set-grid"><div class="stack">
+      ${card('bi-type-h1', 'Judul utama', 'Tulisan besar di bagian paling atas beranda.', fld('heroJudul', 'Judul', d.heroJudul, { max: 120 }) + fld('heroTeks', 'Keterangan di bawah judul', d.heroTeks, { rows: 3, max: 500 }))}
+      ${card('bi-building', 'Profil singkat perusahaan', 'Satu paragraf pengenalan di beranda.', fld('profilSingkat', 'Profil singkat', d.profilSingkat, { rows: 5, max: 1200 }))}
+      ${card('bi-bullseye', 'Visi & misi', '', fld('visi', 'Visi', d.visi, { rows: 2, max: 500 }) + `<label class="field"><span class="label">Misi</span><textarea class="input" data-wl="misi" rows="5">${esc((d.misi || []).join('\n'))}</textarea>${perBaris}</label>`)}
+    </div><div class="stack">
+      ${card('bi-briefcase', 'Bidang usaha', 'Daftar singkat bidang usaha.', `<label class="field"><span class="label">Bidang usaha</span><textarea class="input" data-wl="bidangUsaha" rows="4">${esc((d.bidangUsaha || []).join('\n'))}</textarea>${perBaris}</label>`)}
+      ${card('bi-award', 'Keunggulan perusahaan', 'Ditampilkan sebagai kartu di beranda (maks. 8).', pairRows('keunggulan', 'judul', 'teks', ['Judul keunggulan', 'Keterangan singkat']))}
+      <div class="alert alert-info"><i class="bi bi-megaphone"></i><div><b>Informasi terbaru</b> di beranda diatur di tab <a href="javascript:void(0)" data-wt-go="berita">Informasi terbaru</a>.</div></div>
+    </div></div>`;
+  } else if (t === 'tentang') {
+    body.innerHTML = `<div class="set-grid"><div class="stack">
+      ${card('bi-clock-history', 'Sejarah perusahaan', 'Pisahkan paragraf dengan satu baris kosong.', fld('sejarah', 'Sejarah', d.sejarah, { rows: 9, max: 5000 }))}
+      ${card('bi-building', 'Profil perusahaan', 'Uraian lengkap di halaman Tentang Kami.', fld('profil', 'Profil', d.profil, { rows: 9, max: 5000 }))}
+    </div><div class="stack">
+      ${card('bi-patch-check', 'Legalitas perusahaan', 'Dokumen tanpa nomor tidak ditampilkan di website.', pairRows('legalitas', 'nama', 'nomor', ['Nama dokumen, mis. NIB', 'Nomor dokumen']))}
+      <div class="alert alert-warning"><i class="bi bi-shield-exclamation"></i><div>Cukup tampilkan <b>nomor</b> dokumen. Jangan unggah foto akta/NPWP ke website publik.</div></div>
+    </div></div>`;
+  } else if (t === 'layanan') {
+    body.innerHTML = `<div class="stack">${(d.layanan || []).map((l, i) => card(['bi-box-seam', 'bi-truck-front', 'bi-car-front'][i] || 'bi-truck', (i + 1) + '. ' + esc(l.judul), 'Tampil di halaman Produk & Layanan dan ringkasannya di beranda.',
+      `<div class="row-2"><label class="field"><span class="label">Nama layanan</span><input class="input" data-lk="${i}" data-f="judul" maxlength="80" value="${esc(l.judul)}"></label><div></div></div>
+       <label class="field"><span class="label">Keterangan</span><textarea class="input" data-lk="${i}" data-f="teks" rows="3" maxlength="1000">${esc(l.teks)}</textarea></label>
+       <label class="field"><span class="label">Poin keunggulan layanan</span><textarea class="input" data-lk="${i}" data-f="poin" rows="4">${esc((l.poin || []).join('\n'))}</textarea>${perBaris}</label>`)).join('')}</div>`;
+  } else if (t === 'kontak') {
+    const st = S.settings || {}, k = d.kontak || {};
+    body.innerHTML = `<div class="set-grid"><div class="stack">
+      ${card('bi-whatsapp', 'WhatsApp & jam kerja', '', `<label class="field"><span class="label">No. WhatsApp kantor</span><input class="input mono" data-kk="wa" inputmode="tel" maxlength="20" placeholder="6281234567890" value="${esc(k.wa)}"><small class="muted">Kosongkan untuk memakai Telepon di Kop dokumen (hanya bila nomor seluler 08…).</small></label>
+        <label class="field"><span class="label">Jam kerja</span><input class="input" data-kk="jamKerja" maxlength="120" value="${esc(k.jamKerja)}"></label>`)}
+      ${card('bi-geo-alt', 'Google Maps', 'Peta di halaman Hubungi Kami.', `<label class="field"><span class="label">Lokasi untuk peta</span><input class="input" data-kk="maps" maxlength="300" placeholder="Nama tempat, alamat, atau koordinat (-6.2,106.8)" value="${esc(k.maps)}"><small class="muted">Kosongkan untuk memakai alamat kantor. Tip: buka Google Maps → klik kanan titik kantor → salin koordinat.</small></label>
+        <div class="web-map">${mapsEmbed(k.maps || st.companyAddress)}</div>`)}
+    </div><div class="stack">
+      ${card('bi-building', 'Alamat, telepon & email', 'Diambil dari Pengaturan → Kop dokumen cetak.', `<dl class="dl"><dt>Alamat</dt><dd>${esc(st.companyAddress || '—')}</dd><dt>Telepon</dt><dd>${esc(st.companyPhone || '—')}</dd><dt>Email</dt><dd>${esc(st.companyEmail || '—')}</dd></dl>
+        <button class="btn btn-secondary btn-sm mt" data-go="pengaturan" id="webToKop"><i class="bi bi-pencil"></i> Ubah di Pengaturan</button>`)}
+      <div class="alert alert-info"><i class="bi bi-envelope"></i><div>Formulir pertanyaan disimpan di menu <b>Pertanyaan Masuk</b> dan dikirim ke <b>${esc(st.companyEmail || 'email Super Admin')}</b>.</div></div>
+    </div></div>`;
+    const kb = $('#webToKop'); if (kb) kb.addEventListener('click', () => { S.ui.set.tab = 'kop'; });
+  } else renderBeritaAdmin(body);
+
+  const dirty = () => { ui.dirty = true; const m = $('#webDirty'); if (m) m.textContent = 'Ada perubahan yang belum disimpan.'; const r = $('#webReset'); if (r) r.disabled = false; };
+  body.addEventListener('input', e => {
+    const x = e.target;
+    if (x.dataset.wk) d[x.dataset.wk] = x.value;
+    else if (x.dataset.wl) d[x.dataset.wl] = x.value.split('\n').map(s => s.trim()).filter(Boolean);
+    else if (x.dataset.rk) d[x.dataset.rk][+x.dataset.i][x.dataset.f] = x.value;
+    else if (x.dataset.lk) d.layanan[+x.dataset.lk][x.dataset.f] = x.dataset.f === 'poin' ? x.value.split('\n').map(s => s.trim()).filter(Boolean) : x.value;
+    else if (x.dataset.kk) { d.kontak = d.kontak || {}; d.kontak[x.dataset.kk] = x.value; if (x.dataset.kk === 'maps') { const m = $('.web-map'); clearTimeout(renderWebsite.t); renderWebsite.t = setTimeout(() => { m.innerHTML = mapsEmbed(x.value || (S.settings || {}).companyAddress); }, 700); } }
+    else return;
+    dirty();
+  });
+  body.addEventListener('click', e => {
+    const add = e.target.closest('[data-radd]'), del = e.target.closest('[data-rdel]'), go = e.target.closest('[data-wt-go]');
+    if (go) { ui.tab = go.dataset.wtGo; renderWebsite(); return; }
+    if (add) { const k = add.dataset.radd; d[k] = d[k] || []; if (d[k].length >= (k === 'keunggulan' ? 8 : 15)) return toast('warning', 'Batas tercapai'); d[k].push(k === 'keunggulan' ? { judul: '', teks: '' } : { nama: '', nomor: '' }); dirty(); renderWebsite(); }
+    if (del) { d[del.dataset.rdel].splice(+del.dataset.i, 1); dirty(); renderWebsite(); }
+  });
+  const save = $('#webSave');
+  if (save) save.onclick = () => {
+    btnBusy(save, true, 'Menyimpan…');
+    api('saveWebsite', S.token, d).then(r => { S.web = r.data; ui.draft = null; ui.dirty = false; ok('Website diperbarui', r.message); renderWebsite(); }).catch(fail).finally(() => btnBusy(save, false));
+  };
+  const reset = $('#webReset');
+  if (reset) reset.onclick = () => { ui.draft = null; ui.dirty = false; renderWebsite(); };
+}
+function mapsEmbed(q) {
+  q = String(q || '').trim();
+  if (!q) return '<div class="muted" style="padding:24px;text-align:center">Isi alamat kantor atau lokasi untuk menampilkan peta.</div>';
+  return `<iframe title="Peta" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="https://maps.google.com/maps?q=${encodeURIComponent(q)}&z=16&output=embed"></iframe>`;
+}
+function renderBeritaAdmin(body) {
+  const list = (S.d.berita || []).slice().sort((a, b) => String(b.Tanggal).localeCompare(String(a.Tanggal)));
+  body.innerHTML = `<div class="table-card">
+    <div class="card-title-row" style="padding:18px 20px 0"><div><h3>Informasi terbaru</h3><p class="muted">Pengumuman, promo, rute baru, atau libur operasional. Tampil di beranda website, terbaru di atas.</p></div><button class="btn btn-primary" id="bAdd"><i class="bi bi-plus-lg"></i> Tambah informasi</button></div>
+    ${list.length ? `<div class="table-wrap"><table class="table cards"><thead><tr><th>Tanggal</th><th>Judul</th><th>Tampil</th><th class="t-actions">Aksi</th></tr></thead><tbody>
+    ${list.map(b => `<tr class="${String(b.Tampil) === 'false' ? 'row-muted' : ''}"><td data-label="Tanggal">${tgl(b.Tanggal)}</td><td class="card-title" data-label="Judul"><span class="t-strong">${esc(b.Judul)}</span><span class="t-sub">${esc(String(b.Isi).slice(0, 110))}${String(b.Isi).length > 110 ? '…' : ''}</span></td>
+      <td data-label="Tampil"><span class="badge ${String(b.Tampil) === 'false' ? 'b-slate' : 'b-green'}">${String(b.Tampil) === 'false' ? 'Disembunyikan' : 'Tampil'}</span></td>
+      <td class="t-actions"><button class="icon-btn" data-be="${esc(b.ID)}" title="Ubah"><i class="bi bi-pencil"></i></button><button class="icon-btn" data-bd="${esc(b.ID)}" title="Hapus"><i class="bi bi-trash"></i></button></td></tr>`).join('')}
+    </tbody></table></div>` : `<div style="padding:8px 20px 20px">${emptyHTML('bi-megaphone', 'Belum ada informasi', 'Bagian "Informasi terbaru" di beranda website disembunyikan sampai ada informasi yang ditampilkan.')}</div>`}</div>`;
+  $('#bAdd').onclick = () => openBeritaModal(null);
+  body.onclick = e => {
+    const b = e.target.closest('[data-be],[data-bd]'); if (!b) return;
+    const rec = byId('berita', b.dataset.be || b.dataset.bd);
+    if (b.dataset.be) return openBeritaModal(rec);
+    confirmDialog({ title: 'Hapus informasi?', text: rec.Judul, variant: 'danger', icon: 'bi-trash', ok: 'Hapus' }).then(v => {
+      if (v !== true) return;
+      api('deleteBerita', S.token, rec.ID).then(() => { removeFrom('berita', rec.ID); ok('Informasi dihapus'); renderWebsite(); }).catch(fail);
+    });
+  };
+}
+function openBeritaModal(b) {
+  const d = Object.assign({ Tanggal: today(), Tampil: 'true' }, b || {});
+  openModal({ title: b ? 'Ubah informasi' : 'Tambah informasi', sub: 'Tampil di bagian "Informasi terbaru" pada beranda website.', icon: 'bi-megaphone', size: 'lg',
+    body: `<form id="bForm" novalidate>
+      <div class="row-2"><label class="field"><span class="label req">Tanggal</span><input class="input" type="date" name="Tanggal" value="${esc(String(d.Tanggal).slice(0, 10))}"></label>
+        <label class="field"><span class="label">Tampilkan di website</span><select class="input" name="Tampil"><option value="true" ${String(d.Tampil) !== 'false' ? 'selected' : ''}>Ya, tampilkan</option><option value="false" ${String(d.Tampil) === 'false' ? 'selected' : ''}>Sembunyikan dulu</option></select></label></div>
+      <label class="field"><span class="label req">Judul</span><input class="input" name="Judul" maxlength="150" value="${esc(d.Judul || '')}" placeholder="mis. Rute baru Jakarta – Makassar via laut"></label>
+      <label class="field"><span class="label req">Isi</span><textarea class="input" name="Isi" rows="8" maxlength="5000" placeholder="Tulis informasinya. Pisahkan paragraf dengan baris kosong.">${esc(d.Isi || '')}</textarea></label>
+    </form>`,
+    foot: '<button class="btn btn-secondary" data-close>Batal</button><button class="btn btn-primary" id="bSave"><i class="bi bi-check2"></i> Simpan informasi</button>' });
+  $('#bSave').onclick = () => {
+    const v = formValues($('#bForm')); if (b) v.ID = b.ID;
+    if (!v.Judul || !v.Isi) { toast('warning', 'Lengkapi data', 'Judul dan isi wajib diisi.'); return; }
+    const btn = $('#bSave'); btnBusy(btn, true, 'Menyimpan…');
+    api('saveBerita', S.token, v).then(r => { upsert('berita', r.data); closeModal(); ok(r.message); renderWebsite(); }).catch(fail).finally(() => btnBusy(btn, false));
+  };
 }
 
 // Penanda: js/app.js termuat sampai akhir
