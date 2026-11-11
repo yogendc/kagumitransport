@@ -10,7 +10,7 @@
    ============================================================ */
 
 // ── Konstanta ──────────────────────────────────────────────
-const APP_VERSI = '2.8'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
+const APP_VERSI = '2.9'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
 const LS = { token: 'kgm_token', theme: 'kgm_theme', cache: 'kgm_cache_v1', cols: 'kgm_rekap_cols', draft: 'kgm_draft_', master: 'kgm_master_open', login: 'kgm_login_ctx' };
 const STATUS = ['Dijadwalkan', 'Dikirim', 'Diterima', 'Dibatalkan'];
 const STATUS_CLS = { Dijadwalkan: 'b-indigo', Dikirim: 'b-amber', Diterima: 'b-green', Dibatalkan: 'b-red', Draf: 'b-slate' };
@@ -2657,12 +2657,13 @@ const MASTERS = {
   ekspedisi: {
     title: 'Ekspedisi Rekanan', sub: 'Mitra ekspedisi untuk meneruskan paket. Hanya untuk tim internal, tidak tercetak di dokumen pelanggan.', icon: 'bi-buildings', add: 'Tambah ekspedisi', list: 'ekspedisi',
     canEdit: () => isSA(), canDel: () => isSA(), label: r => r.Nama,
-    search: r => [r.Nama, r.Kode, r.NoWA, r.Alamat, r.Catatan].join(' '),
+    search: r => [r.Nama, r.Kode, r.NoWA, r.Alamat, r.Catatan, tarifParse(r.Tarif).map(t => t.kota).join(' ')].join(' '),
     chips: [['', 'Semua'], ['aktif', 'Pernah dipakai', r => S.d.orders.some(o => o.EkspedisiID === r.ID)]],
     cols: [
       ['ID', r => `<span class="chip chip-soft mono">${esc(r.Kode)}</span>`, 'card-title'],
       ['Ekspedisi', r => `<span class="t-strong">${esc(r.Nama)}</span><span class="t-sub">${esc(firstPart(r.Alamat) || '—')}</span>`],
       ['WhatsApp', r => r.NoWA ? `<a class="mono" href="https://wa.me/${waNumber(r.NoWA)}" target="_blank" rel="noopener">${esc(r.NoWA)}</a>` : '—'],
+      ['Tarif', r => { const t = tarifParse(r.Tarif).filter(x => x.kota); return t.length ? `<b class="mono">${t.length}</b><span class="t-sub">${esc(t.slice(0, 3).map(x => x.kota).join(', '))}${t.length > 3 ? ', …' : ''}</span>` : '<span class="muted">—</span>'; }],
       ['Paket', r => `<b class="mono">${S.d.orders.filter(o => o.EkspedisiID === r.ID && o.StatusDok === 'Terkonfirmasi').length}</b><span class="t-sub">resi diteruskan</span>`]
     ],
     sections: [
@@ -2670,7 +2671,8 @@ const MASTERS = {
         { k: 'Nama', l: 'Nama ekspedisi', req: true, full: true, ph: 'Contoh: JNE Cargo Cabang Cikarang' },
         { k: 'NoWA', l: 'No. WhatsApp', t: 'tel', req: true, ph: '08xxxxxxxxxx' },
         { k: 'Alamat', l: 'Alamat (opsional)', t: 'textarea', full: true },
-        { k: 'Catatan', l: 'Catatan internal', t: 'textarea', full: true }] }
+        { k: 'Catatan', l: 'Catatan internal', t: 'textarea', full: true }] },
+      { t: 'Tarif ekspedisi per kota tujuan', f: [{ k: 'Tarif', t: 'tarif', min: true, full: true }] }
     ]
   },
   rekening: {
@@ -2775,12 +2777,12 @@ function openMasterModal(type, rec, opt) {
         <span class="chip b-indigo mono"><i class="bi bi-lock"></i> Sewa: ${esc(d.IDSewa || 'CUST-otomatis')}</span><span class="chip b-indigo mono"><i class="bi bi-lock"></i> Kirim: ${esc(d.IDKirim || 'KRM-otomatis')}</span></div></div>`;
     }
     if (f.t === 'tarif') {
-      const rows = tarifList({ TarifPaket: v });
-      return `<div class="field full" data-f="${f.k}"><input type="hidden" name="${f.k}" value="${esc(v)}">
-        <small class="muted" style="margin-bottom:6px">Terisi otomatis di Form Kirim Paket sesuai kota tujuan. Kosongkan nama kota untuk tarif umum (semua kota).</small>
-        <div class="tf-table" data-tf-table>
-          <div class="tf-row tf-head"><span>Kota tujuan</span><span>Tarif per kg (Rp)</span><span>Tarif per m³ (Rp)</span><span></span></div>
-          ${(rows.length ? rows : [{}]).map(t => tarifRowHTML(t, ro)).join('')}
+      const rows = tarifParse(v), mn = !!f.min;
+      return `<div class="field full" data-f="${f.k}"><input type="hidden" name="${f.k}" value="${esc(v)}" data-tf-hidden>
+        <small class="muted" style="margin-bottom:6px">${mn ? 'Tarif dari ekspedisi ke kita (biaya modal, hanya internal). Tampil sebagai perkiraan biaya saat ekspedisi dipilih di Form Kirim Paket. Kosongkan nama kota untuk tarif umum (semua kota).' : 'Terisi otomatis di Form Kirim Paket sesuai kota tujuan. Kosongkan nama kota untuk tarif umum (semua kota).'}</small>
+        <div class="tf-table${mn ? ' tf-min' : ''}" data-tf-table${mn ? ' data-tf-min' : ''}>
+          <div class="tf-row tf-head"><span>Kota tujuan</span><span>Harga per kg (Rp)</span><span>Harga per m³ (Rp)</span>${mn ? '<span>Harga minimal (Rp)</span>' : ''}<span></span></div>
+          ${(rows.length ? rows : [{}]).map(t => tarifRowHTML(t, ro, mn)).join('')}
         </div>
         ${ro ? '' : '<button type="button" class="btn btn-secondary btn-sm" data-tf-add style="margin-top:8px;justify-self:start"><i class="bi bi-plus-lg"></i> Tambah kota</button>'}
         <div class="err-msg" data-err="${f.k}" hidden></div></div>`;
@@ -2823,34 +2825,44 @@ function openMasterModal(type, rec, opt) {
     if (np) { const n = digits(vals.NPWP).length; np.className = 'badge plain ' + (!n ? '' : (n === 15 || n === 16) ? 'b-green' : 'b-red'); np.textContent = !n ? '' : (n === 15 || n === 16) ? 'Format valid: ' + n + ' digit' : n + ' digit (harus 15/16)'; }
   };
   form.addEventListener('input', live); form.addEventListener('change', live); live();
-  if (type === 'pelanggan' || type === 'penerima') bindTarifEditor(form);
+  if (type === 'pelanggan' || type === 'penerima' || type === 'ekspedisi') bindTarifEditor(form);
   const save = $('#mfSave');
   if (save) save.onclick = e => { e.preventDefault(); submitMaster(type, rec, form, save, opt); };
 }
-// ── Tarif paket pelanggan: [{kota, kg, m3}] ───────────────
-function tarifList(p) { try { const a = JSON.parse((p && p.TarifPaket) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+// ── Tarif paket pelanggan: [{kota, kg, m3}] · ekspedisi: [{kota, kg, m3, min}] ──
+function tarifParse(v) { try { const a = JSON.parse(v || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+function tarifList(p) { return tarifParse(p && p.TarifPaket); }
+function cariTarifDi(list, kota) {
+  const k = String(kota || '').trim().toLowerCase();
+  return (k && list.find(t => String(t.kota || '').trim().toLowerCase() === k)) || list.find(t => !String(t.kota || '').trim()) || null;
+}
 function cariTarif(p, kota) {
   const list = tarifList(p), k = String(kota || '').trim().toLowerCase();
   return (k && list.find(t => String(t.kota || '').trim().toLowerCase() === k)) || list.find(t => !String(t.kota || '').trim()) || null;
 }
-function tarifRowHTML(t, ro) {
+function tarifRowHTML(t, ro, mn) {
   const m = v => (num(v) ? num(v).toLocaleString('id-ID') : '');
   return `<div class="tf-row" data-tf-row><input class="input tf-kota" data-tf="kota" maxlength="60" placeholder="Semua kota" value="${esc(t.kota || '')}" ${ro ? 'readonly' : ''}>
-    <input class="input t-right" data-tf="kg" inputmode="numeric" placeholder="0" value="${m(t.kg)}" ${ro ? 'readonly' : ''}>
-    <input class="input t-right" data-tf="m3" inputmode="numeric" placeholder="0" value="${m(t.m3)}" ${ro ? 'readonly' : ''}>
+    <input class="input t-right" data-tf="kg" inputmode="numeric" placeholder="${mn ? 'per kg' : '0'}" title="Harga per kg" value="${m(t.kg)}" ${ro ? 'readonly' : ''}>
+    <input class="input t-right" data-tf="m3" inputmode="numeric" placeholder="${mn ? 'per m³' : '0'}" title="Harga per m³" value="${m(t.m3)}" ${ro ? 'readonly' : ''}>
+    ${mn ? `<input class="input t-right" data-tf="min" inputmode="numeric" placeholder="minimal" title="Harga minimal" value="${m(t.min)}" ${ro ? 'readonly' : ''}>` : ''}
     ${ro ? '<span></span>' : '<button type="button" class="icon-btn" data-tf-del title="Hapus kota" aria-label="Hapus kota"><i class="bi bi-trash"></i></button>'}</div>`;
 }
 function bindTarifEditor(form) {
-  const table = form.querySelector('[data-tf-table]'), hidden = form.querySelector('[name=TarifPaket]');
+  const table = form.querySelector('[data-tf-table]'), hidden = form.querySelector('[data-tf-hidden]');
   if (!table) return;
+  const mn = table.hasAttribute('data-tf-min');
   const sync = () => {
-    const rows = $$('[data-tf-row]', table).map(r => ({ kota: r.querySelector('[data-tf=kota]').value.trim(), kg: num(r.querySelector('[data-tf=kg]').value), m3: num(r.querySelector('[data-tf=m3]').value) }))
-      .filter(t => t.kota || t.kg || t.m3);
+    const rows = $$('[data-tf-row]', table).map(r => {
+      const o = { kota: r.querySelector('[data-tf=kota]').value.trim(), kg: num(r.querySelector('[data-tf=kg]').value), m3: num(r.querySelector('[data-tf=m3]').value) };
+      if (mn) o.min = num(r.querySelector('[data-tf=min]').value);
+      return o;
+    }).filter(t => t.kota || t.kg || t.m3 || t.min);
     hidden.value = rows.length ? JSON.stringify(rows) : '';
   };
-  table.addEventListener('input', e => { if (e.target.dataset.tf === 'kg' || e.target.dataset.tf === 'm3') formatMoneyInput(e.target); sync(); });
+  table.addEventListener('input', e => { if (['kg', 'm3', 'min'].includes(e.target.dataset.tf)) formatMoneyInput(e.target); sync(); });
   form.addEventListener('click', e => {
-    if (e.target.closest('[data-tf-add]')) { table.insertAdjacentHTML('beforeend', tarifRowHTML({}, false)); const r = $$('[data-tf-row]', table); r[r.length - 1].querySelector('[data-tf=kota]').focus(); }
+    if (e.target.closest('[data-tf-add]')) { table.insertAdjacentHTML('beforeend', tarifRowHTML({}, false, mn)); const r = $$('[data-tf-row]', table); r[r.length - 1].querySelector('[data-tf=kota]').focus(); }
     const del = e.target.closest('[data-tf-del]');
     if (del) { const rows = $$('[data-tf-row]', table); if (rows.length > 1) del.closest('[data-tf-row]').remove(); else rows[0].querySelectorAll('input').forEach(i => { i.value = ''; }); sync(); }
   });
@@ -2877,7 +2889,8 @@ function validateMasterLocal(type, v, rec) {
     if (dup) errs.NoSIM = 'No. SIM sudah terdaftar atas nama ' + dup.Nama + ' (' + dup.Kode + ').';
   }
   if (type === 'pelanggan' && v.PembayaranBawaan === 'Termin' && !(num(v.TerminHari) > 0)) errs.TerminHari = 'Isi jumlah hari termin.';
-  if (type === 'pelanggan' || type === 'penerima') { const ks = tarifList(v).map(t => String(t.kota || '').trim().toLowerCase()); const dup = ks.find((k, i) => ks.indexOf(k) !== i); if (dup !== undefined) errs.TarifPaket = 'Kota "' + (dup || 'Semua kota') + '" tercantum dua kali.'; }
+  const tk = type === 'ekspedisi' ? 'Tarif' : (type === 'pelanggan' || type === 'penerima') ? 'TarifPaket' : '';
+  if (tk) { const ks = tarifParse(v[tk]).map(t => String(t.kota || '').trim().toLowerCase()); const dup = ks.find((k, i) => ks.indexOf(k) !== i); if (dup !== undefined) errs[tk] = 'Kota "' + (dup || 'Semua kota') + '" tercantum dua kali.'; }
   return errs;
 }
 function submitMaster(type, rec, form, btn, opt) {
@@ -3320,7 +3333,7 @@ function recalc(lay) {
   const st = FORMS[lay]; if (!st) return; const form = st.el;
   const v = n => num(form.querySelector(`[name="${n}"]`).value);
   const pay = form.querySelector('[name=Pembayaran]').value;
-  if (lay === 'paket') hitungOngkos(lay);
+  if (lay === 'paket') { hitungOngkos(lay); updateEkspInfo(lay); }
   const ppEl = form.querySelector('[name=PajakPersen]'), pp = persenNum(ppEl.value);
   const pajak = Math.round(v('Harga') * pp / 100);
   form.querySelector('[name=Pajak]').value = ppEl.value.trim() === '' ? '' : String(pajak);
@@ -3477,7 +3490,27 @@ function updateEkspInfo(lay) {
   const form = FORMS[lay].el, box = form.querySelector('[data-eksp-info]'); if (!box) return;
   const e = byId('ekspedisi', form.querySelector('[name=EkspedisiID]').value);
   box.hidden = !e;
-  if (e) box.innerHTML = `<div><b>${esc(e.Nama)}</b><span class="t-sub">${esc(e.Kode)}${e.Alamat ? ' · ' + esc(firstPart(e.Alamat)) : ''}</span></div>${e.NoWA ? `<a class="btn btn-secondary btn-sm" href="https://wa.me/${waNumber(e.NoWA)}" target="_blank" rel="noopener"><i class="bi bi-whatsapp"></i> WA ${esc(e.NoWA)}</a>` : ''}`;
+  if (e) box.innerHTML = `<div><b>${esc(e.Nama)}</b><span class="t-sub">${esc(e.Kode)}${e.Alamat ? ' · ' + esc(firstPart(e.Alamat)) : ''}</span></div>${e.NoWA ? `<a class="btn btn-secondary btn-sm" href="https://wa.me/${waNumber(e.NoWA)}" target="_blank" rel="noopener"><i class="bi bi-whatsapp"></i> WA ${esc(e.NoWA)}</a>` : ''}${ekspEstimasiHTML(lay, e)}`;
+}
+/** Perkiraan biaya ke ekspedisi = maks(harga minimal, berat × harga/kg atau volume × harga/m³). Hanya info internal. */
+function ekspEstimasiHTML(lay, e) {
+  const form = FORMS[lay].el, kota = form.querySelector('[name=KotaTujuan]').value.trim();
+  const list = tarifParse(e.Tarif);
+  if (!list.length) return '<div class="eksp-est muted">Belum ada tarif untuk ekspedisi ini. Isi di Data Master → Ekspedisi Rekanan.</div>';
+  const t = cariTarifDi(list, kota);
+  if (!t) return `<div class="eksp-est muted">Tarif ke ${esc(kota || 'kota tujuan')} belum ada di ekspedisi ini.</div>`;
+  const tot = itemTotals(itemsOf(lay));
+  const kg = Math.round(tot.TotalBerat * 100) / 100, m3 = Math.round(tot.TotalVolume * 10000) / 10000;
+  const opsi = [];
+  if (num(t.kg)) opsi.push({ l: `${fnumDec(kg)} kg × ${rp(t.kg)}`, v: Math.round(kg * num(t.kg)) });
+  if (num(t.m3)) opsi.push({ l: `${fnumDec(m3, 4)} m³ × ${rp(t.m3)}`, v: Math.round(m3 * num(t.m3)) });
+  const dasar = form.querySelector('[name=DasarTarif]').value === 'volume' ? 1 : 0;
+  const pilih = opsi.length === 2 ? opsi[dasar] : opsi[0];
+  const min = num(t.min), nilai = Math.max(pilih ? pilih.v : 0, min);
+  const harga = num(form.querySelector('[name=Harga]').value);
+  return `<div class="eksp-est"><div class="eksp-est-h"><i class="bi bi-calculator"></i> Perkiraan biaya ekspedisi${t.kota ? ' · ' + esc(t.kota) : ' · tarif umum'}</div>
+    <div class="eksp-est-r"><span>${pilih ? esc(pilih.l) : 'Tanpa harga per kg / m³'}${min ? ` · minimal ${rp(min)}` : ''}</span><b class="mono">${rp(nilai)}</b></div>
+    ${harga ? `<div class="eksp-est-r"><span>Ongkos ke pelanggan − biaya ekspedisi</span><b class="mono ${harga - nilai < 0 ? 't-red' : 't-green'}">${rp(harga - nilai)}</b></div>` : ''}</div>`;
 }
 function simpanEkspedisi(lay) {
   const st = FORMS[lay], form = st.el; if (!st.rec) return;
