@@ -10,7 +10,7 @@
    ============================================================ */
 
 // ── Konstanta ──────────────────────────────────────────────
-const APP_VERSI = '2.7'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
+const APP_VERSI = '2.8'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
 const LS = { token: 'kgm_token', theme: 'kgm_theme', cache: 'kgm_cache_v1', cols: 'kgm_rekap_cols', draft: 'kgm_draft_', master: 'kgm_master_open', login: 'kgm_login_ctx' };
 const STATUS = ['Dijadwalkan', 'Dikirim', 'Diterima', 'Dibatalkan'];
 const STATUS_CLS = { Dijadwalkan: 'b-indigo', Dikirim: 'b-amber', Diterima: 'b-green', Dibatalkan: 'b-red', Draf: 'b-slate' };
@@ -4615,6 +4615,7 @@ function renderWebsite() {
       ${card('bi-building', 'Profil singkat perusahaan', 'Satu paragraf pengenalan di beranda.', fld('profilSingkat', 'Profil singkat', d.profilSingkat, { rows: 5, max: 1200 }))}
       ${card('bi-bullseye', 'Visi & misi', '', fld('visi', 'Visi', d.visi, { rows: 2, max: 500 }) + `<label class="field"><span class="label">Misi</span><textarea class="input" data-wl="misi" rows="5">${esc((d.misi || []).join('\n'))}</textarea>${perBaris}</label>`)}
     </div><div class="stack">
+      ${fotoCard('hero', 'Foto latar beranda', 'Tampil di belakang judul utama. Cocok: armada, gudang, atau kegiatan bongkar muat.')}
       ${card('bi-briefcase', 'Bidang usaha', 'Daftar singkat bidang usaha.', `<label class="field"><span class="label">Bidang usaha</span><textarea class="input" data-wl="bidangUsaha" rows="4">${esc((d.bidangUsaha || []).join('\n'))}</textarea>${perBaris}</label>`)}
       ${card('bi-award', 'Keunggulan perusahaan', 'Ditampilkan sebagai kartu di beranda (maks. 8).', pairRows('keunggulan', 'judul', 'teks', ['Judul keunggulan', 'Keterangan singkat']))}
       <div class="alert alert-info"><i class="bi bi-megaphone"></i><div><b>Informasi terbaru</b> di beranda diatur di tab <a href="javascript:void(0)" data-wt-go="berita">Informasi terbaru</a>.</div></div>
@@ -4624,6 +4625,7 @@ function renderWebsite() {
       ${card('bi-clock-history', 'Sejarah perusahaan', 'Pisahkan paragraf dengan satu baris kosong.', fld('sejarah', 'Sejarah', d.sejarah, { rows: 9, max: 5000 }))}
       ${card('bi-building', 'Profil perusahaan', 'Uraian lengkap di halaman Tentang Kami.', fld('profil', 'Profil', d.profil, { rows: 9, max: 5000 }))}
     </div><div class="stack">
+      ${fotoCard('tentang', 'Foto latar Tentang Kami', 'Tampil di bagian atas halaman Tentang Kami. Cocok: foto tim atau kantor.')}
       ${card('bi-patch-check', 'Legalitas perusahaan', 'Dokumen tanpa nomor tidak ditampilkan di website.', pairRows('legalitas', 'nama', 'nomor', ['Nama dokumen, mis. NIB', 'Nomor dokumen']))}
       <div class="alert alert-warning"><i class="bi bi-shield-exclamation"></i><div>Cukup tampilkan <b>nomor</b> dokumen. Jangan unggah foto akta/NPWP ke website publik.</div></div>
     </div></div>`;
@@ -4631,7 +4633,8 @@ function renderWebsite() {
     body.innerHTML = `<div class="stack">${(d.layanan || []).map((l, i) => card(['bi-box-seam', 'bi-truck-front', 'bi-car-front'][i] || 'bi-truck', (i + 1) + '. ' + esc(l.judul), 'Tampil di halaman Produk & Layanan dan ringkasannya di beranda.',
       `<div class="row-2"><label class="field"><span class="label">Nama layanan</span><input class="input" data-lk="${i}" data-f="judul" maxlength="80" value="${esc(l.judul)}"></label><div></div></div>
        <label class="field"><span class="label">Keterangan</span><textarea class="input" data-lk="${i}" data-f="teks" rows="3" maxlength="1000">${esc(l.teks)}</textarea></label>
-       <label class="field"><span class="label">Poin keunggulan layanan</span><textarea class="input" data-lk="${i}" data-f="poin" rows="4">${esc((l.poin || []).join('\n'))}</textarea>${perBaris}</label>`)).join('')}</div>`;
+       <label class="field"><span class="label">Poin keunggulan layanan</span><textarea class="input" data-lk="${i}" data-f="poin" rows="4">${esc((l.poin || []).join('\n'))}</textarea>${perBaris}</label>
+       ${fotoBox(l.kunci, 'Foto layanan', 'Tampil di halaman Produk & Layanan dan kartu layanan di beranda.')}`)).join('')}</div>`;
   } else if (t === 'kontak') {
     const st = S.settings || {}, k = d.kontak || {};
     body.innerHTML = `<div class="set-grid"><div class="stack">
@@ -4640,6 +4643,7 @@ function renderWebsite() {
       ${card('bi-geo-alt', 'Google Maps', 'Peta di halaman Hubungi Kami.', `<label class="field"><span class="label">Lokasi untuk peta</span><input class="input" data-kk="maps" maxlength="300" placeholder="Nama tempat, alamat, atau koordinat (-6.2,106.8)" value="${esc(k.maps)}"><small class="muted">Kosongkan untuk memakai alamat kantor. Tip: buka Google Maps → klik kanan titik kantor → salin koordinat.</small></label>
         <div class="web-map">${mapsEmbed(k.maps || st.companyAddress)}</div>`)}
     </div><div class="stack">
+      ${fotoCard('kontak', 'Foto latar Hubungi Kami', 'Tampil di bagian atas halaman Hubungi Kami. Cocok: foto depan kantor.')}
       ${card('bi-building', 'Alamat, telepon & email', 'Diambil dari Pengaturan → Kop dokumen cetak.', `<dl class="dl"><dt>Alamat</dt><dd>${esc(st.companyAddress || '—')}</dd><dt>Telepon</dt><dd>${esc(st.companyPhone || '—')}</dd><dt>Email</dt><dd>${esc(st.companyEmail || '—')}</dd></dl>
         <button class="btn btn-secondary btn-sm mt" data-go="pengaturan" id="webToKop"><i class="bi bi-pencil"></i> Ubah di Pengaturan</button>`)}
       <div class="alert alert-info"><i class="bi bi-envelope"></i><div>Formulir pertanyaan disimpan di menu <b>Pertanyaan Masuk</b> dan dikirim ke <b>${esc(st.companyEmail || 'email Super Admin')}</b>.</div></div>
@@ -4661,6 +4665,9 @@ function renderWebsite() {
   body.addEventListener('click', e => {
     const add = e.target.closest('[data-radd]'), del = e.target.closest('[data-rdel]'), go = e.target.closest('[data-wt-go]');
     if (go) { ui.tab = go.dataset.wtGo; renderWebsite(); return; }
+    const fp = e.target.closest('[data-fpick]'), fd = e.target.closest('[data-fdel]');
+    if (fp) { pilihFotoWeb(fp.dataset.fpick, fp); return; }
+    if (fd) { hapusFotoWebUI(fd.dataset.fdel, fd); return; }
     if (add) { const k = add.dataset.radd; d[k] = d[k] || []; if (d[k].length >= (k === 'keunggulan' ? 8 : 15)) return toast('warning', 'Batas tercapai'); d[k].push(k === 'keunggulan' ? { judul: '', teks: '' } : { nama: '', nomor: '' }); dirty(); renderWebsite(); }
     if (del) { d[del.dataset.rdel].splice(+del.dataset.i, 1); dirty(); renderWebsite(); }
   });
@@ -4669,8 +4676,58 @@ function renderWebsite() {
     btnBusy(save, true, 'Menyimpan…');
     api('saveWebsite', S.token, d).then(r => { S.web = r.data; ui.draft = null; ui.dirty = false; ok('Website diperbarui', r.message); renderWebsite(); }).catch(fail).finally(() => btnBusy(save, false));
   };
+  muatPreviewFotoWeb();
   const reset = $('#webReset');
   if (reset) reset.onclick = () => { ui.draft = null; ui.dirty = false; renderWebsite(); };
+}
+// Foto website: unggah (dikompres di browser), pratinjau, hapus
+function fotoBox(slot, label, hint) {
+  const f = (S.web.foto || {})[slot];
+  return `<div class="field web-foto"><span class="label">${label}</span>
+    <div class="web-foto-prev ${f ? '' : 'empty'}" data-fprev="${slot}">${f ? '<span class="muted">Memuat foto…</span>' : '<i class="bi bi-image"></i><span>Belum ada foto</span>'}</div>
+    <div class="chips-row"><button type="button" class="btn btn-secondary btn-sm" data-fpick="${slot}"><i class="bi bi-upload"></i> ${f ? 'Ganti foto' : 'Pilih foto'}</button>
+    ${f ? `<button type="button" class="btn btn-ghost btn-sm" data-fdel="${slot}"><i class="bi bi-trash"></i> Hapus</button>` : ''}</div>
+    <small class="muted">${hint} Foto mendatar (landscape) lebih baik; otomatis dikecilkan sebelum diunggah.</small></div>`;
+}
+function fotoCard(slot, title, hint) {
+  return `<div class="card"><div class="card-h"><span class="num"><i class="bi bi-image"></i></span><div><h3>${title}</h3><p>Opsional</p></div></div>${fotoBox(slot, 'Foto', hint)}</div>`;
+}
+S.webFotoData = S.webFotoData || {};
+function muatPreviewFotoWeb() {
+  document.querySelectorAll('[data-fprev]').forEach(el => {
+    const slot = el.dataset.fprev, f = (S.web.foto || {})[slot]; if (!f) return;
+    const key = slot + ':' + f.v;
+    const tampil = src => { el.innerHTML = `<img alt="" src="${esc(src)}">`; };
+    if (S.webFotoData[key]) return tampil(S.webFotoData[key]);
+    const lewatApi = () => api('getWebFoto', slot).then(r => { S.webFotoData[key] = r.data; tampil(r.data); }).catch(() => { el.innerHTML = '<span class="muted">Pratinjau tidak dapat dimuat.</span>'; });
+    if (!f.url) return lewatApi();
+    const img = new Image();
+    img.onload = () => { S.webFotoData[key] = f.url; tampil(f.url); };
+    img.onerror = lewatApi;
+    img.src = f.url;
+  });
+}
+function pilihFotoWeb(slot, btn) {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/jpeg,image/png,image/webp';
+  inp.onchange = () => {
+    const file = inp.files && inp.files[0]; if (!file) return;
+    btnBusy(btn, true, 'Mengunggah…');
+    compressImage(file, 1920, .82).then(data => api('uploadFotoWeb', S.token, slot, data).then(r => {
+      S.web.foto = r.data.foto; if (S.ui.web.draft) S.ui.web.draft.foto = r.data.foto;
+      S.webFotoData[slot + ':' + r.data.foto[slot].v] = data;
+      ok(r.message, r.data.publik ? 'Tampil di website saat halaman dibuka ulang.' : 'Berbagi publik Google Drive dibatasi, jadi foto dikirim lewat server (sedikit lebih lambat).');
+      renderWebsite();
+    })).catch(fail).finally(() => btnBusy(btn, false));
+  };
+  inp.click();
+}
+function hapusFotoWebUI(slot, btn) {
+  confirmDialog({ title: 'Hapus foto?', text: 'Bagian ini kembali memakai latar warna polos.', variant: 'danger', icon: 'bi-trash', ok: 'Hapus' }).then(v => {
+    if (v !== true) return;
+    btnBusy(btn, true);
+    api('hapusFotoWeb', S.token, slot).then(r => { S.web.foto = r.data.foto; if (S.ui.web.draft) S.ui.web.draft.foto = r.data.foto; ok(r.message); renderWebsite(); }).catch(fail).finally(() => btnBusy(btn, false));
+  });
 }
 function mapsEmbed(q) {
   q = String(q || '').trim();
