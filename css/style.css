@@ -777,4 +777,8 @@ select.input{appearance:none;padding-right:34px;cursor:pointer;
 .eksp-est .t-red{color:var(--red)}.eksp-est .t-green{color:var(--green,#16a34a)}
 .tf-min .tf-row{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 36px}
 @media (max-width:640px){.tf-min .tf-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 36px}.tf-table .tf-head{display:grid}.tf-table .tf-head span:first-child{display:none}}
+.web-logo-prev{display:flex;align-items:center;gap:12px;padding:16px;margin-bottom:12px;border:1px dashed var(--border);border-radius:10px;background:#fff;color:#14211c;min-height:76px}
+.web-logo-prev img{height:44px;max-width:240px;object-fit:contain}
+.web-logo-prev i{font-size:28px;color:var(--primary)}
+.web-logo-prev b{font-size:16px}
 :root{--kgm-css-end:1}

@@ -10,7 +10,7 @@
    ============================================================ */
 
 // ── Konstanta ──────────────────────────────────────────────
-const APP_VERSI = '2.9'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
+const APP_VERSI = '3.0'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
 const LS = { token: 'kgm_token', theme: 'kgm_theme', cache: 'kgm_cache_v1', cols: 'kgm_rekap_cols', draft: 'kgm_draft_', master: 'kgm_master_open', login: 'kgm_login_ctx' };
 const STATUS = ['Dijadwalkan', 'Dikirim', 'Diterima', 'Dibatalkan'];
 const STATUS_CLS = { Dijadwalkan: 'b-indigo', Dikirim: 'b-amber', Diterima: 'b-green', Dibatalkan: 'b-red', Draf: 'b-slate' };
@@ -4648,6 +4648,7 @@ function renderWebsite() {
       ${card('bi-building', 'Profil singkat perusahaan', 'Satu paragraf pengenalan di beranda.', fld('profilSingkat', 'Profil singkat', d.profilSingkat, { rows: 5, max: 1200 }))}
       ${card('bi-bullseye', 'Visi & misi', '', fld('visi', 'Visi', d.visi, { rows: 2, max: 500 }) + `<label class="field"><span class="label">Misi</span><textarea class="input" data-wl="misi" rows="5">${esc((d.misi || []).join('\n'))}</textarea>${perBaris}</label>`)}
     </div><div class="stack">
+      ${logoWebCard()}
       ${fotoCard('hero', 'Foto latar beranda', 'Tampil di belakang judul utama. Cocok: armada, gudang, atau kegiatan bongkar muat.')}
       ${card('bi-briefcase', 'Bidang usaha', 'Daftar singkat bidang usaha.', `<label class="field"><span class="label">Bidang usaha</span><textarea class="input" data-wl="bidangUsaha" rows="4">${esc((d.bidangUsaha || []).join('\n'))}</textarea>${perBaris}</label>`)}
       ${card('bi-award', 'Keunggulan perusahaan', 'Ditampilkan sebagai kartu di beranda (maks. 8).', pairRows('keunggulan', 'judul', 'teks', ['Judul keunggulan', 'Keterangan singkat']))}
@@ -4700,6 +4701,8 @@ function renderWebsite() {
     if (go) { ui.tab = go.dataset.wtGo; renderWebsite(); return; }
     const fp = e.target.closest('[data-fpick]'), fd = e.target.closest('[data-fdel]');
     if (fp) { pilihFotoWeb(fp.dataset.fpick, fp); return; }
+    const lg = e.target.closest('[data-wlogo]');
+    if (lg) { logoWebAksi(lg.dataset.wlogo, lg); return; }
     if (fd) { hapusFotoWebUI(fd.dataset.fdel, fd); return; }
     if (add) { const k = add.dataset.radd; d[k] = d[k] || []; if (d[k].length >= (k === 'keunggulan' ? 8 : 15)) return toast('warning', 'Batas tercapai'); d[k].push(k === 'keunggulan' ? { judul: '', teks: '' } : { nama: '', nomor: '' }); dirty(); renderWebsite(); }
     if (del) { d[del.dataset.rdel].splice(+del.dataset.i, 1); dirty(); renderWebsite(); }
@@ -4713,6 +4716,57 @@ function renderWebsite() {
   const reset = $('#webReset');
   if (reset) reset.onclick = () => { ui.draft = null; ui.dirty = false; renderWebsite(); };
 }
+// Logo website: disimpan apa adanya (tidak dipotong persegi), cocok untuk logo mendatar berisi tulisan
+function logoWebCard() {
+  const lg = S.web.logo || { data: '', nama: true }, st = S.settings || {};
+  const src = lg.data || st.logo || '';
+  return `<div class="card"><div class="card-h"><span class="num"><i class="bi bi-badge-tm"></i></span><div><h3>Logo website</h3><p>${lg.data ? 'Logo khusus website' : 'Saat ini memakai logo aplikasi (Pengaturan → Branding)'}</p></div></div>
+    <div class="web-logo-prev">${src ? `<img alt="" src="${esc(src)}">` : '<i class="bi bi-truck"></i>'}${lg.nama ? `<b>${esc(st.companyName || st.appName || '')}</b>` : ''}</div>
+    <div class="chips-row"><button type="button" class="btn btn-secondary btn-sm" data-wlogo="pick"><i class="bi bi-upload"></i> ${lg.data ? 'Ganti logo' : 'Unggah logo website'}</button>
+      ${lg.data ? '<button type="button" class="btn btn-ghost btn-sm" data-wlogo="del"><i class="bi bi-trash"></i> Pakai logo aplikasi</button>' : ''}</div>
+    <label class="check-row" style="display:flex;gap:8px;align-items:center;margin-top:12px"><input type="checkbox" data-wlogo="nama" ${lg.nama ? 'checked' : ''}><span>Tampilkan nama perusahaan di samping logo</span></label>
+    <small class="muted">PNG transparan atau SVG paling bagus. Logo mendatar (berisi tulisan) tidak dipotong. Matikan nama perusahaan bila tulisannya sudah ada di logo.</small></div>`;
+}
+function bacaLogoWeb(file) {
+  return new Promise((res, rej) => {
+    if (file.type === 'image/svg+xml') {
+      const fr = new FileReader();
+      fr.onload = () => (fr.result.length <= 45000 ? res(fr.result) : rej(new Error('Berkas SVG terlalu besar (maks. sekitar 30 KB).')));
+      fr.onerror = () => rej(new Error('Berkas tidak bisa dibaca.'));
+      return fr.readAsDataURL(file);
+    }
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const buat = (maxH, type, q) => {
+        const sc = Math.min(1, maxH / img.height, (maxH * 5) / img.width);
+        const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.width * sc)); c.height = Math.max(1, Math.round(img.height * sc));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); return c.toDataURL(type, q);
+      };
+      const coba = [[160, 'image/png'], [160, 'image/webp', .9], [120, 'image/webp', .85], [96, 'image/png'], [96, 'image/webp', .8], [72, 'image/webp', .75]];
+      for (const [h, t, q] of coba) { const d = buat(h, t, q); if (d.startsWith('data:' + t) && d.length <= 45000) return res(d); }
+      rej(new Error('Logo terlalu rumit untuk diperkecil. Coba gambar yang lebih sederhana.'));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('File bukan gambar yang valid.')); };
+    img.src = url;
+  });
+}
+function logoWebAksi(aksi, el) {
+  const lg = S.web.logo || { data: '', nama: true };
+  const simpan = (data, nama, btn) => {
+    if (btn && btn.tagName === 'BUTTON') btnBusy(btn, true, 'Menyimpan…');
+    return api('saveWebLogo', S.token, data, nama).then(r => {
+      S.web.logo = r.data; if (S.ui.web.draft) S.ui.web.draft.logo = r.data; ok(r.message, 'Tampil di website saat halaman dibuka ulang.'); renderWebsite();
+    }).catch(fail).finally(() => { if (btn && btn.tagName === 'BUTTON') btnBusy(btn, false); });
+  };
+  if (aksi === 'nama') return simpan(null, el.checked, null);
+  if (aksi === 'del') return simpan('', lg.nama, el);
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/png,image/jpeg,image/webp,image/svg+xml';
+  inp.onchange = () => { const f = inp.files && inp.files[0]; if (f) bacaLogoWeb(f).then(d => simpan(d, lg.nama, el)).catch(fail); };
+  inp.click();
+}
+
 // Foto website: unggah (dikompres di browser), pratinjau, hapus
 function fotoBox(slot, label, hint) {
   const f = (S.web.foto || {})[slot];
