@@ -10,7 +10,7 @@
    ============================================================ */
 
 // ── Konstanta ──────────────────────────────────────────────
-const APP_VERSI = '3.0'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
+const APP_VERSI = '3.1'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
 const LS = { token: 'kgm_token', theme: 'kgm_theme', cache: 'kgm_cache_v1', cols: 'kgm_rekap_cols', draft: 'kgm_draft_', master: 'kgm_master_open', login: 'kgm_login_ctx' };
 const STATUS = ['Dijadwalkan', 'Dikirim', 'Diterima', 'Dibatalkan'];
 const STATUS_CLS = { Dijadwalkan: 'b-indigo', Dikirim: 'b-amber', Diterima: 'b-green', Dibatalkan: 'b-red', Draf: 'b-slate' };
@@ -37,7 +37,7 @@ const CDN = {
 // ── State aplikasi (memori) ────────────────────────────────
 const S = {
   token: null, me: null, settings: {}, booted: false, lastSync: 0,
-  d: { pelanggan: [], penerima: [], ekspedisi: [], kendaraan: [], pengemudi: [], rekening: [], orders: [], invoices: [], inspeksi: [], finance: [], users: [], pertanyaan: [], berita: [] },
+  d: { pelanggan: [], penerima: [], ekspedisi: [], kendaraan: [], pengemudi: [], rekening: [], orders: [], invoices: [], inspeksi: [], finance: [], users: [], pertanyaan: [], berita: [], crmCompany: [], crmLeads: [], crmActivity: [], crmUsers: [] },
   web: null,
   page: 'ringkasan',
   ui: {
@@ -55,6 +55,8 @@ const S = {
   charts: {}
 };
 const SA_PAGES = ['finance', 'laporan', 'pengaturan', 'website'];
+const isSales = () => !!(S.me && S.me.role === 'SALES');
+const CRM_PAGES = ['crm', 'crm-perusahaan', 'crm-leads', 'crm-aktivitas'];
 const isSA = () => !!(S.me && S.me.role === 'SUPER_ADMIN');
 
 // ── Utilitas ───────────────────────────────────────────────
@@ -401,14 +403,14 @@ function logout() {
 function hydrate(d, fromCache) {
   S.me = d.me || S.me;
   S.settings = Object.assign({}, d.settings || {});
-  ['pelanggan', 'penerima', 'ekspedisi', 'kendaraan', 'pengemudi', 'rekening', 'orders', 'invoices', 'inspeksi', 'pertanyaan'].forEach(k => { if (d[k]) S.d[k] = d[k]; });
+  ['pelanggan', 'penerima', 'ekspedisi', 'kendaraan', 'pengemudi', 'rekening', 'orders', 'invoices', 'inspeksi', 'pertanyaan', 'crmCompany', 'crmLeads', 'crmActivity', 'crmUsers'].forEach(k => { if (d[k]) S.d[k] = d[k]; else if (!fromCache) S.d[k] = []; });
   if (!fromCache) { S.d.finance = d.finance || []; S.d.users = d.users || []; S.d.berita = d.berita || []; S.web = d.webKonten || null; S.lastSync = Date.now(); }
   applyBranding(S.settings);
 }
 function saveCache() {
   // Data keuangan & pengguna tidak disimpan di perangkat
   const c = { me: S.me, settings: S.settings, t: Date.now() };
-  ['pelanggan', 'penerima', 'ekspedisi', 'kendaraan', 'pengemudi', 'rekening', 'orders', 'invoices', 'inspeksi', 'pertanyaan'].forEach(k => { c[k] = S.d[k]; });
+  ['pelanggan', 'penerima', 'ekspedisi', 'kendaraan', 'pengemudi', 'rekening', 'orders', 'invoices', 'inspeksi', 'pertanyaan', 'crmCompany', 'crmLeads', 'crmActivity', 'crmUsers'].forEach(k => { c[k] = S.d[k]; });
   lsSet(LS.cache, JSON.stringify(c));
 }
 let refreshing = null;
@@ -430,6 +432,7 @@ function refreshData(silent) {
     if (S.booted) {
       applyRole();
       if (wasSA !== isSA() && !isSA() && SA_PAGES.includes(S.page)) navigateTo('ringkasan');
+      if (isSales() && !CRM_PAGES.includes(S.page)) navigateTo('crm');
       updateBadges();
       if (!isFormPage(S.page)) renderPage(S.page); else syncOpenForms();
     }
@@ -459,13 +462,15 @@ function showApp() {
   updateBadges();
   const d = new Date(today() + 'T00:00:00');
   $('#todayChip span').textContent = HARI[d.getDay()] + ', ' + tgl(today());
-  navigateTo(S.page && (isSA() || !SA_PAGES.includes(S.page)) ? S.page : 'ringkasan', { force: true });
+  if (isSales()) navigateTo(CRM_PAGES.includes(S.page) ? S.page : 'crm', { force: true });
+  else navigateTo(S.page && (isSA() || !SA_PAGES.includes(S.page)) ? S.page : 'ringkasan', { force: true });
   hideSplash();
 }
 function applyRole() {
   const me = S.me || {};
   $('#sbUserName').textContent = me.nama || me.email || '';
-  $('#sbUserRole').textContent = isSA() ? 'Super Admin' : 'Admin';
+  $('#sbUserRole').textContent = isSA() ? 'Super Admin' : isSales() ? 'Sales' : 'Admin';
+  document.body.classList.toggle('is-sales', isSales());
   $('#sbAvatar').textContent = initials(me.nama);
   $$('.sa-only').forEach(el => { el.hidden = !isSA(); });
   const open = lsGet(LS.master, '1') === '1';
@@ -479,6 +484,7 @@ const RENDER = {
   pengemudi: () => renderMaster('pengemudi'), penerima: () => renderMaster('penerima'), ekspedisi: () => renderMaster('ekspedisi'),
   finance: renderFinance, laporan: renderLaporan, pengaturan: renderPengaturan,
   website: renderWebsite, pertanyaan: renderPertanyaan,
+  crm: renderCrm, 'crm-perusahaan': renderCrmPerusahaan, 'crm-leads': renderCrmLeads, 'crm-aktivitas': renderCrmAktivitas,
   inspeksi: renderInspeksiPage
 };
 function renderPage(p) { try { if (RENDER[p]) RENDER[p](); } catch (e) { console.error(e); fail(e, 'Gagal menampilkan halaman'); } }
@@ -486,6 +492,7 @@ function renderPage(p) { try { if (RENDER[p]) RENDER[p](); } catch (e) { console
 /** Satu-satunya cara berpindah halaman (tanpa reload, tanpa ubah URL). */
 function navigateTo(page, opt) {
   opt = opt || {};
+  if (isSales() && !CRM_PAGES.includes(page)) page = 'crm';
   if (SA_PAGES.includes(page) && !isSA()) { toast('warning', 'Akses ditolak', 'Halaman ini khusus Super Admin.'); return; }
   const sec = $('#page-' + page); if (!sec) return;
   $$('.page').forEach(p => p.classList.toggle('active', p === sec));
@@ -602,6 +609,8 @@ function updateBadges() {
   set('#badgeDriver', driver);
   const pty = S.d.pertanyaan.filter(q => q.Status === 'Baru').length;
   set('#badgePty', pty, pty + ' baru');
+  const crmDue = (S.d.crmLeads || []).filter(l => ['Lead Baru', 'Dihubungi', 'Berminat', 'Penawaran Dikirim', 'Negosiasi'].includes(l.Tahap) && l.NextFollowup && l.NextFollowup <= today() && (!isSales() || l.PICEmail === (S.me || {}).email)).length;
+  set('#badgeCrm', crmDue, crmDue + ' follow-up');
   $('#bellDot').hidden = !(due || armada || driver);
 }
 function renderNotif() {
@@ -4040,7 +4049,7 @@ function setAkun() {
     <div class="card-title-row" style="padding:18px 20px 0"><div><h3>Daftar pengguna</h3><p class="muted">${users.filter(u => u.Status === 'Aktif').length} aktif dari ${users.length} akun</p></div><button class="btn btn-primary" id="uAdd"><i class="bi bi-person-plus"></i> Tambah pengguna</button></div>
     <div class="table-wrap"><table class="table cards"><thead><tr><th>Pengguna</th><th>Peran</th><th>Divisi</th><th>WhatsApp</th><th>Terakhir masuk</th><th>Status</th><th class="t-actions">Aksi</th></tr></thead><tbody>
     ${users.map(u => `<tr class="${u.Status !== 'Aktif' ? 'row-muted' : ''}"><td class="card-title" data-label="Pengguna"><div class="who"><span class="avatar soft">${esc(initials(u.Nama))}</span><div><span class="t-strong">${esc(u.Nama)}${u.Email === S.me.email ? ' <span class="chip chip-soft">Anda</span>' : ''}</span><span class="t-sub">${esc(u.Email)}</span></div></div></td>
-      <td data-label="Peran"><span class="badge ${u.Peran === 'SUPER_ADMIN' ? 'b-green' : 'b-indigo'}">${u.Peran === 'SUPER_ADMIN' ? 'Super Admin' : 'Admin'}</span></td><td data-label="Divisi">${esc(u.Divisi || '—')}</td>
+      <td data-label="Peran"><span class="badge ${u.Peran === 'SUPER_ADMIN' ? 'b-green' : u.Peran === 'SALES' ? 'b-amber' : 'b-indigo'}">${u.Peran === 'SUPER_ADMIN' ? 'Super Admin' : u.Peran === 'SALES' ? 'Sales' : 'Admin'}</span></td><td data-label="Divisi">${esc(u.Divisi || '—')}</td>
       <td data-label="WhatsApp" class="mono">${esc(u.NoHP || '—')}</td><td data-label="Terakhir masuk" class="muted">${u.TerakhirLogin ? tglJam(u.TerakhirLogin) : 'Belum pernah'}</td>
       <td data-label="Status"><span class="badge ${u.Status === 'Aktif' ? 'b-green' : 'b-slate'}">${esc(u.Status)}</span></td>
       <td class="t-actions"><button class="icon-btn" data-ue="${esc(u.ID)}" title="Ubah"><i class="bi bi-pencil"></i></button><button class="icon-btn" data-ur="${esc(u.ID)}" title="Reset kata sandi"><i class="bi bi-key"></i></button>${u.Email !== S.me.email ? `<button class="icon-btn" data-ut="${esc(u.ID)}" title="${u.Status === 'Aktif' ? 'Nonaktifkan' : 'Aktifkan'}"><i class="bi ${u.Status === 'Aktif' ? 'bi-slash-circle' : 'bi-check-circle'}"></i></button><button class="icon-btn" data-ud="${esc(u.ID)}" title="Hapus"><i class="bi bi-trash"></i></button>` : ''}</td></tr>`).join('')}
@@ -4074,7 +4083,7 @@ function openUserModal(u) {
     body: `<form id="uForm" class="row-2" novalidate>
       <label class="field" style="grid-column:1/-1"><span class="label req">Nama lengkap</span><input class="input" name="Nama" value="${esc(d.Nama || '')}"></label>
       <label class="field" style="grid-column:1/-1"><span class="label req">Email</span><input class="input" type="email" name="Email" value="${esc(d.Email || '')}" placeholder="nama@gmail.com"><small class="muted">Dipakai untuk masuk. Akun Google pemilik skrip bisa memakai tombol "Masuk dengan Google".</small></label>
-      <label class="field"><span class="label req">Peran</span><select class="input" name="Peran"><option value="ADMIN" ${d.Peran === 'ADMIN' ? 'selected' : ''}>Admin</option><option value="SUPER_ADMIN" ${d.Peran === 'SUPER_ADMIN' ? 'selected' : ''}>Super Admin</option></select></label>
+      <label class="field"><span class="label req">Peran</span><select class="input" name="Peran"><option value="ADMIN" ${d.Peran === 'ADMIN' ? 'selected' : ''}>Admin</option><option value="SUPER_ADMIN" ${d.Peran === 'SUPER_ADMIN' ? 'selected' : ''}>Super Admin</option><option value="SALES" ${d.Peran === 'SALES' ? 'selected' : ''}>Sales (hanya menu CRM)</option></select></label>
       <label class="field"><span class="label">Divisi / tanggung jawab</span><input class="input" name="Divisi" value="${esc(d.Divisi || '')}" placeholder="Operasional sewa"></label>
       <label class="field"><span class="label">No. WhatsApp</span><input class="input" name="NoHP" inputmode="tel" value="${esc(d.NoHP || '')}"></label>
       <label class="field"><span class="label">Status</span><select class="input" name="Status" ${u && u.Email === S.me.email ? 'disabled' : ''}><option ${d.Status === 'Aktif' ? 'selected' : ''}>Aktif</option><option ${d.Status === 'Nonaktif' ? 'selected' : ''}>Nonaktif</option></select></label>
@@ -4365,7 +4374,7 @@ function docSuratJalan(o, nominal, forPdf) {
 function waktuCetakTeks() {
   return new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date()).replace(/\./g, ':').replace(',', '') + ' WIB';
 }
-function peranTeks(r) { return r === 'SUPER_ADMIN' ? 'Super Admin' : r === 'ADMIN' ? 'Admin' : (r || '-'); }
+function peranTeks(r) { return r === 'SUPER_ADMIN' ? 'Super Admin' : r === 'ADMIN' ? 'Admin' : r === 'SALES' ? 'Sales' : (r || '-'); }
 function petugasQR(docName) {
   const me = S.me || {}, st = S.settings || {};
   const txt = [st.companyName || st.appName || 'KAGUMI Transport', 'Dokumen: ' + docName, 'Dicetak oleh: ' + (me.nama || me.email || '-') + ' (' + peranTeks(me.role) + ')', 'Waktu cetak: ' + waktuCetakTeks()].join('\n');
@@ -4568,6 +4577,7 @@ function renderPertanyaan() {
   el.querySelectorAll('[data-pf]').forEach(b => b.onclick = () => { st.f = b.dataset.pf; renderPertanyaan(); });
   $('#ptyRefresh').onclick = e => { const b = e.currentTarget; btnBusy(b, true); refreshData(true).catch(fail).finally(() => btnBusy(b, false)); };
   $('#ptyList').onclick = e => {
+    const pl = e.target.closest('[data-pty-lead]'); if (pl) return ptyKeLead(byId('pertanyaan', pl.dataset.ptyLead), pl);
     const b = e.target.closest('[data-ps]'); if (!b) return;
     const r = byId('pertanyaan', b.dataset.id); if (!r) return;
     if (b.dataset.ps === 'Selesai') return ptySelesai(r);
@@ -4587,6 +4597,7 @@ function ptyCard(r) {
     ${r.Catatan || r.DitanganiOleh ? `<div class="pty-note"><i class="bi bi-journal-check"></i><div>${r.Catatan ? esc(r.Catatan) : ''}<small class="muted">${r.DitanganiOleh ? (r.Catatan ? ' — ' : '') + 'ditangani ' + esc(r.DitanganiOleh) + ', ' + tglJam(r.DiubahPada) : ''}</small></div></div>` : ''}
     <div class="chips-row pty-act">
       <a class="btn btn-secondary btn-sm" href="${wa}" target="_blank" rel="noopener"><i class="bi bi-whatsapp"></i> Balas WA</a>
+      ${(() => { const ld = (S.d.crmLeads || []).find(l => l.PertanyaanID === r.ID); return ld ? `<button class="btn btn-ghost btn-sm" data-lead="${esc(ld.ID)}"><i class="bi bi-funnel"></i> Lead ${esc(ld.Kode)}</button>` : `<button class="btn btn-secondary btn-sm" data-pty-lead="${esc(r.ID)}"><i class="bi bi-funnel"></i> Jadikan lead</button>`; })()}
       ${r.Status !== 'Diproses' && r.Status !== 'Selesai' ? `<button class="btn btn-secondary btn-sm" data-ps="Diproses" data-id="${esc(r.ID)}"><i class="bi bi-hourglass-split"></i> Tandai diproses</button>` : ''}
       ${r.Status !== 'Selesai' ? `<button class="btn btn-primary btn-sm" data-ps="Selesai" data-id="${esc(r.ID)}"><i class="bi bi-check2"></i> Selesai</button>` : `<button class="btn btn-ghost btn-sm" data-ps="Baru" data-id="${esc(r.ID)}"><i class="bi bi-arrow-counterclockwise"></i> Buka lagi</button>`}
     </div></div>`;
@@ -4858,6 +4869,407 @@ function openBeritaModal(b) {
     api('saveBerita', S.token, v).then(r => { upsert('berita', r.data); closeModal(); ok(r.message); renderWebsite(); }).catch(fail).finally(() => btnBusy(btn, false));
   };
 }
+
+// ============================================================
+// CRM: Dashboard CRM · Database Perusahaan · Sales Leads · Riwayat Aktivitas
+// ============================================================
+const CRM_TAHAP = ['Lead Baru', 'Dihubungi', 'Berminat', 'Penawaran Dikirim', 'Negosiasi', 'Deal', 'Gagal'];
+const CRM_AKTIF = CRM_TAHAP.slice(0, 5);
+const CRM_TAHAP_CLS = { 'Lead Baru': 'b-slate', Dihubungi: 'b-primary', Berminat: 'b-indigo', 'Penawaran Dikirim': 'b-amber', Negosiasi: 'b-amber', Deal: 'b-green', Gagal: 'b-red' };
+const CRM_LAYANAN = ['Pengiriman Barang', 'Pengiriman Mobil & Alat Berat', 'Sewa Kendaraan'];
+const CRM_LAYANAN_IC = { 'Pengiriman Barang': 'bi-box-seam', 'Pengiriman Mobil & Alat Berat': 'bi-car-front', 'Sewa Kendaraan': 'bi-truck-front' };
+const CRM_STATUS_PT = ['Prospek', 'Customer', 'Mitra', 'Tidak Aktif'];
+const CRM_STATUS_CLS = { Prospek: 'b-primary', Customer: 'b-green', Mitra: 'b-indigo', 'Tidak Aktif': 'b-slate' };
+const CRM_PRIORITAS = ['Tinggi', 'Sedang', 'Rendah'];
+const CRM_FREKUENSI = ['Sekali', 'Harian', 'Mingguan', 'Bulanan', 'Tidak tentu'];
+const CRM_JENIS = ['Telepon', 'WhatsApp', 'Email', 'Meeting', 'Kunjungan', 'Kirim Penawaran', 'Follow-up', 'Lainnya'];
+const CRM_JENIS_IC = { Telepon: 'bi-telephone', WhatsApp: 'bi-whatsapp', Email: 'bi-envelope', Meeting: 'bi-people', Kunjungan: 'bi-geo-alt', 'Kirim Penawaran': 'bi-file-earmark-text', 'Follow-up': 'bi-arrow-repeat', Website: 'bi-globe2', 'Perubahan tahap': 'bi-signpost-split', Lainnya: 'bi-chat-dots' };
+const CRM_SUMBER = ['Website', 'Referensi', 'Kunjungan langsung', 'Telepon masuk', 'Media sosial', 'Pameran', 'Database / riset', 'Lainnya'];
+const CRM_INDUSTRI = ['Otomotif', 'Dealer kendaraan', 'Distributor', 'Manufaktur', 'Logistik', 'Konstruksi', 'Pertambangan', 'Perkebunan', 'Retail', 'E-commerce', 'Pemerintahan', 'Lainnya'];
+
+const crmPT = id => (S.d.crmCompany || []).find(c => c.ID === id) || null;
+const crmLead = id => (S.d.crmLeads || []).find(l => l.ID === id) || null;
+const crmAktifLead = l => CRM_AKTIF.includes(l.Tahap);
+const crmBolehUbah = l => !isSales() || !l.PICEmail || l.PICEmail === S.me.email;
+const crmTahapBadge = t => `<span class="badge ${CRM_TAHAP_CLS[t] || 'b-slate'}">${esc(t || '-')}</span>`;
+const crmNama = l => { const p = crmPT(l.CompanyID); return p ? p.Nama : '(perusahaan dihapus)'; };
+function crmFollowBadge(d) {
+  if (!d) return '';
+  const t = today();
+  if (d < t) return `<span class="badge b-red plain"><i class="bi bi-alarm"></i> ${tglPendek(d)}</span>`;
+  if (d === t) return `<span class="badge b-amber plain"><i class="bi bi-alarm"></i> Hari ini</span>`;
+  return `<span class="badge b-slate plain"><i class="bi bi-calendar-event"></i> ${tglPendek(d)}</span>`;
+}
+function crmUserOpts(sel, kosong) {
+  return (kosong ? `<option value="">${kosong}</option>` : '') + (S.d.crmUsers || []).map(u => `<option value="${esc(u.email)}" ${u.email === sel ? 'selected' : ''}>${esc(u.nama)}${u.peran === 'SALES' ? '' : u.peran === 'SUPER_ADMIN' ? ' (Super Admin)' : ' (Admin)'}</option>`).join('');
+}
+const crmOpts = (list, sel, kosong) => (kosong !== undefined ? `<option value="">${kosong}</option>` : '') + list.map(v => `<option ${v === sel ? 'selected' : ''}>${esc(v)}</option>`).join('');
+function crmApplyResult(d) {
+  if (!d) return;
+  if (d.lead) upsert('crmLeads', d.lead);
+  if (d.perusahaan) upsert('crmCompany', d.perusahaan);
+  if (d.pelanggan) upsert('pelanggan', d.pelanggan);
+  if (d.pertanyaan) upsert('pertanyaan', d.pertanyaan);
+  [].concat(d.aktivitas || [], d.ubahTahap || []).filter(Boolean).forEach(a => upsert('crmActivity', a));
+  saveCache(); updateBadges();
+}
+function crmRerender() { if (CRM_PAGES.includes(S.page) || S.page === 'pertanyaan') renderPage(S.page); }
+
+// ── Dashboard CRM ───────────────────────────────────────────
+function renderCrm() {
+  const el = $('#page-crm'), st = S.ui.crm = S.ui.crm || { pic: isSales() ? S.me.email : '' };
+  const leads = (S.d.crmLeads || []).filter(l => !st.pic || l.PICEmail === st.pic);
+  const akt = (S.d.crmActivity || []).filter(a => !st.pic || a.PICEmail === st.pic);
+  const aktif = leads.filter(crmAktifLead), t = today(), bln = t.slice(0, 7);
+  const nilaiAktif = aktif.reduce((s, l) => s + num(l.EstimasiNilai), 0);
+  const dealBln = leads.filter(l => l.Tahap === 'Deal' && String(l.TanggalTutup).slice(0, 7) === bln);
+  const deal = leads.filter(l => l.Tahap === 'Deal').length, gagal = leads.filter(l => l.Tahap === 'Gagal').length;
+  const winRate = deal + gagal ? Math.round(deal / (deal + gagal) * 100) : null;
+  const follow = aktif.filter(l => l.NextFollowup && l.NextFollowup <= t).sort((a, b) => String(a.NextFollowup).localeCompare(String(b.NextFollowup)));
+  const tanpaJadwal = aktif.filter(l => !l.NextFollowup).length;
+  const maxCnt = Math.max(1, ...CRM_TAHAP.map(tp => leads.filter(l => l.Tahap === tp).length));
+  const funnel = CRM_TAHAP.map(tp => {
+    const ls = leads.filter(l => l.Tahap === tp), n = ls.reduce((s, l) => s + num(l.EstimasiNilai), 0);
+    return `<button class="fn-row" data-crm-tahap="${esc(tp)}"><span class="fn-l">${esc(tp)}</span><span class="fn-bar"><i class="${CRM_TAHAP_CLS[tp]}" style="width:${Math.max(ls.length ? 4 : 0, ls.length / maxCnt * 100)}%"></i></span><b class="fn-n">${ls.length}</b><span class="fn-v mono">${n ? rp(n) : '—'}</span></button>`;
+  }).join('');
+  const per30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+  const sales = (S.d.crmUsers || []).map(u => {
+    const ls = (S.d.crmLeads || []).filter(l => l.PICEmail === u.email);
+    return { u, aktif: ls.filter(crmAktifLead).length, nilai: ls.filter(crmAktifLead).reduce((s, l) => s + num(l.EstimasiNilai), 0),
+      akt: (S.d.crmActivity || []).filter(a => a.PICEmail === u.email && a.Jenis !== 'Perubahan tahap' && String(a.Tanggal) >= per30).length,
+      deal: ls.filter(l => l.Tahap === 'Deal' && String(l.TanggalTutup).slice(0, 7) === bln), telat: ls.filter(l => crmAktifLead(l) && l.NextFollowup && l.NextFollowup < t).length };
+  }).filter(x => x.aktif || x.akt || x.deal.length || x.u.peran === 'SALES').sort((a, b) => b.deal.length - a.deal.length || b.aktif - a.aktif);
+  const recent = akt.slice().sort((a, b) => String(b.Tanggal).localeCompare(String(a.Tanggal))).slice(0, 8);
+  const perLay = CRM_LAYANAN.map(ly => { const ls = aktif.filter(l => l.Layanan === ly); return { ly, n: ls.length, v: ls.reduce((s, l) => s + num(l.EstimasiNilai), 0) }; });
+
+  el.innerHTML = `
+  <div class="hero">
+    <div class="grow"><h1>Dashboard CRM</h1><p>Pantau peluang penjualan, jadwal follow-up, dan kinerja tim sales.</p></div>
+    <div class="hero-actions">
+      <select class="input" id="crmPic" style="min-width:180px">${crmUserOpts(st.pic, 'Semua sales')}</select>
+      <button class="btn btn-secondary" data-crm-new="pt"><i class="bi bi-building-add"></i> Perusahaan</button>
+      <button class="btn btn-primary" data-crm-new="lead"><i class="bi bi-plus-lg"></i> Lead baru</button>
+    </div>
+  </div>
+  <div class="kpis">
+    ${kpi('Lead aktif', aktif.length + '<small>peluang</small>', 'bi-funnel', 'ic-indigo', `${tanpaJadwal ? `<span class="badge b-amber plain">${tanpaJadwal} tanpa jadwal follow-up</span>` : 'Semua punya jadwal follow-up'}`)}
+    ${kpi('Nilai pipeline', `<span class="mono" style="font-size:.8em">${rp(nilaiAktif)}</span>`, 'bi-cash-stack', 'ic-primary', 'Estimasi nilai lead aktif')}
+    ${kpi('Deal bulan ini', dealBln.length + '<small>deal</small>', 'bi-trophy', 'ic-green', dealBln.length ? rp(dealBln.reduce((s, l) => s + num(l.EstimasiNilai), 0)) : 'Belum ada deal bulan ini')}
+    ${kpi('Win rate', winRate === null ? '—' : winRate + '<small>%</small>', 'bi-bullseye', 'ic-amber', `${deal} deal · ${gagal} gagal`)}
+  </div>
+  <div class="dash-grid">
+    <div class="stack">
+      <div class="card"><div class="card-title-row"><div><h3>Pipeline penjualan</h3><p class="muted">Jumlah lead & estimasi nilai per tahap. Klik untuk membuka daftar.</p></div></div><div class="funnel">${funnel}</div></div>
+      <div class="card"><div class="card-title-row"><div><h3>Lead aktif per layanan</h3></div></div>
+        <div class="crm-lay">${perLay.map(x => `<div class="crm-lay-i"><i class="bi ${CRM_LAYANAN_IC[x.ly]}"></i><div><b>${x.n} lead</b><small>${esc(x.ly)}</small><span class="mono">${x.v ? rp(x.v) : '—'}</span></div></div>`).join('')}</div></div>
+      <div class="table-card"><div class="card-title-row" style="padding:18px 20px 0"><div><h3>Kinerja sales</h3><p class="muted">Aktivitas 30 hari terakhir · deal bulan ini</p></div></div>
+        ${sales.length ? `<div class="table-wrap"><table class="table cards"><thead><tr><th>Sales</th><th class="t-right">Lead aktif</th><th class="t-right">Nilai pipeline</th><th class="t-right">Aktivitas</th><th class="t-right">Deal</th><th class="t-right">Follow-up telat</th></tr></thead><tbody>
+          ${sales.map(x => `<tr><td class="card-title" data-label="Sales"><b>${esc(x.u.nama)}</b></td><td class="t-right" data-label="Lead aktif">${x.aktif}</td><td class="t-right mono" data-label="Nilai">${x.nilai ? rp(x.nilai) : '—'}</td><td class="t-right" data-label="Aktivitas">${x.akt}</td><td class="t-right" data-label="Deal"><b>${x.deal.length}</b></td><td class="t-right" data-label="Telat">${x.telat ? `<span class="badge b-red plain">${x.telat}</span>` : '0'}</td></tr>`).join('')}
+        </tbody></table></div>` : `<div style="padding:0 20px 20px">${emptyHTML('bi-people', 'Belum ada akun sales', 'Tambahkan pengguna berperan Sales di Pengaturan → Kelola akun.')}</div>`}</div>
+    </div>
+    <div class="stack">
+      <div class="card list-card"><div class="card-title-row"><div><h3><i class="bi bi-alarm" style="color:var(--red)"></i> Follow-up hari ini</h3><p class="muted">Termasuk yang terlambat.</p></div>${follow.length ? `<span class="badge b-red plain">${follow.length}</span>` : ''}</div>
+        ${follow.length ? follow.slice(0, 8).map(l => `<button class="li li-btn" data-lead="${esc(l.ID)}"><span class="kpi-ic ${l.NextFollowup < t ? 'ic-red' : 'ic-amber'}" style="width:36px;height:36px;font-size:16px"><i class="bi ${CRM_LAYANAN_IC[l.Layanan] || 'bi-funnel'}"></i></span><div class="grow"><b class="t-clip">${esc(crmNama(l))}</b><small>${esc(l.Tahap)} · ${esc(l.PICNama || '-')}</small></div>${crmFollowBadge(l.NextFollowup)}</button>`).join('') : emptyHTML('bi-calendar2-check', 'Tidak ada follow-up mendesak', 'Jadwal follow-up diatur saat mencatat aktivitas.')}
+      </div>
+      <div class="card list-card"><div class="card-title-row"><div><h3>Aktivitas terbaru</h3></div><button class="btn btn-ghost btn-sm" data-go="crm-aktivitas">Semua</button></div>
+        ${recent.length ? recent.map(crmAktMini).join('') : emptyHTML('bi-chat-dots', 'Belum ada aktivitas', 'Catat telepon, WhatsApp, atau kunjungan dari detail lead.')}
+      </div>
+    </div>
+  </div>`;
+  $('#crmPic').onchange = e => { st.pic = e.target.value; renderCrm(); };
+  el.querySelectorAll('[data-crm-tahap]').forEach(b => b.onclick = () => { S.ui.crmLeads = Object.assign(S.ui.crmLeads || {}, { tahap: b.dataset.crmTahap, pic: st.pic, view: 'tabel' }); navigateTo('crm-leads'); });
+}
+function crmAktMini(a) {
+  const l = crmLead(a.LeadID);
+  return `<button class="li li-btn" data-lead="${esc(a.LeadID)}"><span class="kpi-ic ic-primary" style="width:36px;height:36px;font-size:16px"><i class="bi ${CRM_JENIS_IC[a.Jenis] || 'bi-chat-dots'}"></i></span><div class="grow"><b class="t-clip">${esc(l ? crmNama(l) : '-')}</b><small class="t-clip">${esc(a.Jenis)} · ${esc(String(a.Keterangan || a.Hasil || '').split('\n')[0])}</small></div><small class="muted" style="white-space:nowrap">${tglPendek(a.Tanggal)}</small></button>`;
+}
+
+// ── Database Perusahaan ─────────────────────────────────────
+function renderCrmPerusahaan() {
+  const el = $('#page-crm-perusahaan'), st = S.ui.crmPt = S.ui.crmPt || { q: '', f: '' };
+  const rows = S.d.crmCompany || [];
+  el.innerHTML = `
+  <div class="page-head"><div class="ph-icon"><i class="bi bi-buildings"></i></div><div class="grow"><h1>Database Perusahaan</h1><p class="muted">Calon customer & mitra. Satu perusahaan cukup dicatat sekali, lalu bisa punya banyak lead.</p></div>
+    <button class="btn btn-primary" data-crm-new="pt"><i class="bi bi-plus-lg"></i> Tambah perusahaan</button></div>
+  <div class="card" style="margin-bottom:16px"><div class="toolbar"><div class="search grow"><i class="bi bi-search"></i><input class="input" id="ptQ" placeholder="Cari nama, kota, industri, kontak…" value="${esc(st.q)}"></div></div>
+    <div class="chips-row">${[['', 'Semua']].concat(CRM_STATUS_PT.map(s => [s, s])).map(([k, l]) => `<button class="fchip ${st.f === k ? 'active' : ''}" data-ptf="${esc(k)}">${l}<span class="cnt">${k ? rows.filter(r => r.Status === k).length : rows.length}</span></button>`).join('')}</div></div>
+  <div class="table-card" id="ptList"></div>`;
+  const draw = () => {
+    const q = st.q.trim().toLowerCase();
+    const list = rows.filter(r => (!st.f || r.Status === st.f) && (!q || [r.Nama, r.Kode, r.Kota, r.Provinsi, r.Industri, r.KontakNama, r.KontakHP, r.Telepon, r.Email].join(' ').toLowerCase().includes(q)))
+      .sort((a, b) => String(a.Nama).localeCompare(String(b.Nama)));
+    $('#ptList').innerHTML = list.length ? `<div class="table-wrap"><table class="table cards"><thead><tr><th>Perusahaan</th><th>Kota</th><th>Kontak</th><th>Status</th><th class="t-right">Lead aktif</th><th class="t-actions">Aksi</th></tr></thead><tbody>
+      ${list.map(r => { const ls = (S.d.crmLeads || []).filter(l => l.CompanyID === r.ID); return `<tr class="clickable" data-pt="${esc(r.ID)}"><td class="card-title" data-label="Perusahaan"><b>${esc(r.Nama)}</b><span class="t-sub">${esc(r.Kode)}${r.Industri ? ' · ' + esc(r.Industri) : ''}</span></td>
+        <td data-label="Kota">${esc(r.Kota || '—')}${r.Provinsi ? `<span class="t-sub">${esc(r.Provinsi)}</span>` : ''}</td>
+        <td data-label="Kontak">${r.KontakNama ? esc(r.KontakNama) : '—'}${r.KontakHP || r.Telepon ? `<span class="t-sub mono">${esc(r.KontakHP || r.Telepon)}</span>` : ''}</td>
+        <td data-label="Status"><span class="badge ${CRM_STATUS_CLS[r.Status] || 'b-slate'}">${esc(r.Status || 'Prospek')}</span></td>
+        <td class="t-right" data-label="Lead aktif">${ls.filter(crmAktifLead).length}<span class="t-sub">${ls.length} total</span></td>
+        <td class="t-actions"><button class="icon-btn" data-pt-edit="${esc(r.ID)}" title="Ubah"><i class="bi bi-pencil"></i></button></td></tr>`; }).join('')}
+      </tbody></table></div>` : `<div style="padding:20px">${emptyHTML('bi-buildings', rows.length ? 'Tidak ada yang cocok' : 'Belum ada perusahaan', rows.length ? 'Ubah kata kunci atau filter.' : 'Mulai dengan menambahkan calon customer pertama.')}</div>`;
+  };
+  $('#ptQ').addEventListener('input', debounce(e => { st.q = e.target.value; draw(); }, 120));
+  el.querySelectorAll('[data-ptf]').forEach(b => b.onclick = () => { st.f = b.dataset.ptf; renderCrmPerusahaan(); });
+  $('#ptList').onclick = e => {
+    const ed = e.target.closest('[data-pt-edit]'); if (ed) { e.stopPropagation(); return openCrmPtForm(crmPT(ed.dataset.ptEdit)); }
+    const tr = e.target.closest('[data-pt]'); if (tr) openCrmPtDetail(tr.dataset.pt);
+  };
+  draw();
+}
+function openCrmPtForm(r, after, isian) {
+  const d = Object.assign({ Status: 'Prospek' }, isian || {}, r || {});
+  const f = (k, l, o) => { o = o || {}; return `<label class="field${o.full ? ' full' : ''}"><span class="label${o.req ? ' req' : ''}">${l}</span>${o.html || `<input class="input${o.mono ? ' mono' : ''}" name="${k}" maxlength="${o.max || 120}" value="${esc(d[k] || '')}"${o.ph ? ` placeholder="${esc(o.ph)}"` : ''}${o.type ? ` type="${o.type}"` : ''}${o.list ? ` list="${o.list}"` : ''}>`}</label>`; };
+  openModal({ title: r ? 'Ubah perusahaan' : 'Tambah perusahaan', sub: r ? r.Kode : 'Calon customer atau mitra baru', icon: 'bi-building-add', size: 'lg',
+    body: `<form id="ptForm" novalidate><div class="form-sec"><h4>Identitas perusahaan</h4><div class="grid-2">
+      ${f('Nama', 'Nama perusahaan', { req: true, ph: 'mis. PT Dealer Toyota A' })}
+      ${f('Industri', 'Industri', { list: 'dlIndustri', ph: 'Otomotif, distributor, …' })}
+      ${f('Alamat', 'Alamat', { full: true, max: 300 })}
+      ${f('Kota', 'Kota')}${f('Provinsi', 'Provinsi')}
+      ${f('Telepon', 'Telepon kantor', { mono: true, max: 30 })}${f('Email', 'Email perusahaan', { type: 'email' })}
+      ${f('Website', 'Website', { ph: 'https://…', max: 150 })}
+      ${f('Status', 'Status', { html: `<select class="input" name="Status">${crmOpts(CRM_STATUS_PT, d.Status)}</select>` })}
+    </div></div>
+    <div class="form-sec"><h4>Kontak person</h4><div class="grid-2">
+      ${f('KontakNama', 'Nama kontak', { max: 80 })}${f('KontakJabatan', 'Jabatan', { max: 60, ph: 'mis. Manajer logistik' })}
+      ${f('KontakHP', 'No. HP / WA kontak', { mono: true, max: 30 })}
+      ${f('SumberData', 'Sumber data', { html: `<select class="input" name="SumberData">${crmOpts(CRM_SUMBER, d.SumberData, '— Pilih —')}</select>` })}
+      ${f('Catatan', 'Catatan', { full: true, html: `<textarea class="input" name="Catatan" rows="3" maxlength="1000">${esc(d.Catatan || '')}</textarea>` })}
+    </div></div>
+    <datalist id="dlIndustri">${CRM_INDUSTRI.map(i => `<option>${esc(i)}</option>`).join('')}</datalist>
+    ${d.PelangganID ? `<p class="muted" style="font-size:12.5px"><i class="bi bi-link-45deg"></i> Tertaut ke Data Pelanggan.</p>` : ''}</form>`,
+    foot: `${r && isSA() ? '<button class="btn btn-ghost" id="ptDel" style="margin-right:auto;color:var(--red)"><i class="bi bi-trash"></i> Hapus</button>' : ''}<button class="btn btn-secondary" data-close>Batal</button><button class="btn btn-primary" id="ptSave"><i class="bi bi-check2"></i> Simpan</button>` });
+  $('#ptSave').onclick = () => {
+    const v = formValues($('#ptForm')); if (r) v.ID = r.ID;
+    if (!v.Nama.trim()) return toast('warning', 'Nama perusahaan wajib diisi');
+    const b = $('#ptSave'); btnBusy(b, true, 'Menyimpan…');
+    api('saveCrmCompany', S.token, v).then(res => { upsert('crmCompany', res.data); saveCache(); ok(res.message); closeModal(); if (after) after(res.data); else crmRerender(); }).catch(fail).finally(() => btnBusy(b, false));
+  };
+  if ($('#ptDel')) $('#ptDel').onclick = () => confirmDialog({ title: 'Hapus perusahaan?', text: r.Nama, variant: 'danger', icon: 'bi-trash', ok: 'Hapus' }).then(v => {
+    if (v !== true) return;
+    api('deleteCrmCompany', S.token, r.ID).then(res => { removeFrom('crmCompany', r.ID); saveCache(); ok(res.message); closeModal(); crmRerender(); }).catch(fail);
+  });
+}
+function openCrmPtDetail(id) {
+  const p = crmPT(id); if (!p) return;
+  const ls = (S.d.crmLeads || []).filter(l => l.CompanyID === id).sort((a, b) => String(b.DiubahPada).localeCompare(String(a.DiubahPada)));
+  const akt = (S.d.crmActivity || []).filter(a => a.CompanyID === id).sort((a, b) => String(b.Tanggal).localeCompare(String(a.Tanggal))).slice(0, 6);
+  const wa = p.KontakHP || p.Telepon;
+  openModal({ title: p.Nama, sub: [p.Kode, p.Industri, p.Kota].filter(Boolean).join(' · '), icon: 'bi-buildings', size: 'lg',
+    body: `<div class="crm-detail">
+      <div class="crm-info"><span class="badge ${CRM_STATUS_CLS[p.Status] || 'b-slate'}">${esc(p.Status)}</span>
+        <dl class="dl">${[['Alamat', [p.Alamat, p.Kota, p.Provinsi].filter(Boolean).join(', ')], ['Telepon', p.Telepon], ['Email', p.Email], ['Website', p.Website],
+          ['Kontak', [p.KontakNama, p.KontakJabatan].filter(Boolean).join(' · ')], ['HP kontak', p.KontakHP], ['Sumber', p.SumberData], ['Catatan', p.Catatan]].filter(x => x[1]).map(x => `<dt>${x[0]}</dt><dd>${esc(x[1])}</dd>`).join('')}</dl>
+        ${wa ? `<a class="btn btn-secondary btn-sm" href="https://wa.me/${waNumber(wa)}" target="_blank" rel="noopener"><i class="bi bi-whatsapp"></i> WhatsApp ${esc(p.KontakNama || '')}</a>` : ''}</div>
+      <div><div class="card-title-row"><h4 style="margin:0">Lead (${ls.length})</h4><button class="btn btn-primary btn-sm" id="ptNewLead"><i class="bi bi-plus-lg"></i> Buat lead</button></div>
+        ${ls.length ? ls.map(l => `<button class="li li-btn" data-lead="${esc(l.ID)}"><span class="kpi-ic ic-indigo" style="width:34px;height:34px;font-size:15px"><i class="bi ${CRM_LAYANAN_IC[l.Layanan]}"></i></span><div class="grow"><b>${esc(l.Kode)} · ${esc(l.Layanan)}</b><small>${l.EstimasiNilai ? rp(l.EstimasiNilai) + ' · ' : ''}${esc(l.PICNama || 'Tanpa PIC')}</small></div>${crmTahapBadge(l.Tahap)}</button>`).join('') : '<p class="muted">Belum ada lead.</p>'}
+        ${akt.length ? `<h4 style="margin:18px 0 0">Aktivitas terakhir</h4>${akt.map(crmAktMini).join('')}` : ''}</div></div>`,
+    foot: `<button class="btn btn-secondary" data-close>Tutup</button><button class="btn btn-secondary" id="ptEdit"><i class="bi bi-pencil"></i> Ubah data</button>` });
+  $('#ptEdit').onclick = () => openCrmPtForm(p, () => openCrmPtDetail(id));
+  $('#ptNewLead').onclick = () => openCrmLeadForm(null, id);
+}
+
+// ── Sales Leads ─────────────────────────────────────────────
+function renderCrmLeads() {
+  const el = $('#page-crm-leads');
+  const st = S.ui.crmLeads = Object.assign({ q: '', ly: '', pic: isSales() ? S.me.email : '', pr: '', tahap: '', view: window.innerWidth < 760 ? 'tabel' : 'kanban' }, S.ui.crmLeads || {});
+  el.innerHTML = `
+  <div class="page-head"><div class="ph-icon"><i class="bi bi-funnel"></i></div><div class="grow"><h1>Sales Leads</h1><p class="muted">Peluang penjualan per perusahaan. Klik lead untuk mencatat aktivitas atau memindah tahap.</p></div>
+    <button class="btn btn-primary" data-crm-new="lead"><i class="bi bi-plus-lg"></i> Lead baru</button></div>
+  <div class="card" style="margin-bottom:16px"><div class="toolbar">
+    <div class="search grow"><i class="bi bi-search"></i><input class="input" id="ldQ" placeholder="Cari perusahaan, kode, kebutuhan, rute…" value="${esc(st.q)}"></div>
+    <select class="input" id="ldLy" style="max-width:230px">${crmOpts(CRM_LAYANAN, st.ly, 'Semua layanan')}</select>
+    <select class="input" id="ldPic" style="max-width:200px">${crmUserOpts(st.pic, 'Semua sales')}</select>
+    <select class="input" id="ldPr" style="max-width:160px">${crmOpts(CRM_PRIORITAS, st.pr, 'Semua prioritas')}</select>
+    <div class="seg"><button class="seg-btn ${st.view === 'kanban' ? 'active' : ''}" data-ldv="kanban"><i class="bi bi-kanban"></i> Papan</button><button class="seg-btn ${st.view === 'tabel' ? 'active' : ''}" data-ldv="tabel"><i class="bi bi-list-ul"></i> Tabel</button></div>
+  </div>${st.view === 'tabel' ? `<div class="chips-row">${[['', 'Semua tahap']].concat(CRM_TAHAP.map(t => [t, t])).map(([k, l]) => `<button class="fchip ${st.tahap === k ? 'active' : ''}" data-ldt="${esc(k)}">${l}</button>`).join('')}</div>` : ''}</div>
+  <div id="ldBody"></div>`;
+  const filt = () => { const q = st.q.trim().toLowerCase(); return (S.d.crmLeads || []).filter(l => (!st.ly || l.Layanan === st.ly) && (!st.pic || l.PICEmail === st.pic) && (!st.pr || l.Prioritas === st.pr)
+    && (!q || [crmNama(l), l.Kode, l.Kebutuhan, l.Rute, l.PICNama].join(' ').toLowerCase().includes(q))); };
+  const card = l => `<button class="kb-card pr-${esc((l.Prioritas || 'Sedang').toLowerCase())}" data-lead="${esc(l.ID)}"><b class="t-clip">${esc(crmNama(l))}</b>
+    <small><i class="bi ${CRM_LAYANAN_IC[l.Layanan]}"></i> ${esc(l.Layanan)}</small>${l.EstimasiNilai ? `<span class="mono kb-v">${rp(l.EstimasiNilai)}</span>` : ''}
+    <span class="kb-f"><span class="avatar xs" title="${esc(l.PICNama || 'Tanpa PIC')}">${esc(initials(l.PICNama || '?'))}</span>${crmFollowBadge(crmAktifLead(l) ? l.NextFollowup : '')}<span class="muted mono" style="margin-left:auto;font-size:11px">${esc(l.Kode)}</span></span></button>`;
+  const draw = () => {
+    const list = filt();
+    if (st.view === 'kanban') {
+      $('#ldBody').innerHTML = `<div class="kanban">${CRM_TAHAP.map(t => { const ls = list.filter(l => l.Tahap === t).sort((a, b) => String(a.NextFollowup || '9').localeCompare(String(b.NextFollowup || '9')));
+        return `<div class="kb-col"><div class="kb-h">${crmTahapBadge(t)}<b>${ls.length}</b><span class="muted mono">${ls.length ? rp(ls.reduce((s, l) => s + num(l.EstimasiNilai), 0)) : ''}</span></div><div class="kb-list">${ls.map(card).join('') || '<p class="muted kb-empty">Kosong</p>'}</div></div>`; }).join('')}</div>`;
+    } else {
+      const ls = list.filter(l => !st.tahap || l.Tahap === st.tahap).sort((a, b) => String(b.DiubahPada).localeCompare(String(a.DiubahPada)));
+      $('#ldBody').innerHTML = `<div class="table-card">${ls.length ? `<div class="table-wrap"><table class="table cards"><thead><tr><th>Lead</th><th>Layanan</th><th>Tahap</th><th class="t-right">Estimasi nilai</th><th>PIC</th><th>Follow-up</th></tr></thead><tbody>
+        ${ls.map(l => `<tr class="clickable" data-lead="${esc(l.ID)}"><td class="card-title" data-label="Lead"><b>${esc(crmNama(l))}</b><span class="t-sub">${esc(l.Kode)} · ${esc(l.Prioritas || 'Sedang')}</span></td><td data-label="Layanan">${esc(l.Layanan)}${l.Rute ? `<span class="t-sub">${esc(l.Rute)}</span>` : ''}</td>
+          <td data-label="Tahap">${crmTahapBadge(l.Tahap)}</td><td class="t-right mono" data-label="Nilai">${l.EstimasiNilai ? rp(l.EstimasiNilai) : '—'}</td><td data-label="PIC">${esc(l.PICNama || '—')}</td><td data-label="Follow-up">${crmFollowBadge(crmAktifLead(l) ? l.NextFollowup : '') || '<span class="muted">—</span>'}</td></tr>`).join('')}
+        </tbody></table></div>` : `<div style="padding:20px">${emptyHTML('bi-funnel', 'Belum ada lead', 'Buat lead dari Database Perusahaan atau tombol Lead baru.')}</div>`}</div>`;
+    }
+  };
+  $('#ldQ').addEventListener('input', debounce(e => { st.q = e.target.value; draw(); }, 120));
+  $('#ldLy').onchange = e => { st.ly = e.target.value; draw(); };
+  $('#ldPic').onchange = e => { st.pic = e.target.value; draw(); };
+  $('#ldPr').onchange = e => { st.pr = e.target.value; draw(); };
+  el.querySelectorAll('[data-ldv]').forEach(b => b.onclick = () => { st.view = b.dataset.ldv; renderCrmLeads(); });
+  el.querySelectorAll('[data-ldt]').forEach(b => b.onclick = () => { st.tahap = b.dataset.ldt; renderCrmLeads(); });
+  draw();
+}
+function openCrmLeadForm(l, companyId) {
+  const edit = !!(l && l.ID);
+  const d = Object.assign({ Prioritas: 'Sedang', Tahap: 'Lead Baru', TanggalProspek: today(), PICEmail: S.me.email, CompanyID: companyId || '' }, l || {});
+  const pts = (S.d.crmCompany || []).filter(p => p.Status !== 'Tidak Aktif' || p.ID === d.CompanyID).sort((a, b) => String(a.Nama).localeCompare(String(b.Nama)));
+  const label = p => p.Nama + (p.Kota ? ' — ' + p.Kota : '') + ' (' + p.Kode + ')';
+  const cur = crmPT(d.CompanyID);
+  openModal({ title: edit ? 'Ubah lead' : 'Lead baru', sub: edit ? l.Kode : 'Peluang penjualan dari satu perusahaan', icon: 'bi-funnel', size: 'lg',
+    body: `<form id="ldForm" novalidate><div class="grid-2">
+      <label class="field full"><span class="label req">Perusahaan</span><div class="row-inline"><input class="input grow" id="ldPt" list="dlPt" placeholder="Ketik untuk mencari perusahaan…" value="${esc(cur ? label(cur) : '')}" autocomplete="off"><button type="button" class="btn btn-secondary" id="ldPtNew"><i class="bi bi-plus-lg"></i> Baru</button></div><datalist id="dlPt">${pts.map(p => `<option value="${esc(label(p))}"></option>`).join('')}</datalist><small class="err-msg" data-err="pt" hidden></small></label>
+      <label class="field"><span class="label req">Jenis layanan</span><select class="input" name="Layanan">${crmOpts(CRM_LAYANAN, d.Layanan, '— Pilih —')}</select></label>
+      <label class="field"><span class="label">Prioritas</span><select class="input" name="Prioritas">${crmOpts(CRM_PRIORITAS, d.Prioritas)}</select></label>
+      <label class="field full"><span class="label">Kebutuhan customer</span><textarea class="input" name="Kebutuhan" rows="3" maxlength="2000" placeholder="mis. kirim 20 unit mobil per bulan Jakarta – Medan">${esc(d.Kebutuhan || '')}</textarea></label>
+      <label class="field"><span class="label">Estimasi nilai (Rp)</span><input class="input t-right mono" name="EstimasiNilai" inputmode="numeric" data-money value="${num(d.EstimasiNilai) ? num(d.EstimasiNilai).toLocaleString('id-ID') : ''}" placeholder="0"></label>
+      <label class="field"><span class="label">Frekuensi order</span><select class="input" name="Frekuensi">${crmOpts(CRM_FREKUENSI, d.Frekuensi, '— Pilih —')}</select></label>
+      <label class="field full"><span class="label">Rute pengiriman</span><input class="input" name="Rute" maxlength="200" value="${esc(d.Rute || '')}" placeholder="mis. Jakarta → Medan, Surabaya → Makassar"></label>
+      <label class="field"><span class="label">PIC sales</span>${isSales() ? `<input class="input" value="${esc(d.PICNama || S.me.nama)}" readonly>` : `<select class="input" name="PICEmail">${crmUserOpts(d.PICEmail, 'Belum ditentukan')}</select>`}</label>
+      <label class="field"><span class="label">Tanggal prospek</span><input class="input" type="date" name="TanggalProspek" value="${esc(d.TanggalProspek || '')}"></label>
+      <label class="field"><span class="label">Jadwal follow-up</span><input class="input" type="date" name="NextFollowup" value="${esc(d.NextFollowup || '')}"></label>
+      ${edit ? '' : `<label class="field"><span class="label">Tahap awal</span><select class="input" name="Tahap">${crmOpts(CRM_AKTIF, d.Tahap)}</select></label>`}
+    </div></form>`,
+    foot: `${edit && isSA() ? '<button class="btn btn-ghost" id="ldDel" style="margin-right:auto;color:var(--red)"><i class="bi bi-trash"></i> Hapus</button>' : ''}<button class="btn btn-secondary" data-close>Batal</button><button class="btn btn-primary" id="ldSave"><i class="bi bi-check2"></i> Simpan lead</button>` });
+  const form = $('#ldForm');
+  form.querySelectorAll('[data-money]').forEach(i => i.addEventListener('input', () => formatMoneyInput(i)));
+  $('#ldPtNew').onclick = () => {
+    const keep = formValues(form); keep.EstimasiNilai = num(keep.EstimasiNilai);
+    const nama = $('#ldPt').value.trim();
+    // Simpan isian lead, buat perusahaan, lalu kembali ke form lead dengan perusahaan baru terpilih
+    openCrmPtForm(null, pt => openCrmLeadForm(Object.assign({}, l || {}, keep, { CompanyID: pt.ID }), pt.ID), nama && !pts.some(x => label(x) === nama) ? { Nama: nama } : null);
+  };
+  $('#ldSave').onclick = () => {
+    const v = formValues(form);
+    const ptv = $('#ldPt').value.trim(), p = pts.find(x => label(x) === ptv) || pts.find(x => x.Nama.toLowerCase() === ptv.toLowerCase());
+    const e = form.querySelector('[data-err=pt]');
+    if (!p) { e.textContent = ptv ? 'Perusahaan tidak ditemukan. Pilih dari daftar atau klik Baru.' : 'Pilih perusahaan.'; e.hidden = false; return; }
+    if (!v.Layanan) return toast('warning', 'Pilih jenis layanan');
+    v.CompanyID = p.ID; v.EstimasiNilai = num(v.EstimasiNilai); if (edit) v.ID = l.ID;
+    const b = $('#ldSave'); btnBusy(b, true, 'Menyimpan…');
+    api('saveCrmLead', S.token, v).then(res => { crmApplyResult(res.data); ok(res.message); closeModal(); crmRerender(); openCrmLeadDetail(res.data.lead.ID); }).catch(fail).finally(() => btnBusy(b, false));
+  };
+  if ($('#ldDel')) $('#ldDel').onclick = () => confirmDialog({ title: 'Hapus lead?', text: l.Kode + ' beserta seluruh riwayat aktivitasnya.', variant: 'danger', icon: 'bi-trash', ok: 'Hapus' }).then(ok2 => {
+    if (ok2 !== true) return;
+    api('deleteCrmLead', S.token, l.ID).then(res => { removeFrom('crmLeads', l.ID); (res.data.aktivitas || []).forEach(id => removeFrom('crmActivity', id)); saveCache(); updateBadges(); ok(res.message); closeModal(); crmRerender(); }).catch(fail);
+  });
+}
+
+function openCrmLeadDetail(id) {
+  const l = crmLead(id); if (!l) return;
+  const p = crmPT(l.CompanyID) || {}, boleh = crmBolehUbah(l), t = today();
+  const akt = (S.d.crmActivity || []).filter(a => a.LeadID === id).sort((a, b) => String(b.Tanggal).localeCompare(String(a.Tanggal)) || String(b.DibuatPada).localeCompare(String(a.DibuatPada)));
+  const idx = CRM_TAHAP.indexOf(l.Tahap);
+  const now = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 16);
+  const wa = p.KontakHP || p.Telepon;
+  openModal({ title: (p.Nama || '-'), sub: `${l.Kode} · ${l.Layanan}`, icon: CRM_LAYANAN_IC[l.Layanan] || 'bi-funnel', size: 'lg',
+    body: `<div class="stepper">${CRM_TAHAP.map((tp, i) => `<button type="button" class="st-step ${tp === l.Tahap ? 'cur' : ''} ${tp === 'Gagal' ? 'lost' : i < idx && l.Tahap !== 'Gagal' ? 'done' : ''}" data-tahap="${esc(tp)}" ${boleh ? '' : 'disabled'}>${esc(tp)}</button>`).join('')}</div>
+      ${l.Tahap === 'Gagal' ? `<div class="alert alert-warning"><i class="bi bi-x-octagon"></i><div><b>Gagal:</b> ${esc(l.AlasanLost)}</div></div>` : ''}
+      ${l.Tahap === 'Deal' && p.PelangganID ? `<div class="alert alert-info"><i class="bi bi-trophy"></i><div>Deal ${l.TanggalTutup ? 'pada ' + tgl(l.TanggalTutup) : ''}. Perusahaan sudah ada di <b>Data Pelanggan</b> dan bisa dipilih di form order.</div></div>` : ''}
+      ${!boleh ? `<div class="alert alert-info"><i class="bi bi-lock"></i><div>Lead milik <b>${esc(l.PICNama)}</b>. Anda hanya dapat melihat.</div></div>` : ''}
+      <div class="crm-detail">
+        <div class="crm-info"><dl class="dl">${[['Kebutuhan', l.Kebutuhan], ['Estimasi nilai', l.EstimasiNilai ? rp(l.EstimasiNilai) : ''], ['Frekuensi', l.Frekuensi], ['Rute', l.Rute], ['Prioritas', l.Prioritas],
+          ['PIC sales', l.PICNama], ['Prospek sejak', l.TanggalProspek ? tgl(l.TanggalProspek) : ''], ['Follow-up', l.NextFollowup ? tgl(l.NextFollowup) + (crmAktifLead(l) && l.NextFollowup < t ? ' (terlambat)' : '') : ''],
+          ['Kontak', [p.KontakNama, p.KontakJabatan].filter(Boolean).join(' · ')]].filter(x => x[1]).map(x => `<dt>${x[0]}</dt><dd>${esc(x[1])}</dd>`).join('')}</dl>
+          <div class="chips-row">${wa ? `<a class="btn btn-secondary btn-sm" href="https://wa.me/${waNumber(wa)}" target="_blank" rel="noopener"><i class="bi bi-whatsapp"></i> WhatsApp</a>` : ''}<button type="button" class="btn btn-ghost btn-sm" id="ldToPt"><i class="bi bi-buildings"></i> Perusahaan</button></div></div>
+        <div>
+          ${boleh ? `<form id="akForm" class="ak-form" novalidate><h4>Catat aktivitas</h4><div class="grid-2">
+            <label class="field"><span class="label">Jenis</span><select class="input" name="Jenis">${crmOpts(CRM_JENIS, 'WhatsApp')}</select></label>
+            <label class="field"><span class="label">Waktu</span><input class="input" type="datetime-local" name="Tanggal" value="${now}"></label>
+            <label class="field full"><span class="label">Keterangan</span><textarea class="input" name="Keterangan" rows="2" maxlength="2000" placeholder="Apa yang dilakukan / dibicarakan"></textarea></label>
+            <label class="field full"><span class="label">Hasil komunikasi</span><input class="input" name="Hasil" maxlength="1000" placeholder="mis. Tertarik, minta penawaran harga"></label>
+            <label class="field"><span class="label">Tindak lanjut</span><input class="input" name="TindakLanjut" maxlength="500" placeholder="mis. Kirim proposal"></label>
+            <label class="field"><span class="label">Jadwal follow-up berikutnya</span><input class="input" type="date" name="NextFollowup" value="${esc(l.NextFollowup && l.NextFollowup > t ? l.NextFollowup : '')}"></label>
+          </div><button type="button" class="btn btn-primary btn-sm" id="akSave"><i class="bi bi-check2"></i> Simpan aktivitas</button></form>` : ''}
+          <h4 style="margin:16px 0 4px">Riwayat aktivitas (${akt.length})</h4>
+          <ol class="timeline">${akt.map(a => `<li class="${a.Jenis === 'Perubahan tahap' ? 'tl-sys' : ''}"><span class="tl-ic"><i class="bi ${CRM_JENIS_IC[a.Jenis] || 'bi-chat-dots'}"></i></span><div class="grow">
+            <div class="tl-h"><b>${esc(a.Jenis)}</b><small class="muted">${tglJam(a.Tanggal)} · ${esc(a.PICNama || '')}</small>${a.Jenis !== 'Perubahan tahap' && (isSA() || a.PICEmail === S.me.email) ? `<button type="button" class="icon-btn sm" data-akdel="${esc(a.ID)}" title="Hapus"><i class="bi bi-trash"></i></button>` : ''}</div>
+            ${a.Keterangan ? `<p>${esc(a.Keterangan)}</p>` : ''}${a.Hasil ? `<p><span class="muted">Hasil:</span> ${esc(a.Hasil)}</p>` : ''}${a.TindakLanjut ? `<p><span class="muted">Tindak lanjut:</span> ${esc(a.TindakLanjut)}${a.NextFollowup ? ' · ' + tgl(a.NextFollowup) : ''}</p>` : ''}</div></li>`).join('') || '<p class="muted">Belum ada aktivitas.</p>'}</ol>
+        </div></div>`,
+    foot: `<button class="btn btn-secondary" data-close>Tutup</button>${boleh ? '<button class="btn btn-secondary" id="ldEdit"><i class="bi bi-pencil"></i> Ubah lead</button>' : ''}` });
+  $('#ldToPt').onclick = () => openCrmPtDetail(l.CompanyID);
+  if ($('#ldEdit')) $('#ldEdit').onclick = () => openCrmLeadForm(l);
+  if ($('#akSave')) $('#akSave').onclick = () => {
+    const v = formValues($('#akForm')); v.LeadID = id;
+    if (!v.Keterangan.trim() && !v.Hasil.trim()) return toast('warning', 'Isi keterangan atau hasil komunikasi');
+    const b = $('#akSave'); btnBusy(b, true, 'Menyimpan…');
+    api('saveCrmActivity', S.token, v).then(res => { crmApplyResult(res.data); ok(res.message); crmRerender(); openCrmLeadDetail(id); }).catch(fail).finally(() => btnBusy(b, false));
+  };
+  $('#modalBody').querySelectorAll('[data-akdel]').forEach(b => b.onclick = () => confirmDialog({ title: 'Hapus aktivitas?', variant: 'danger', icon: 'bi-trash', ok: 'Hapus' }).then(v => {
+    if (v !== true) return;
+    api('deleteCrmActivity', S.token, b.dataset.akdel).then(res => { removeFrom('crmActivity', b.dataset.akdel); saveCache(); ok(res.message); crmRerender(); openCrmLeadDetail(id); }).catch(fail);
+  }));
+  $('#modalBody').querySelectorAll('[data-tahap]').forEach(b => b.onclick = () => crmPindahTahap(l, b.dataset.tahap));
+}
+function crmPindahTahap(l, tahap) {
+  if (tahap === l.Tahap) return;
+  const kirim = extra => api('saveCrmLead', S.token, Object.assign({ ID: l.ID, Tahap: tahap }, extra || {}))
+    .then(res => { crmApplyResult(res.data); ok(res.message); crmRerender(); openCrmLeadDetail(l.ID); }).catch(fail);
+  if (tahap === 'Gagal') {
+    openModal({ title: 'Tandai lead gagal', sub: crmNama(l) + ' · ' + l.Kode, icon: 'bi-x-octagon', size: 'sm',
+      body: `<label class="field"><span class="label req">Alasan gagal</span><select class="input" id="lostSel">${crmOpts(['Harga tidak cocok', 'Pilih kompetitor', 'Kebutuhan batal', 'Tidak ada respons', 'Rute/layanan tidak tersedia', 'Lainnya'], '')}</select></label>
+        <label class="field"><span class="label">Keterangan</span><input class="input" id="lostTxt" maxlength="200" placeholder="Opsional"></label>`,
+      foot: `<button class="btn btn-secondary" id="lostBack">Batal</button><button class="btn btn-danger" id="lostOk">Tandai gagal</button>` });
+    $('#lostBack').onclick = () => openCrmLeadDetail(l.ID);
+    $('#lostOk').onclick = () => { const a = [$('#lostSel').value, $('#lostTxt').value.trim()].filter(Boolean).join(': '); btnBusy($('#lostOk'), true); kirim({ AlasanLost: a }); };
+    return;
+  }
+  if (tahap === 'Deal') {
+    const p = crmPT(l.CompanyID) || {};
+    confirmDialog({ title: 'Tandai Deal?', html: `<b>${esc(p.Nama)}</b> ${p.PelangganID ? 'sudah tertaut ke Data Pelanggan.' : 'akan otomatis dibuatkan <b>Data Pelanggan</b> (nama, alamat, telepon, email) agar bisa dipilih di form order.'}`, icon: 'bi-trophy', ok: 'Ya, Deal' })
+      .then(v => { if (v === true) kirim(); });
+    return;
+  }
+  kirim();
+}
+
+// ── Riwayat Aktivitas ───────────────────────────────────────
+function renderCrmAktivitas() {
+  const el = $('#page-crm-aktivitas'), st = S.ui.crmAk = S.ui.crmAk || { q: '', jenis: '', pic: isSales() ? S.me.email : '', hari: '30' };
+  el.innerHTML = `
+  <div class="page-head"><div class="ph-icon"><i class="bi bi-clock-history"></i></div><div class="grow"><h1>Riwayat Aktivitas</h1><p class="muted">Semua telepon, WhatsApp, meeting, dan perubahan tahap lead.</p></div></div>
+  <div class="card" style="margin-bottom:16px"><div class="toolbar">
+    <div class="search grow"><i class="bi bi-search"></i><input class="input" id="akQ" placeholder="Cari perusahaan, keterangan, hasil…" value="${esc(st.q)}"></div>
+    <select class="input" id="akJ" style="max-width:190px">${crmOpts(CRM_JENIS.concat(['Website', 'Perubahan tahap']), st.jenis, 'Semua jenis')}</select>
+    <select class="input" id="akP" style="max-width:200px">${crmUserOpts(st.pic, 'Semua sales')}</select>
+    <select class="input" id="akH" style="max-width:150px">${[['7', '7 hari'], ['30', '30 hari'], ['90', '90 hari'], ['', 'Semua']].map(([k, l]) => `<option value="${k}" ${st.hari === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+  </div></div><div id="akList"></div>`;
+  const draw = () => {
+    const q = st.q.trim().toLowerCase(), batas = st.hari ? new Date(Date.now() - Number(st.hari) * 864e5).toISOString().slice(0, 10) : '';
+    const list = (S.d.crmActivity || []).filter(a => (!st.jenis || a.Jenis === st.jenis) && (!st.pic || a.PICEmail === st.pic) && (!batas || String(a.Tanggal) >= batas)
+      && (!q || [crmPT(a.CompanyID) ? crmPT(a.CompanyID).Nama : '', a.Keterangan, a.Hasil, a.TindakLanjut].join(' ').toLowerCase().includes(q)))
+      .sort((a, b) => String(b.Tanggal).localeCompare(String(a.Tanggal)));
+    $('#akList').innerHTML = list.length ? `<div class="table-card"><div class="table-wrap"><table class="table cards"><thead><tr><th>Waktu</th><th>Perusahaan</th><th>Aktivitas</th><th>Hasil & tindak lanjut</th><th>Oleh</th></tr></thead><tbody>
+      ${list.slice(0, 300).map(a => { const p = crmPT(a.CompanyID), l = crmLead(a.LeadID); return `<tr class="clickable" data-lead="${esc(a.LeadID)}"><td data-label="Waktu" class="mono">${tglJam(a.Tanggal)}</td>
+        <td class="card-title" data-label="Perusahaan"><b>${esc(p ? p.Nama : '-')}</b><span class="t-sub">${l ? esc(l.Kode) + ' · ' + esc(l.Layanan) : ''}</span></td>
+        <td data-label="Aktivitas"><span class="badge b-slate plain"><i class="bi ${CRM_JENIS_IC[a.Jenis] || 'bi-chat-dots'}"></i> ${esc(a.Jenis)}</span><span class="t-sub t-clip2">${esc(a.Keterangan || '')}</span></td>
+        <td data-label="Hasil">${esc(a.Hasil || '—')}${a.TindakLanjut ? `<span class="t-sub">→ ${esc(a.TindakLanjut)}${a.NextFollowup ? ' (' + tglPendek(a.NextFollowup) + ')' : ''}</span>` : ''}</td><td data-label="Oleh">${esc(a.PICNama || '')}</td></tr>`; }).join('')}
+      </tbody></table></div></div>${list.length > 300 ? '<p class="muted mt">Menampilkan 300 aktivitas terbaru. Persempit filter untuk melihat yang lain.</p>' : ''}` : `<div class="card">${emptyHTML('bi-clock-history', 'Tidak ada aktivitas', 'Ubah filter, atau catat aktivitas dari detail lead.')}</div>`;
+  };
+  $('#akQ').addEventListener('input', debounce(e => { st.q = e.target.value; draw(); }, 120));
+  $('#akJ').onchange = e => { st.jenis = e.target.value; draw(); };
+  $('#akP').onchange = e => { st.pic = e.target.value; draw(); };
+  $('#akH').onchange = e => { st.hari = e.target.value; draw(); };
+  draw();
+}
+
+// ── Pertanyaan website → lead ───────────────────────────────
+function ptyKeLead(r, btn) {
+  const pilih = isSales() ? '' : `<label class="field"><span class="label">PIC sales</span><select class="input" id="ptyPic">${crmUserOpts(S.me.email)}</select></label>`;
+  openModal({ title: 'Jadikan lead CRM', sub: r.Nama + (r.Perusahaan ? ' · ' + r.Perusahaan : ''), icon: 'bi-funnel', size: 'sm',
+    body: `<p class="muted" style="margin-top:0">Akan dibuat: perusahaan <b>${esc(r.Perusahaan || r.Nama)}</b> (atau memakai yang sudah ada), lead baru, dan aktivitas pertama berisi pertanyaan ini.</p>${pilih}`,
+    foot: '<button class="btn btn-secondary" data-close>Batal</button><button class="btn btn-primary" id="ptyLeadOk"><i class="bi bi-funnel"></i> Buat lead</button>' });
+  $('#ptyLeadOk').onclick = () => {
+    const b = $('#ptyLeadOk'); btnBusy(b, true, 'Membuat…');
+    api('leadDariPertanyaan', S.token, r.ID, $('#ptyPic') ? $('#ptyPic').value : '').then(res => { crmApplyResult(res.data); ok(res.message); closeModal(); renderPertanyaan(); openCrmLeadDetail(res.data.lead.ID); }).catch(fail).finally(() => btnBusy(b, false));
+  };
+}
+
+// Klik global: buka lead / perusahaan / form baru dari mana saja
+document.addEventListener('click', e => {
+  const ld = e.target.closest('[data-lead]');
+  if (ld && !e.target.closest('[data-akdel]')) { e.preventDefault(); openCrmLeadDetail(ld.dataset.lead); return; }
+  const nw = e.target.closest('[data-crm-new]');
+  if (nw) { if (nw.dataset.crmNew === 'pt') openCrmPtForm(null); else openCrmLeadForm(null); }
+});
 
 // Penanda: js/app.js termuat sampai akhir
 window.__KGM_JS_END = true;

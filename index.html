@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=3.0.0">
+  <link rel="stylesheet" href="css/style.css?v=3.1.0">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2216%22 fill=%22%23006C49%22/%3E%3Cpath d=%22M14 22h22v18H14zM36 28h8l6 6v6H36z%22 fill=%22white%22/%3E%3Ccircle cx=%2222%22 cy=%2243%22 r=%225%22 fill=%22white%22/%3E%3Ccircle cx=%2244%22 cy=%2243%22 r=%225%22 fill=%22white%22/%3E%3C/svg%3E">
 </head>
 <body>
@@ -110,6 +110,7 @@
       <button class="icon-btn sb-close" id="sbClose" aria-label="Tutup menu"><i class="bi bi-x-lg"></i></button>
     </div>
     <nav class="sb-nav" id="sbNav">
+      <div class="staff-only">
       <div class="sb-group">Operasional</div>
       <a class="sb-link" data-page="ringkasan" href="javascript:void(0)"><i class="bi bi-grid-1x2"></i><span>Ringkasan</span></a>
       <a class="sb-link" data-page="sewa" href="javascript:void(0)"><i class="bi bi-truck-front"></i><span>Form Sewa Kendaraan</span></a>
@@ -126,9 +127,17 @@
         <a class="sb-link" data-page="penerima" href="javascript:void(0)"><i class="bi bi-geo-alt"></i><span>Data Penerima</span></a>
         <a class="sb-link" data-page="ekspedisi" href="javascript:void(0)"><i class="bi bi-buildings"></i><span>Ekspedisi Rekanan</span></a>
       </div>
+      </div>
+      <div class="sb-group">CRM</div>
+      <a class="sb-link" data-page="crm" href="javascript:void(0)"><i class="bi bi-speedometer2"></i><span>Dashboard CRM</span><b class="sb-badge danger" id="badgeCrm" hidden></b></a>
+      <a class="sb-link" data-page="crm-perusahaan" href="javascript:void(0)"><i class="bi bi-buildings"></i><span>Database Perusahaan</span></a>
+      <a class="sb-link" data-page="crm-leads" href="javascript:void(0)"><i class="bi bi-funnel"></i><span>Sales Leads</span></a>
+      <a class="sb-link" data-page="crm-aktivitas" href="javascript:void(0)"><i class="bi bi-clock-history"></i><span>Riwayat Aktivitas</span></a>
+      <div class="staff-only">
       <div class="sb-group">Website</div>
       <a class="sb-link" data-page="pertanyaan" href="javascript:void(0)"><i class="bi bi-chat-left-text"></i><span>Pertanyaan Masuk</span><b class="sb-badge danger" id="badgePty" hidden></b></a>
       <a class="sb-link sa-only" data-page="website" href="javascript:void(0)"><i class="bi bi-globe2"></i><span>Kelola Website</span></a>
+      </div>
       <div class="sa-only">
         <div class="sb-group">Super Admin</div>
         <a class="sb-link" data-page="finance" href="javascript:void(0)"><i class="bi bi-wallet2"></i><span>Keuangan &amp; Finance</span></a>
@@ -156,7 +165,7 @@
     <header class="topbar">
       <button class="icon-btn only-mobile" id="btnMenu" aria-label="Buka menu"><i class="bi bi-list"></i></button>
       <div class="crumb"><i class="bi bi-house"></i><span>/</span><b id="crumbTitle">Ringkasan</b></div>
-      <div class="top-search">
+      <div class="top-search staff-only">
         <i class="bi bi-search"></i>
         <input id="globalSearch" class="input" type="search" placeholder="Cari no. surat jalan, nopol, pelanggan…" autocomplete="off">
         <kbd>/</kbd>
@@ -166,7 +175,7 @@
         <span class="chip chip-date" id="todayChip"><i class="bi bi-calendar3"></i><span></span></span>
         <span class="sync-dot" id="syncDot" title="Data tersinkron"></span>
         <button class="icon-btn" id="btnTheme" aria-label="Ganti tema"><i class="bi bi-moon-stars"></i></button>
-        <div class="pos-rel">
+        <div class="pos-rel staff-only">
           <button class="icon-btn" id="btnBell" aria-label="Notifikasi"><i class="bi bi-bell"></i><i class="bell-dot" id="bellDot" hidden></i></button>
           <div class="menu notif" id="notifMenu" hidden></div>
         </div>
@@ -557,15 +566,23 @@
       <section class="page" id="page-pengaturan" data-title="Pengaturan Sistem"></section>
       <section class="page" id="page-pertanyaan" data-title="Pertanyaan Masuk"></section>
       <section class="page" id="page-website" data-title="Kelola Website"></section>
+      <section class="page" id="page-crm" data-title="Dashboard CRM"></section>
+      <section class="page" id="page-crm-perusahaan" data-title="Database Perusahaan"></section>
+      <section class="page" id="page-crm-leads" data-title="Sales Leads"></section>
+      <section class="page" id="page-crm-aktivitas" data-title="Riwayat Aktivitas"></section>
     </main>
   </div>
 
   <!-- Navigasi bawah (ponsel) -->
   <nav class="bottom-nav" id="bottomNav" aria-label="Navigasi cepat">
-    <button data-page="ringkasan"><i class="bi bi-grid-1x2"></i><span>Ringkasan</span></button>
-    <button data-page="rekap"><i class="bi bi-journal-text"></i><span>Rekap</span></button>
-    <button class="bn-main" data-act="new-order" aria-label="Buat surat jalan"><i class="bi bi-plus-lg"></i></button>
-    <button data-page="invoice"><i class="bi bi-receipt"></i><span>Invoice</span><b class="bn-badge" id="bnBadge" hidden></b></button>
+    <button class="staff-only" data-page="ringkasan"><i class="bi bi-grid-1x2"></i><span>Ringkasan</span></button>
+    <button class="staff-only" data-page="rekap"><i class="bi bi-journal-text"></i><span>Rekap</span></button>
+    <button class="bn-main staff-only" data-act="new-order" aria-label="Buat surat jalan"><i class="bi bi-plus-lg"></i></button>
+    <button class="staff-only" data-page="invoice"><i class="bi bi-receipt"></i><span>Invoice</span><b class="bn-badge" id="bnBadge" hidden></b></button>
+    <button class="sales-only" data-page="crm"><i class="bi bi-speedometer2"></i><span>Dashboard</span></button>
+    <button class="sales-only" data-page="crm-leads"><i class="bi bi-funnel"></i><span>Leads</span></button>
+    <button class="bn-main sales-only" data-crm-new="lead" aria-label="Lead baru"><i class="bi bi-plus-lg"></i></button>
+    <button class="sales-only" data-page="crm-perusahaan"><i class="bi bi-buildings"></i><span>Perusahaan</span></button>
     <button data-act="menu"><i class="bi bi-list"></i><span>Menu</span></button>
   </nav>
 </div>
@@ -647,8 +664,8 @@
   setTimeout(function () { window.__kgmCheck(true); }, 15000);
 })();
 </script>
-<script src="js/config.js?v=3.0.0"></script>
-<script src="js/app.js?v=3.0.0"></script>
+<script src="js/config.js?v=3.1.0"></script>
+<script src="js/app.js?v=3.1.0"></script>
 <script>setTimeout(function () { window.__kgmCheck(false); }, 0);</script>
 </body>
 </html>
