@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=3.2.0">
+  <link rel="stylesheet" href="css/style.css?v=3.3.0">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2216%22 fill=%22%23006C49%22/%3E%3Cpath d=%22M14 22h22v18H14zM36 28h8l6 6v6H36z%22 fill=%22white%22/%3E%3Ccircle cx=%2222%22 cy=%2243%22 r=%225%22 fill=%22white%22/%3E%3Ccircle cx=%2244%22 cy=%2243%22 r=%225%22 fill=%22white%22/%3E%3C/svg%3E">
 </head>
 <body>
@@ -110,45 +110,64 @@
       <button class="icon-btn sb-close" id="sbClose" aria-label="Tutup menu"><i class="bi bi-x-lg"></i></button>
     </div>
     <nav class="sb-nav" id="sbNav">
-      <div class="staff-only">
-      <div class="sb-group">Operasional</div>
-      <a class="sb-link" data-page="ringkasan" href="javascript:void(0)"><i class="bi bi-grid-1x2"></i><span>Ringkasan</span></a>
-      <a class="sb-link" data-page="sewa" href="javascript:void(0)"><i class="bi bi-truck-front"></i><span>Form Sewa Kendaraan</span></a>
-      <a class="sb-link" data-page="kirim" href="javascript:void(0)"><i class="bi bi-truck"></i><span>Form Kirim Mobil</span></a>
-      <a class="sb-link" data-page="paket" href="javascript:void(0)"><i class="bi bi-box-seam"></i><span>Form Kirim Paket</span></a>
-      <a class="sb-link" data-page="inspeksi" href="javascript:void(0)"><i class="bi bi-clipboard2-check"></i><span>Form Inspeksi</span></a>
-      <a class="sb-link" data-page="rekap" href="javascript:void(0)"><i class="bi bi-journal-text"></i><span>Rekap Order</span><b class="sb-badge neutral" id="badgeDraf" hidden></b></a>
-      <a class="sb-link" data-page="invoice" href="javascript:void(0)"><i class="bi bi-receipt"></i><span>Invoice &amp; Tagihan</span><b class="sb-badge danger" id="badgeInvoice" hidden></b></a>
-      <button class="sb-link sb-toggle" id="sbMasterToggle" aria-expanded="true"><i class="bi bi-database"></i><span>Data Master</span><i class="bi bi-chevron-down chev"></i></button>
-      <div class="sb-sub" id="sbMaster">
-        <a class="sb-link" data-page="pelanggan" href="javascript:void(0)"><i class="bi bi-buildings"></i><span>Data Pelanggan</span></a>
-        <a class="sb-link" data-page="kendaraan" href="javascript:void(0)"><i class="bi bi-car-front"></i><span>Data Kendaraan</span><b class="sb-badge warn" id="badgeArmada" hidden></b></a>
-        <a class="sb-link" data-page="pengemudi" href="javascript:void(0)"><i class="bi bi-person-badge"></i><span>Data Pengemudi</span><b class="sb-badge warn" id="badgeDriver" hidden></b></a>
-        <a class="sb-link" data-page="penerima" href="javascript:void(0)"><i class="bi bi-geo-alt"></i><span>Data Penerima</span></a>
-        <a class="sb-link" data-page="ekspedisi" href="javascript:void(0)"><i class="bi bi-buildings"></i><span>Ekspedisi Rekanan</span></a>
+      <div class="sb-sec staff-only" data-sec="ops">
+        <button class="sb-group sb-sec-h" data-sec-toggle="ops" aria-expanded="true"><span>Operasional</span><b class="sb-dot" hidden></b><i class="bi bi-chevron-down chev"></i></button>
+        <div class="sb-sec-b">
+        <a class="sb-link" data-page="ringkasan" href="javascript:void(0)"><i class="bi bi-grid-1x2"></i><span>Ringkasan</span></a>
+        <a class="sb-link" data-page="sewa" href="javascript:void(0)"><i class="bi bi-truck-front"></i><span>Form Sewa Kendaraan</span></a>
+        <a class="sb-link" data-page="kirim" href="javascript:void(0)"><i class="bi bi-truck"></i><span>Form Kirim Mobil</span></a>
+        <a class="sb-link" data-page="paket" href="javascript:void(0)"><i class="bi bi-box-seam"></i><span>Form Kirim Paket</span></a>
+        <a class="sb-link" data-page="inspeksi" href="javascript:void(0)"><i class="bi bi-clipboard2-check"></i><span>Form Inspeksi</span></a>
+        <a class="sb-link" data-page="rekap" href="javascript:void(0)"><i class="bi bi-journal-text"></i><span>Rekap Order</span><b class="sb-badge neutral" id="badgeDraf" hidden></b></a>
+        <a class="sb-link" data-page="invoice" href="javascript:void(0)"><i class="bi bi-receipt"></i><span>Invoice &amp; Tagihan</span><b class="sb-badge danger" id="badgeInvoice" hidden></b></a>
+        <button class="sb-link sb-toggle" id="sbMasterToggle" aria-expanded="true"><i class="bi bi-database"></i><span>Data Master</span><i class="bi bi-chevron-down chev"></i></button>
+        <div class="sb-sub" id="sbMaster">
+          <a class="sb-link" data-page="pelanggan" href="javascript:void(0)"><i class="bi bi-buildings"></i><span>Data Pelanggan</span></a>
+          <a class="sb-link" data-page="kendaraan" href="javascript:void(0)"><i class="bi bi-car-front"></i><span>Data Kendaraan</span><b class="sb-badge warn" id="badgeArmada" hidden></b></a>
+          <a class="sb-link" data-page="pengemudi" href="javascript:void(0)"><i class="bi bi-person-badge"></i><span>Data Pengemudi</span><b class="sb-badge warn" id="badgeDriver" hidden></b></a>
+          <a class="sb-link" data-page="penerima" href="javascript:void(0)"><i class="bi bi-geo-alt"></i><span>Data Penerima</span></a>
+          <a class="sb-link" data-page="ekspedisi" href="javascript:void(0)"><i class="bi bi-buildings"></i><span>Ekspedisi Rekanan</span></a>
+        </div>
+        </div>
       </div>
+      <div class="sb-sec grp-crm" data-sec="crm">
+        <button class="sb-group sb-sec-h" data-sec-toggle="crm" aria-expanded="true"><span>CRM</span><b class="sb-dot" hidden></b><i class="bi bi-chevron-down chev"></i></button>
+        <div class="sb-sec-b">
+        <a class="sb-link" data-page="crm" href="javascript:void(0)"><i class="bi bi-speedometer2"></i><span>Dashboard CRM</span><b class="sb-badge danger" id="badgeCrm" hidden></b></a>
+        <a class="sb-link" data-page="crm-kinerja" href="javascript:void(0)"><i class="bi bi-graph-up-arrow"></i><span>Kinerja Sales</span><b class="sb-badge warn" id="badgeTarget" hidden></b></a>
+        <a class="sb-link" data-page="crm-perusahaan" href="javascript:void(0)"><i class="bi bi-buildings"></i><span>Database Perusahaan</span></a>
+        <a class="sb-link" data-page="crm-leads" href="javascript:void(0)"><i class="bi bi-funnel"></i><span>Sales Leads</span></a>
+        <a class="sb-link" data-page="crm-aktivitas" href="javascript:void(0)"><i class="bi bi-clock-history"></i><span>Riwayat Aktivitas</span></a>
+        </div>
       </div>
-      <div class="grp-crm">
-      <div class="sb-group">CRM</div>
-      <a class="sb-link" data-page="crm" href="javascript:void(0)"><i class="bi bi-speedometer2"></i><span>Dashboard CRM</span><b class="sb-badge danger" id="badgeCrm" hidden></b></a>
-      <a class="sb-link" data-page="crm-perusahaan" href="javascript:void(0)"><i class="bi bi-buildings"></i><span>Database Perusahaan</span></a>
-      <a class="sb-link" data-page="crm-leads" href="javascript:void(0)"><i class="bi bi-funnel"></i><span>Sales Leads</span></a>
-      <a class="sb-link" data-page="crm-aktivitas" href="javascript:void(0)"><i class="bi bi-clock-history"></i><span>Riwayat Aktivitas</span></a>
+      <div class="sb-sec grp-cs" data-sec="cs">
+        <button class="sb-group sb-sec-h" data-sec-toggle="cs" aria-expanded="true"><span>Customer Service</span><b class="sb-dot" hidden></b><i class="bi bi-chevron-down chev"></i></button>
+        <div class="sb-sec-b">
+        <a class="sb-link" data-page="keluhan" href="javascript:void(0)"><i class="bi bi-chat-square-text"></i><span>Keluhan Pelanggan</span><b class="sb-badge danger" id="badgeKlh" hidden></b></a>
+        <a class="sb-link" data-page="cs-kinerja" href="javascript:void(0)"><i class="bi bi-person-check"></i><span>Kinerja CS</span></a>
+        <a class="sb-link" data-page="pertanyaan" href="javascript:void(0)"><i class="bi bi-chat-left-text"></i><span>Pertanyaan Masuk</span><b class="sb-badge danger" id="badgePty" hidden></b></a>
+        </div>
       </div>
-      <div class="grp-cs">
-      <div class="sb-group">Customer Service</div>
-      <a class="sb-link" data-page="keluhan" href="javascript:void(0)"><i class="bi bi-chat-square-text"></i><span>Keluhan Pelanggan</span><b class="sb-badge danger" id="badgeKlh" hidden></b></a>
-      <a class="sb-link" data-page="pertanyaan" href="javascript:void(0)"><i class="bi bi-chat-left-text"></i><span>Pertanyaan Masuk</span><b class="sb-badge danger" id="badgePty" hidden></b></a>
+      <div class="sb-sec " data-sec="surat">
+        <button class="sb-group sb-sec-h" data-sec-toggle="surat" aria-expanded="true"><span>Surat</span><b class="sb-dot" hidden></b><i class="bi bi-chevron-down chev"></i></button>
+        <div class="sb-sec-b">
+        <a class="sb-link" data-page="surat" href="javascript:void(0)"><i class="bi bi-envelope-paper"></i><span>Surat Menyurat</span><b class="sb-badge danger" id="badgeSurat" hidden></b></a>
+        <a class="sb-link" data-page="harga" href="javascript:void(0)"><i class="bi bi-tags"></i><span>Daftar Harga</span></a>
+        </div>
       </div>
-      <div class="sa-only">
-      <div class="sb-group">Website</div>
-      <a class="sb-link" data-page="website" href="javascript:void(0)"><i class="bi bi-globe2"></i><span>Kelola Website</span></a>
+      <div class="sb-sec sa-only" data-sec="web">
+        <button class="sb-group sb-sec-h" data-sec-toggle="web" aria-expanded="true"><span>Website</span><b class="sb-dot" hidden></b><i class="bi bi-chevron-down chev"></i></button>
+        <div class="sb-sec-b">
+        <a class="sb-link" data-page="website" href="javascript:void(0)"><i class="bi bi-globe2"></i><span>Kelola Website</span></a>
+        </div>
       </div>
-      <div class="sa-only">
-        <div class="sb-group">Super Admin</div>
+      <div class="sb-sec sa-only" data-sec="sa">
+        <button class="sb-group sb-sec-h" data-sec-toggle="sa" aria-expanded="true"><span>Super Admin</span><b class="sb-dot" hidden></b><i class="bi bi-chevron-down chev"></i></button>
+        <div class="sb-sec-b">
         <a class="sb-link" data-page="finance" href="javascript:void(0)"><i class="bi bi-wallet2"></i><span>Keuangan &amp; Finance</span></a>
         <a class="sb-link" data-page="laporan" href="javascript:void(0)"><i class="bi bi-bar-chart-line"></i><span>Laporan &amp; Export</span></a>
         <a class="sb-link" data-page="pengaturan" href="javascript:void(0)"><i class="bi bi-gear"></i><span>Pengaturan Sistem</span></a>
+        </div>
       </div>
     </nav>
     <div class="sb-user">
@@ -573,6 +592,10 @@
       <section class="page" id="page-pertanyaan" data-title="Pertanyaan Masuk"></section>
       <section class="page" id="page-website" data-title="Kelola Website"></section>
       <section class="page" id="page-keluhan" data-title="Keluhan Pelanggan"></section>
+      <section class="page" id="page-cs-kinerja" data-title="Kinerja Customer Service"></section>
+      <section class="page" id="page-crm-kinerja" data-title="Kinerja Sales"></section>
+      <section class="page" id="page-surat" data-title="Surat Menyurat"></section>
+      <section class="page" id="page-harga" data-title="Daftar Harga"></section>
       <section class="page" id="page-crm" data-title="Dashboard CRM"></section>
       <section class="page" id="page-crm-perusahaan" data-title="Database Perusahaan"></section>
       <section class="page" id="page-crm-leads" data-title="Sales Leads"></section>
@@ -674,8 +697,8 @@
   setTimeout(function () { window.__kgmCheck(true); }, 15000);
 })();
 </script>
-<script src="js/config.js?v=3.2.0"></script>
-<script src="js/app.js?v=3.2.0"></script>
+<script src="js/config.js?v=3.3.0"></script>
+<script src="js/app.js?v=3.3.0"></script>
 <script>setTimeout(function () { window.__kgmCheck(false); }, 0);</script>
 </body>
 </html>

@@ -857,4 +857,40 @@ body:not(.is-cs) .cs-only{display:none!important}
 @media (max-width:900px){.klh-grid{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:900px){#page-crm .dash-grid>.stack:last-child{order:-1}.crm-detail{grid-template-columns:minmax(0,1fr)}.crm-lay{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:640px){.grid-2{grid-template-columns:minmax(0,1fr)}.fn-row{grid-template-columns:110px minmax(0,1fr) 28px}.fn-v{display:none}}
+/* ── Sidebar: grup dilipat ── */
+.sb-sec-h{display:flex;align-items:center;gap:8px;width:100%;background:none;border:0;cursor:pointer;text-align:left;font-family:inherit;border-radius:8px}
+.sb-sec-h:hover{color:var(--text)}
+.sb-sec-h span{flex:1}
+.sb-sec-h .chev{font-size:12px;transition:transform .2s}
+.sb-sec:not(.open) .sb-sec-h .chev{transform:rotate(-90deg)}
+.sb-sec:not(.open) .sb-sec-b{display:none}
+.sb-dot{width:8px;height:8px;border-radius:50%;background:var(--red);display:inline-block}
+.sb-dot[hidden]{display:none}
+/* ── Kinerja & target ── */
+.pbar{position:relative;height:7px;border-radius:99px;background:var(--surface-2);overflow:visible;margin-top:5px;min-width:70px}
+.pbar i{display:block;height:100%;border-radius:99px;background:#f59e0b}
+.pbar.ok i{background:#16a34a}.pbar.bad i{background:var(--red)}
+.pbar s{position:absolute;top:-3px;width:2px;height:13px;background:var(--text);opacity:.45;text-decoration:none}
+.pbar+small{font-size:11px;color:var(--muted)}
+.tgt-card{margin-bottom:16px;border-left:4px solid var(--primary)}
+.tgt-card.is-bad{border-left-color:var(--red)}
+.tgt-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:12px 0}
+.tgt-grid small{display:block;color:var(--muted);font-size:12px}
+.tgt-grid b{font-size:15px}
+.rekom{margin:8px 0 0;padding-left:20px;display:grid;gap:6px;font-size:13.5px}
+.tgt-base{border:1px dashed var(--border);border-radius:12px;padding:12px 14px;margin-bottom:14px;background:var(--surface-2)}
+.tgt-base p{margin:4px 0 10px;font-size:12.5px}
+.tgt-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.tgt-table td{vertical-align:middle}
+.tgt-table .input{min-width:110px;height:36px}
+.rc-table .input{min-width:90px;height:34px;padding:0 8px;font-size:13px}
+.rc-table td{padding:4px}
+.rc-wrap{max-height:320px;overflow:auto}
+.srt-prev{width:100%;height:62vh;border:1px solid var(--border);border-radius:10px;background:#E2E8F0}
+.pick-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:1200;display:grid;place-items:center;padding:16px}
+.pick-box{background:var(--surface);border-radius:16px;padding:18px;width:min(640px,100%);max-height:86vh;display:flex;flex-direction:column;box-shadow:var(--e3,0 20px 50px rgba(0,0,0,.25))}
+.pick-list{overflow:auto;display:grid;gap:6px}
+.pick-i{padding:8px 10px;border:1px solid var(--border);border-radius:10px;gap:10px}
+.pick-i[hidden]{display:none}
+@media (max-width:760px){.tgt-grid,.tgt-row{grid-template-columns:repeat(2,minmax(0,1fr))}}
 :root{--kgm-css-end:1}

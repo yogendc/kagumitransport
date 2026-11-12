@@ -10,7 +10,7 @@
    ============================================================ */
 
 // ── Konstanta ──────────────────────────────────────────────
-const APP_VERSI = '3.2'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
+const APP_VERSI = '3.3'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
 const LS = { token: 'kgm_token', theme: 'kgm_theme', cache: 'kgm_cache_v1', cols: 'kgm_rekap_cols', draft: 'kgm_draft_', master: 'kgm_master_open', login: 'kgm_login_ctx' };
 const STATUS = ['Dijadwalkan', 'Dikirim', 'Diterima', 'Dibatalkan'];
 const STATUS_CLS = { Dijadwalkan: 'b-indigo', Dikirim: 'b-amber', Diterima: 'b-green', Dibatalkan: 'b-red', Draf: 'b-slate' };
@@ -37,7 +37,7 @@ const CDN = {
 // ── State aplikasi (memori) ────────────────────────────────
 const S = {
   token: null, me: null, settings: {}, booted: false, lastSync: 0,
-  d: { pelanggan: [], penerima: [], ekspedisi: [], kendaraan: [], pengemudi: [], rekening: [], orders: [], invoices: [], inspeksi: [], finance: [], users: [], pertanyaan: [], berita: [], crmCompany: [], crmLeads: [], crmActivity: [], crmUsers: [], keluhan: [], keluhanLog: [], orderRingkas: [], csUsers: [] },
+  d: { pelanggan: [], penerima: [], ekspedisi: [], kendaraan: [], pengemudi: [], rekening: [], orders: [], invoices: [], inspeksi: [], finance: [], users: [], pertanyaan: [], berita: [], crmCompany: [], crmLeads: [], crmActivity: [], crmUsers: [], keluhan: [], keluhanLog: [], orderRingkas: [], csUsers: [], surat: [], harga: [], kontakSurat: [], targetSales: [] },
   web: null,
   page: 'ringkasan',
   ui: {
@@ -56,11 +56,37 @@ const S = {
 };
 const SA_PAGES = ['finance', 'laporan', 'pengaturan', 'website'];
 const isSales = () => !!(S.me && S.me.role === 'SALES');
-const CRM_PAGES = ['crm', 'crm-perusahaan', 'crm-leads', 'crm-aktivitas'];
+const CRM_PAGES = ['crm', 'crm-kinerja', 'crm-perusahaan', 'crm-leads', 'crm-aktivitas'];
 const isCS = () => !!(S.me && S.me.role === 'CS');
-const CS_PAGES = ['keluhan', 'pertanyaan'];
+const CS_PAGES = ['keluhan', 'cs-kinerja', 'pertanyaan'];
 /** Halaman yang boleh dibuka peran terbatas (Sales / CS); null = semua (Admin & Super Admin). */
-const pagesTerbatas = () => (isSales() ? CRM_PAGES : isCS() ? CS_PAGES : null);
+const SURAT_PAGES = ['surat', 'harga'];
+const pagesTerbatas = () => (isSales() ? CRM_PAGES.concat(SURAT_PAGES) : isCS() ? CS_PAGES.concat(SURAT_PAGES) : null);
+// ── Sidebar: grup menu bisa dilipat (diingat per browser) ──
+function sbSecState() { try { return JSON.parse(lsGet('kgmSbSec', '{}')) || {}; } catch (e) { return {}; } }
+function sbSecSet(key, open, simpan) {
+  const el = document.querySelector('.sb-sec[data-sec="' + key + '"]'); if (!el) return;
+  el.classList.toggle('open', open);
+  const b = el.querySelector('[data-sec-toggle]'); if (b) b.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (simpan) { const st = sbSecState(); st[key] = open; lsSet('kgmSbSec', JSON.stringify(st)); }
+  sbSecDots();
+}
+function sbSecInit() {
+  const st = sbSecState();
+  $$('.sb-sec').forEach(el => { const k = el.dataset.sec; sbSecSet(k, st[k] !== undefined ? st[k] : k === 'ops' || (pagesTerbatas() || []).length > 0); });
+  if (S.page) sbSecBuka(S.page);
+}
+function sbSecBuka(page) {
+  const a = document.querySelector('.sb-link[data-page="' + page + '"]'), sec = a && a.closest('.sb-sec');
+  if (sec && !sec.classList.contains('open')) sbSecSet(sec.dataset.sec, true);
+}
+/** Titik merah di judul grup yang dilipat bila ada lencana di dalamnya. */
+function sbSecDots() {
+  $$('.sb-sec').forEach(el => {
+    const n = $$('.sb-badge', el).filter(b => !b.hidden).length;
+    const d = el.querySelector('.sb-dot'); if (d) d.hidden = !n || el.classList.contains('open');
+  });
+}
 const isSA = () => !!(S.me && S.me.role === 'SUPER_ADMIN');
 
 // ── Utilitas ───────────────────────────────────────────────
@@ -407,14 +433,14 @@ function logout() {
 function hydrate(d, fromCache) {
   S.me = d.me || S.me;
   S.settings = Object.assign({}, d.settings || {});
-  ['pelanggan', 'penerima', 'ekspedisi', 'kendaraan', 'pengemudi', 'rekening', 'orders', 'invoices', 'inspeksi', 'pertanyaan', 'crmCompany', 'crmLeads', 'crmActivity', 'crmUsers', 'keluhan', 'keluhanLog', 'orderRingkas', 'csUsers'].forEach(k => { if (d[k]) S.d[k] = d[k]; else if (!fromCache) S.d[k] = []; });
+  ['pelanggan', 'penerima', 'ekspedisi', 'kendaraan', 'pengemudi', 'rekening', 'orders', 'invoices', 'inspeksi', 'pertanyaan', 'crmCompany', 'crmLeads', 'crmActivity', 'crmUsers', 'keluhan', 'keluhanLog', 'orderRingkas', 'csUsers', 'surat', 'harga', 'kontakSurat', 'targetSales'].forEach(k => { if (d[k]) S.d[k] = d[k]; else if (!fromCache) S.d[k] = []; });
   if (!fromCache) { S.d.finance = d.finance || []; S.d.users = d.users || []; S.d.berita = d.berita || []; S.web = d.webKonten || null; S.lastSync = Date.now(); }
   applyBranding(S.settings);
 }
 function saveCache() {
   // Data keuangan & pengguna tidak disimpan di perangkat
   const c = { me: S.me, settings: S.settings, t: Date.now() };
-  ['pelanggan', 'penerima', 'ekspedisi', 'kendaraan', 'pengemudi', 'rekening', 'orders', 'invoices', 'inspeksi', 'pertanyaan', 'crmCompany', 'crmLeads', 'crmActivity', 'crmUsers', 'keluhan', 'keluhanLog', 'orderRingkas', 'csUsers'].forEach(k => { c[k] = S.d[k]; });
+  ['pelanggan', 'penerima', 'ekspedisi', 'kendaraan', 'pengemudi', 'rekening', 'orders', 'invoices', 'inspeksi', 'pertanyaan', 'crmCompany', 'crmLeads', 'crmActivity', 'crmUsers', 'keluhan', 'keluhanLog', 'orderRingkas', 'csUsers', 'surat', 'harga', 'kontakSurat', 'targetSales'].forEach(k => { c[k] = S.d[k]; });
   lsSet(LS.cache, JSON.stringify(c));
 }
 let refreshing = null;
@@ -481,6 +507,7 @@ function applyRole() {
   const open = lsGet(LS.master, '1') === '1';
   $('#sbMasterToggle').setAttribute('aria-expanded', open ? 'true' : 'false');
   $('#sbMaster').hidden = !open;
+  sbSecInit();
 }
 
 const RENDER = {
@@ -489,7 +516,7 @@ const RENDER = {
   pengemudi: () => renderMaster('pengemudi'), penerima: () => renderMaster('penerima'), ekspedisi: () => renderMaster('ekspedisi'),
   finance: renderFinance, laporan: renderLaporan, pengaturan: renderPengaturan,
   website: renderWebsite, pertanyaan: renderPertanyaan,
-  keluhan: renderKeluhan,
+  keluhan: renderKeluhan, 'cs-kinerja': renderCsKinerja, 'crm-kinerja': renderSalesKinerja, surat: renderSurat, harga: renderHarga,
   crm: renderCrm, 'crm-perusahaan': renderCrmPerusahaan, 'crm-leads': renderCrmLeads, 'crm-aktivitas': renderCrmAktivitas,
   inspeksi: renderInspeksiPage
 };
@@ -503,6 +530,7 @@ function navigateTo(page, opt) {
   const sec = $('#page-' + page); if (!sec) return;
   $$('.page').forEach(p => p.classList.toggle('active', p === sec));
   $$('.sb-link[data-page]').forEach(a => a.classList.toggle('active', a.dataset.page === page));
+  sbSecBuka(page);
   $$('#bottomNav [data-page]').forEach(a => a.classList.toggle('active', a.dataset.page === page));
   $('#crumbTitle').textContent = sec.dataset.title || '';
   S.page = page;
@@ -539,6 +567,7 @@ function bindGlobal() {
   $('#btnMenu').onclick = openSidebar;
   $('#sbClose').onclick = closeSidebar;
   $('#sidebarBackdrop').onclick = closeSidebar;
+  $$('[data-sec-toggle]').forEach(b => b.onclick = () => sbSecSet(b.dataset.secToggle, !b.closest('.sb-sec').classList.contains('open'), true));
   $('#sbMasterToggle').onclick = () => {
     const open = $('#sbMaster').hidden;
     $('#sbMaster').hidden = !open; $('#sbMasterToggle').setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -607,7 +636,8 @@ function updateBadges() {
   const drafts = S.d.orders.filter(o => o.StatusDok === 'Draf').length;
   const armada = S.d.kendaraan.filter(k => vehicleAlerts(k).length).length;
   const driver = S.d.pengemudi.filter(d => driverAlert(d)).length;
-  const set = (id, n, txt) => { const el = $(id); if (!el) return; el.hidden = !n; el.textContent = txt || n; };
+  // Lencana di sidebar cukup angka (keterangan lengkap muncul saat kursor diarahkan) agar nama menu tidak terpotong
+  const set = (id, n, txt) => { const el = $(id); if (!el) return; el.hidden = !n; const sb = !!el.closest('.sb-sec-b'); el.textContent = sb ? n : (txt || n); el.title = txt || ''; };
   set('#badgeInvoice', due, due + ' jatuh tempo');
   set('#bnBadge', due);
   set('#badgeDraf', drafts, drafts + ' draf');
@@ -620,6 +650,11 @@ function updateBadges() {
   const klhBuka = (S.d.keluhan || []).filter(k => ['Baru', 'Diproses', 'Menunggu Pelanggan'].includes(k.Status));
   const klhLewat = klhBuka.filter(k => k.BatasWaktu && String(k.BatasWaktu) < new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 19).replace('T', ' ')).length;
   set('#badgeKlh', klhBuka.length, klhLewat ? klhLewat + ' lewat SLA' : klhBuka.length + ' terbuka');
+  const srt = (S.d.surat || []).filter(x => isSA() ? x.Status === 'Menunggu Persetujuan' : x.Status === 'Ditolak' && x.DibuatOleh === (S.me || {}).email).length;
+  set('#badgeSurat', srt, isSA() ? srt + ' menunggu persetujuan' : srt + ' ditolak');
+  const tgt = typeof targetTertinggal === 'function' ? targetTertinggal() : 0;
+  set('#badgeTarget', tgt, isSales() ? 'Target tertinggal' : tgt + ' sales tertinggal target');
+  sbSecDots();
   $('#bellDot').hidden = !(due || armada || driver);
 }
 function renderNotif() {
@@ -4942,7 +4977,7 @@ function renderCrm() {
     return `<button class="fn-row" data-crm-tahap="${esc(tp)}"><span class="fn-l">${esc(tp)}</span><span class="fn-bar"><i class="${CRM_TAHAP_CLS[tp]}" style="width:${Math.max(ls.length ? 4 : 0, ls.length / maxCnt * 100)}%"></i></span><b class="fn-n">${ls.length}</b><span class="fn-v mono">${n ? rp(n) : '—'}</span></button>`;
   }).join('');
   const per30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
-  const sales = (S.d.crmUsers || []).map(u => {
+  const sales = (S.d.crmUsers || []).filter(u => !isSales() || u.email === S.me.email).map(u => {
     const ls = (S.d.crmLeads || []).filter(l => l.PICEmail === u.email);
     return { u, aktif: ls.filter(crmAktifLead).length, nilai: ls.filter(crmAktifLead).reduce((s, l) => s + num(l.EstimasiNilai), 0),
       akt: (S.d.crmActivity || []).filter(a => a.PICEmail === u.email && a.Jenis !== 'Perubahan tahap' && String(a.Tanggal) >= per30).length,
@@ -4960,6 +4995,7 @@ function renderCrm() {
       <button class="btn btn-primary" data-crm-new="lead"><i class="bi bi-plus-lg"></i> Lead baru</button>
     </div>
   </div>
+  ${kartuTargetSales()}
   <div class="kpis">
     ${kpi('Lead aktif', aktif.length + '<small>peluang</small>', 'bi-funnel', 'ic-indigo', `${tanpaJadwal ? `<span class="badge b-amber plain">${tanpaJadwal} tanpa jadwal follow-up</span>` : 'Semua punya jadwal follow-up'}`)}
     ${kpi('Nilai pipeline', `<span class="mono" style="font-size:.8em">${rp(nilaiAktif)}</span>`, 'bi-cash-stack', 'ic-primary', 'Estimasi nilai lead aktif')}
@@ -5481,6 +5517,466 @@ function openKeluhanDetail(id) {
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-klh]'); if (b) { e.preventDefault(); openKeluhanDetail(b.dataset.klh); return; }
   if (e.target.closest('[data-klh-new]')) openKeluhanForm(null);
+});
+
+// ============================================================
+// KINERJA SALES (target bulanan) · KINERJA CS · SURAT MENYURAT · DAFTAR HARGA
+// ============================================================
+const BULAN_ID = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+const periodeLabel = p => { const [y, m] = String(p).split('-'); return BULAN_ID[Number(m) - 1] + ' ' + y; };
+const periodeGeser = (p, n) => { const [y, m] = String(p).split('-').map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); return d.toISOString().slice(0, 7); };
+function periodeOpts(sel, mundur) {
+  const now = today().slice(0, 7), out = [];
+  for (let i = -1; i < (mundur || 12); i++) out.push(periodeGeser(now, -i));
+  return out.map(p => `<option value="${p}" ${p === sel ? 'selected' : ''}>${periodeLabel(p)}</option>`).join('');
+}
+function masaKerja(sejak) {
+  if (!sejak) return { bln: null, teks: '—' };
+  const a = new Date(sejak + 'T00:00:00'), b = new Date(today() + 'T00:00:00');
+  const bln = Math.max(0, (b.getFullYear() - a.getFullYear()) * 12 + b.getMonth() - a.getMonth());
+  return { bln, teks: bln < 1 ? '< 1 bulan' : bln < 12 ? bln + ' bulan' : Math.floor(bln / 12) + ' th ' + (bln % 12 ? (bln % 12) + ' bln' : '') };
+}
+/** Bagian bulan yang sudah berjalan (0–1) untuk mengukur "sesuai jalur" target. */
+function lajuBulan(p) {
+  const now = today(); if (p < now.slice(0, 7)) return 1; if (p > now.slice(0, 7)) return 0;
+  const [y, m] = p.split('-').map(Number); const hari = new Date(y, m, 0).getDate();
+  return Number(now.slice(8, 10)) / hari;
+}
+const KONTAK_JENIS = ['Telepon', 'WhatsApp', 'Email', 'Meeting', 'Kunjungan', 'Kirim Penawaran', 'Follow-up', 'Lainnya'];
+const METRIK = [
+  { k: 'Nilai', t: 'TargetNilai', l: 'Nilai deal', ic: 'bi-cash-stack', uang: true },
+  { k: 'Deal', t: 'TargetDeal', l: 'Jumlah deal', ic: 'bi-trophy' },
+  { k: 'Perusahaan', t: 'TargetPerusahaan', l: 'Perusahaan dihubungi', ic: 'bi-buildings' },
+  { k: 'Aktivitas', t: 'TargetAktivitas', l: 'Aktivitas', ic: 'bi-telephone-outbound' }
+];
+function capaianSales(email, p) {
+  const leads = (S.d.crmLeads || []).filter(l => l.PICEmail === email);
+  const deal = leads.filter(l => l.Tahap === 'Deal' && String(l.TanggalTutup).slice(0, 7) === p);
+  const akt = (S.d.crmActivity || []).filter(a => a.PICEmail === email && String(a.Tanggal).slice(0, 7) === p && KONTAK_JENIS.includes(a.Jenis));
+  const t = (S.d.targetSales || []).find(x => x.Email === email && x.Periode === p) || null;
+  const real = { Nilai: deal.reduce((s, l) => s + num(l.EstimasiNilai), 0), Deal: deal.length, Perusahaan: new Set(akt.map(a => a.CompanyID)).size, Aktivitas: akt.length };
+  const pct = {}; let tot = 0, n = 0;
+  METRIK.forEach(m => { const tg = t ? num(t[m.t]) : 0; if (tg > 0) { pct[m.k] = Math.round(real[m.k] / tg * 100); tot += Math.min(100, pct[m.k]); n++; } });
+  const skor = n ? Math.round(tot / n) : null, laju = lajuBulan(p);
+  const status = skor === null ? 'Belum ada target' : skor >= 100 ? 'Tercapai' : skor >= laju * 100 * 0.9 ? 'Sesuai jalur' : 'Tertinggal';
+  const telat = leads.filter(l => crmAktifLead(l) && l.NextFollowup && l.NextFollowup < today()).length;
+  const tanpaJadwal = leads.filter(l => crmAktifLead(l) && !l.NextFollowup).length;
+  const tahapAkhir = leads.filter(l => ['Penawaran Dikirim', 'Negosiasi'].includes(l.Tahap)).length;
+  return { real, pct, t, skor, status, laju, telat, tanpaJadwal, tahapAkhir, aktifLead: leads.filter(crmAktifLead).length };
+}
+/** Berapa sales tertinggal target bulan ini (untuk Sales: 1 bila dirinya tertinggal). */
+function targetTertinggal() {
+  const p = today().slice(0, 7);
+  if (isSales()) return capaianSales(S.me.email, p).status === 'Tertinggal' ? 1 : 0;
+  if (isCS()) return 0;
+  return (S.d.crmUsers || []).filter(u => u.peran === 'SALES' && capaianSales(u.email, p).status === 'Tertinggal').length;
+}
+function rekomSales(c, p) {
+  const r = [], sisaHari = p === today().slice(0, 7) ? Math.max(1, new Date(...p.split('-').map((v, i) => i ? Number(v) : Number(v)), 0).getDate() - Number(today().slice(8, 10)) + 1) : 0;
+  if (!c.t) return ['Belum ada target untuk bulan ini. Super Admin dapat mengaturnya lewat tombol "Atur target".'];
+  if (c.pct.Aktivitas >= 100 && (c.pct.Deal || 0) < 60) r.push(`Aktivitas sudah banyak tetapi deal masih rendah. Fokus menutup ${c.tahapAkhir} lead di tahap Penawaran/Negosiasi.`);
+  if (c.t && num(c.t.TargetPerusahaan) > c.real.Perusahaan && sisaHari) { const kurang = num(c.t.TargetPerusahaan) - c.real.Perusahaan; r.push(`Masih perlu menghubungi ${kurang} perusahaan lagi, sekitar ${Math.ceil(kurang / sisaHari)} per hari.`); }
+  if (c.t && num(c.t.TargetAktivitas) > c.real.Aktivitas && sisaHari) { const kurang = num(c.t.TargetAktivitas) - c.real.Aktivitas; r.push(`Kurang ${kurang} aktivitas (telepon/WA/kunjungan), sekitar ${Math.ceil(kurang / sisaHari)} per hari.`); }
+  if ((c.pct.Deal || 0) >= 100 && (c.pct.Nilai || 100) < 70) r.push('Jumlah deal tercapai tetapi nilainya kecil. Tawarkan layanan rutin/bulanan agar nilai per customer naik.');
+  if (c.telat) r.push(`${c.telat} lead terlambat di-follow-up. Hubungi hari ini sebelum lead dingin.`);
+  if (c.tanpaJadwal) r.push(`${c.tanpaJadwal} lead aktif belum punya jadwal follow-up.`);
+  if (!r.length && c.skor >= 100) r.push('Semua target tercapai. Pertahankan, dan bagikan cara kerja ke tim.');
+  if (!r.length) r.push('Sesuai jalur. Jaga ritme aktivitas harian.');
+  return r;
+}
+function barPct(v, laju) {
+  if (v === undefined) return '<span class="muted">—</span>';
+  const cls = v >= 100 ? 'ok' : laju !== undefined && v < laju * 100 * 0.9 ? 'bad' : 'mid';
+  return `<div class="pbar ${cls}"><i style="width:${Math.min(100, v)}%"></i>${laju !== undefined && laju < 1 ? `<s style="left:${laju * 100}%"></s>` : ''}</div><small>${v}%</small>`;
+}
+const STATUS_TGT_CLS = { Tercapai: 'b-green', 'Sesuai jalur': 'b-primary', Tertinggal: 'b-red', 'Belum ada target': 'b-slate' };
+
+/** Kartu target di Dashboard CRM (untuk Sales: miliknya; untuk staf: ringkasan tim). */
+function kartuTargetSales() {
+  const p = today().slice(0, 7);
+  if (isSales()) {
+    const c = capaianSales(S.me.email, p);
+    if (!c.t) return '';
+    return `<div class="card tgt-card ${c.status === 'Tertinggal' ? 'is-bad' : ''}"><div class="card-title-row"><div><h3><i class="bi bi-bullseye"></i> Target ${periodeLabel(p)}</h3><p class="muted">Bulan berjalan ${Math.round(c.laju * 100)}% · skor ${c.skor}%</p></div><span class="badge ${STATUS_TGT_CLS[c.status]}">${c.status}</span></div>
+      <div class="tgt-grid">${METRIK.map(m => `<div><small>${m.l}</small><b class="${m.uang ? 'mono' : ''}">${m.uang ? rp(c.real[m.k]) : c.real[m.k]} <span class="muted">/ ${m.uang ? rp(c.t[m.t]) : num(c.t[m.t])}</span></b>${barPct(c.pct[m.k], c.laju)}</div>`).join('')}</div>
+      <ul class="rekom">${rekomSales(c, p).slice(0, 3).map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`;
+  }
+  const n = targetTertinggal();
+  return n ? `<div class="alert alert-warning"><i class="bi bi-bullseye"></i><div><b>${n} sales tertinggal target bulan ini.</b> Lihat <a href="javascript:void(0)" data-go="crm-kinerja">Kinerja Sales</a>.</div></div>` : '';
+}
+
+function renderSalesKinerja() {
+  const el = $('#page-crm-kinerja'), st = S.ui.kin = S.ui.kin || { p: today().slice(0, 7) };
+  const p = st.p, sales = (S.d.crmUsers || []).filter(u => u.peran === 'SALES' && (!isSales() || u.email === S.me.email));
+  const rows = sales.map(u => ({ u, c: capaianSales(u.email, p), mk: masaKerja(u.sejak) })).sort((a, b) => (b.c.skor ?? -1) - (a.c.skor ?? -1));
+  const tim = METRIK.map(m => ({ m, real: rows.reduce((s, x) => s + x.c.real[m.k], 0), tgt: rows.reduce((s, x) => s + (x.c.t ? num(x.c.t[m.t]) : 0), 0) }));
+  el.innerHTML = `
+  <div class="hero"><div class="grow"><h1>Kinerja Sales</h1><p>Capaian per sales dibanding target bulanan: nilai deal, jumlah deal, perusahaan dihubungi, dan aktivitas.</p></div>
+    <div class="hero-actions"><select class="input" id="kinP" style="min-width:170px">${periodeOpts(p)}</select>${isSA() ? '<button class="btn btn-primary" id="kinSet"><i class="bi bi-bullseye"></i> Atur target</button>' : ''}</div></div>
+  ${isSales() ? '' : `<div class="kpis">${tim.map(x => kpi('Tim · ' + x.m.l, `<span class="${x.m.uang ? 'mono' : ''}" style="${x.m.uang ? 'font-size:.75em' : ''}">${x.m.uang ? rp(x.real) : x.real}</span>`, x.m.ic, 'ic-primary', x.tgt ? 'Target ' + (x.m.uang ? rp(x.tgt) : x.tgt) + ' · ' + Math.round(x.real / x.tgt * 100) + '%' : 'Belum ada target')).join('')}</div>`}
+  ${rows.length ? `<div class="table-card"><div class="table-wrap"><table class="table cards kin-t"><thead><tr><th>Sales</th><th>Nilai deal</th><th>Jumlah deal</th><th>Perusahaan</th><th>Aktivitas</th><th>Skor</th></tr></thead><tbody>
+    ${rows.map(({ u, c, mk }) => `<tr class="clickable" data-kin="${esc(u.email)}"><td class="card-title" data-label="Sales"><b>${esc(u.nama)}</b><span class="t-sub">Masa kerja ${esc(mk.teks)} · ${c.aktifLead} lead aktif</span></td>
+      ${METRIK.map(m => `<td data-label="${m.l}"><span class="${m.uang ? 'mono' : ''}">${m.uang ? rp(c.real[m.k]) : c.real[m.k]}</span>${c.t && num(c.t[m.t]) ? `<span class="t-sub">/ ${m.uang ? rp(c.t[m.t]) : num(c.t[m.t])}</span>` : ''}${barPct(c.pct[m.k], c.laju)}</td>`).join('')}
+      <td data-label="Skor"><b style="font-size:16px">${c.skor === null ? '—' : c.skor + '%'}</b><br><span class="badge ${STATUS_TGT_CLS[c.status]}">${c.status}</span></td></tr>`).join('')}
+  </tbody></table></div></div>` : `<div class="card">${emptyHTML('bi-people', 'Belum ada akun Sales', 'Tambahkan pengguna berperan Sales di Pengaturan → Kelola akun.')}</div>`}
+  <p class="muted mt" style="font-size:12.5px">Skor = rata-rata capaian keempat target (maks. 100% per target). Garis tipis pada bar = posisi hari ini dalam bulan; di bawah 90% dari posisi itu dianggap tertinggal. Perusahaan & aktivitas dihitung dari Riwayat Aktivitas (telepon, WA, email, meeting, kunjungan, penawaran, follow-up).</p>
+  <div id="kinDetail"></div>`;
+  $('#kinP').onchange = e => { st.p = e.target.value; renderSalesKinerja(); };
+  if ($('#kinSet')) $('#kinSet').onclick = () => openTargetModal(p);
+  const detail = email => {
+    const u = sales.find(x => x.email === email), c = capaianSales(email, p);
+    $('#kinDetail').innerHTML = `<div class="card mt"><div class="card-title-row"><div><h3>Rekomendasi untuk ${esc(u.nama)}</h3><p class="muted">${periodeLabel(p)}${c.t && c.t.Catatan ? ' · Catatan target: ' + esc(c.t.Catatan) : ''}</p></div><button class="btn btn-secondary btn-sm" id="kinLeads"><i class="bi bi-funnel"></i> Lihat lead</button></div>
+      <ul class="rekom">${rekomSales(c, p).map(x => `<li>${esc(x)}</li>`).join('')}${!isSales() && masaKerja(u.sejak).bln !== null && masaKerja(u.sejak).bln < 3 ? '<li>Sales baru (&lt; 3 bulan): sebaiknya target bertahap & didampingi saat kunjungan.</li>' : ''}</ul></div>`;
+    $('#kinLeads').onclick = () => { S.ui.crmLeads = Object.assign(S.ui.crmLeads || {}, { pic: email, view: 'tabel', tahap: '' }); navigateTo('crm-leads'); };
+  };
+  el.querySelectorAll('[data-kin]').forEach(tr => tr.onclick = () => detail(tr.dataset.kin));
+  if (rows.length === 1 || isSales()) rows.length && detail(rows[0].u.email);
+}
+function openTargetModal(p) {
+  const sales = (S.d.crmUsers || []).filter(u => u.peran === 'SALES');
+  if (!sales.length) return toast('warning', 'Belum ada akun Sales');
+  const tg = email => (S.d.targetSales || []).find(x => x.Email === email && x.Periode === p) || {};
+  const val = v => num(v) ? num(v).toLocaleString('id-ID') : '';
+  openModal({ title: 'Atur target ' + periodeLabel(p), sub: 'Target per sales bisa berbeda, misalnya sesuai masa kerja', icon: 'bi-bullseye', size: 'lg',
+    body: `<div class="tgt-base"><b>Bantu isi sesuai masa kerja</b><p class="muted">Isi target untuk sales senior (≥ 12 bulan), lalu klik Terapkan: sales 3–12 bulan mendapat 75%, sales &lt; 3 bulan 50%.</p>
+      <div class="tgt-row">${METRIK.map(m => `<label class="field"><span class="label">${m.l}</span><input class="input t-right ${m.uang ? 'mono' : ''}" data-base="${m.t}" inputmode="numeric" ${m.uang ? 'data-money' : ''}></label>`).join('')}</div>
+      <div class="chips-row"><button type="button" class="btn btn-secondary btn-sm" id="tgtApply"><i class="bi bi-magic"></i> Terapkan sesuai masa kerja</button><button type="button" class="btn btn-ghost btn-sm" id="tgtCopy"><i class="bi bi-clipboard"></i> Salin dari ${periodeLabel(periodeGeser(p, -1))}</button></div></div>
+      <div class="table-wrap"><table class="table tgt-table"><thead><tr><th>Sales</th>${METRIK.map(m => `<th>${m.l}</th>`).join('')}<th>Catatan</th></tr></thead><tbody>
+      ${sales.map(u => { const t = tg(u.email), mk = masaKerja(u.sejak); return `<tr data-tgt="${esc(u.email)}" data-bln="${mk.bln === null ? 12 : mk.bln}"><td><b>${esc(u.nama)}</b><span class="t-sub">${esc(mk.teks)}</span></td>
+        ${METRIK.map(m => `<td><input class="input t-right ${m.uang ? 'mono' : ''}" data-f="${m.t}" inputmode="numeric" ${m.uang ? 'data-money' : ''} value="${val(t[m.t])}"></td>`).join('')}
+        <td><input class="input" data-f="Catatan" maxlength="300" value="${esc(t.Catatan || '')}"></td></tr>`; }).join('')}
+      </tbody></table></div>`,
+    foot: '<button class="btn btn-secondary" data-close>Batal</button><button class="btn btn-primary" id="tgtSave"><i class="bi bi-check2"></i> Simpan target</button>' });
+  const body = $('#modalBody');
+  body.querySelectorAll('[data-money]').forEach(i => i.addEventListener('input', () => formatMoneyInput(i)));
+  const isi = (tr, k, v) => { const i = tr.querySelector(`[data-f="${k}"]`); i.value = v ? Math.round(v).toLocaleString('id-ID') : ''; };
+  $('#tgtApply').onclick = () => body.querySelectorAll('[data-tgt]').forEach(tr => {
+    const b = Number(tr.dataset.bln), f = b >= 12 ? 1 : b >= 3 ? .75 : .5;
+    METRIK.forEach(m => { const base = num(body.querySelector(`[data-base="${m.t}"]`).value); if (base) isi(tr, m.t, base * f); });
+  });
+  $('#tgtCopy').onclick = () => { const pp = periodeGeser(p, -1); let n = 0; body.querySelectorAll('[data-tgt]').forEach(tr => { const t = (S.d.targetSales || []).find(x => x.Email === tr.dataset.tgt && x.Periode === pp); if (t) { n++; METRIK.forEach(m => isi(tr, m.t, num(t[m.t]))); tr.querySelector('[data-f=Catatan]').value = t.Catatan || ''; } }); toast(n ? 'success' : 'info', n ? 'Target disalin' : 'Bulan lalu belum ada target'); };
+  $('#tgtSave').onclick = () => {
+    const list = $$('[data-tgt]', body).map(tr => { const o = { Email: tr.dataset.tgt, Catatan: tr.querySelector('[data-f=Catatan]').value }; METRIK.forEach(m => { o[m.t] = num(tr.querySelector(`[data-f="${m.t}"]`).value); }); return o; });
+    const b = $('#tgtSave'); btnBusy(b, true, 'Menyimpan…');
+    api('saveTargetSales', S.token, p, list).then(r => { r.data.forEach(t => upsert('targetSales', t)); saveCache(); updateBadges(); ok(r.message); closeModal(); renderPage(S.page); }).catch(fail).finally(() => btnBusy(b, false));
+  };
+}
+
+// ── Kinerja Customer Service ──
+function capaianCs(u, p) {
+  const k = (S.d.keluhan || []).filter(x => x.PICEmail === u.email);
+  const masuk = k.filter(x => String(x.Tanggal).slice(0, 7) === p);
+  const selesai = k.filter(x => x.Status === 'Selesai' && String(x.TanggalSelesai).slice(0, 7) === p);
+  const tepat = selesai.filter(x => String(x.TanggalSelesai) <= String(x.BatasWaktu)).length;
+  const jam = selesai.length ? selesai.reduce((s, x) => s + klhJam(x.Tanggal, x.TanggalSelesai), 0) / selesai.length : null;
+  const buka = k.filter(klhTerbuka), telat = k.filter(klhTelat);
+  const balas = (S.d.keluhanLog || []).filter(l => l.OlehEmail === u.email && l.Jenis === 'Balasan' && String(l.Waktu).slice(0, 7) === p).length;
+  const pty = (S.d.pertanyaan || []).filter(q => q.DitanganiOleh === u.nama && String(q.DiubahPada).slice(0, 7) === p).length;
+  const ditangani = new Set(masuk.map(x => x.ID).concat(selesai.map(x => x.ID))).size;
+  return { masuk: masuk.length, ditangani, selesai: selesai.length, tepat, pTepat: selesai.length ? Math.round(tepat / selesai.length * 100) : null,
+    pSelesai: ditangani ? Math.round(selesai.length / ditangani * 100) : null, jam, buka: buka.length, telat: telat.length, balas, pty };
+}
+function rekomCs(rows, p) {
+  const r = [], all = (S.d.keluhan || []);
+  const tanpaPic = all.filter(k => klhTerbuka(k) && !k.PICEmail).length;
+  if (tanpaPic) r.push(`${tanpaPic} keluhan terbuka belum punya petugas (PIC). Bagikan agar tidak terlewat.`);
+  rows.filter(x => x.c.telat).forEach(x => r.push(`${x.u.nama} memegang ${x.c.telat} keluhan lewat batas waktu. Bantu atau alihkan ke petugas lain.`));
+  rows.filter(x => x.c.pTepat !== null && x.c.pTepat < 80).forEach(x => r.push(`Ketepatan waktu ${x.u.nama} ${x.c.pTepat}% (di bawah 80%). Cek apakah hambatan ada di operasional atau di petugas.`));
+  rows.filter(x => x.c.selesai && !x.c.balas).forEach(x => r.push(`${x.u.nama} belum pernah mengirim balasan publik bulan ini. Kabari pelanggan lewat balasan agar mereka tidak menunggu tanpa kabar.`));
+  const bln = all.filter(k => String(k.Tanggal).slice(0, 7) === p);
+  if (bln.length >= 3) {
+    const per = {}; bln.forEach(k => { per[k.Kategori] = (per[k.Kategori] || 0) + 1; });
+    const [kat, n] = Object.entries(per).sort((a, b) => b[1] - a[1])[0];
+    if (n / bln.length >= .35) r.push(`${Math.round(n / bln.length * 100)}% keluhan ${periodeLabel(p)} adalah "${kat}". Sampaikan ke tim operasional untuk mencari akar masalahnya.`);
+  }
+  if (!r.length) r.push('Penanganan keluhan bulan ini baik. Pertahankan respons cepat dan balasan ke pelanggan.');
+  return r;
+}
+function renderCsKinerja() {
+  const el = $('#page-cs-kinerja'), st = S.ui.csk = S.ui.csk || { p: today().slice(0, 7) }, p = st.p;
+  const users = (S.d.csUsers || []).filter(u => !isCS() || u.email === S.me.email);
+  const rows = users.map(u => ({ u, c: capaianCs(u, p), mk: masaKerja(u.sejak) })).filter(x => x.u.peran === 'CS' || x.c.ditangani || x.c.buka || x.c.pty)
+    .sort((a, b) => b.c.selesai - a.c.selesai || b.c.ditangani - a.c.ditangani);
+  const tot = rows.reduce((s, x) => ({ d: s.d + x.c.ditangani, s: s.s + x.c.selesai, t: s.t + x.c.tepat, b: s.b + x.c.buka, l: s.l + x.c.telat }), { d: 0, s: 0, t: 0, b: 0, l: 0 });
+  el.innerHTML = `
+  <div class="hero"><div class="grow"><h1>Kinerja Customer Service</h1><p>Berapa pelanggan yang dibantu tiap petugas, dan apakah masalahnya terselesaikan tepat waktu.</p></div>
+    <div class="hero-actions"><select class="input" id="cskP" style="min-width:170px">${periodeOpts(p)}</select></div></div>
+  <div class="kpis">
+    ${kpi('Keluhan ditangani', tot.d + '<small>keluhan</small>', 'bi-people', 'ic-indigo', periodeLabel(p))}
+    ${kpi('Terselesaikan', tot.s + '<small>keluhan</small>', 'bi-check2-circle', 'ic-green', tot.d ? Math.round(tot.s / tot.d * 100) + '% dari yang ditangani' : '—')}
+    ${kpi('Tepat waktu', tot.s ? Math.round(tot.t / tot.s * 100) + '<small>%</small>' : '—', 'bi-speedometer', 'ic-amber', tot.t + ' dari ' + tot.s + ' selesai')}
+    ${kpi('Masih terbuka', tot.b + '<small>keluhan</small>', 'bi-alarm', 'ic-red', tot.l ? `<span class="badge b-red">${tot.l} lewat SLA</span>` : 'Tidak ada yang lewat SLA')}
+  </div>
+  ${rows.length ? `<div class="table-card"><div class="table-wrap"><table class="table cards"><thead><tr><th>Petugas</th><th class="t-right">Dibantu</th><th class="t-right">Selesai</th><th>Terselesaikan</th><th>Tepat waktu</th><th class="t-right">Rata-rata selesai</th><th class="t-right">Terbuka / lewat SLA</th><th class="t-right">Balasan · Pertanyaan web</th></tr></thead><tbody>
+    ${rows.map(({ u, c, mk }) => `<tr class="clickable" data-csk="${esc(u.email)}"><td class="card-title" data-label="Petugas"><b>${esc(u.nama)}</b><span class="t-sub">${u.peran === 'CS' ? 'Customer Service' : peranTeks(u.peran)} · ${esc(mk.teks)}</span></td>
+      <td class="t-right" data-label="Dibantu"><b>${c.ditangani}</b></td><td class="t-right" data-label="Selesai">${c.selesai}</td>
+      <td data-label="Terselesaikan">${c.pSelesai === null ? '<span class="muted">—</span>' : barPct(c.pSelesai)}</td><td data-label="Tepat waktu">${c.pTepat === null ? '<span class="muted">—</span>' : barPct(c.pTepat)}</td>
+      <td class="t-right" data-label="Rata-rata">${c.jam === null ? '—' : c.jam >= 24 ? (c.jam / 24).toFixed(1) + ' hari' : c.jam.toFixed(1) + ' jam'}</td>
+      <td class="t-right" data-label="Terbuka">${c.buka}${c.telat ? ` <span class="badge b-red plain">${c.telat}</span>` : ''}</td><td class="t-right" data-label="Balasan">${c.balas} · ${c.pty}</td></tr>`).join('')}
+  </tbody></table></div></div>` : `<div class="card">${emptyHTML('bi-person-check', 'Belum ada data', 'Tambahkan akun Customer Service di Pengaturan → Kelola akun.')}</div>`}
+  <div class="card mt"><div class="card-title-row"><div><h3><i class="bi bi-lightbulb"></i> Rekomendasi</h3><p class="muted">${periodeLabel(p)}</p></div></div><ul class="rekom">${rekomCs(rows, p).map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`;
+  $('#cskP').onchange = e => { st.p = e.target.value; renderCsKinerja(); };
+  el.querySelectorAll('[data-csk]').forEach(tr => tr.onclick = () => { S.ui.klh = Object.assign(S.ui.klh || {}, { pic: tr.dataset.csk, f: 'semua', q: '', kat: '' }); navigateTo('keluhan'); });
+}
+
+// ── Daftar Harga ──
+const HARGA_LAYANAN = ['Pengiriman Barang', 'Pengiriman Mobil & Alat Berat', 'Sewa Kendaraan', 'Lainnya'];
+const HARGA_SATUAN = ['per trip', 'per unit', 'per kg', 'per m³', 'per koli', 'per hari', 'per bulan'];
+function renderHarga() {
+  const el = $('#page-harga'), st = S.ui.hrg = S.ui.hrg || { ly: '', q: '' }, list = S.d.harga || [];
+  el.innerHTML = `<div class="page-head"><div class="ph-icon"><i class="bi bi-tags"></i></div><div class="grow"><h1>Daftar Harga</h1><p class="muted">Harga standar per layanan & rute. Dipakai saat membuat Rate Card atau Surat Penawaran Harga${isSA() ? '' : ' (hanya Super Admin yang dapat mengubah)'}.</p></div>
+    ${isSA() ? '<button class="btn btn-primary" id="hrgAdd"><i class="bi bi-plus-lg"></i> Tambah harga</button>' : ''}</div>
+  <div class="card" style="margin-bottom:16px"><div class="toolbar"><div class="search grow"><i class="bi bi-search"></i><input class="input" id="hrgQ" placeholder="Cari rute, kota, armada…" value="${esc(st.q)}"></div>
+    <select class="input" id="hrgLy" style="max-width:260px">${crmOpts(HARGA_LAYANAN, st.ly, 'Semua layanan')}</select>
+    <button class="btn btn-secondary" data-surat-new="RC"><i class="bi bi-file-earmark-spreadsheet"></i> Buat rate card</button></div></div>
+  <div class="table-card" id="hrgList"></div>`;
+  const draw = () => {
+    const q = st.q.trim().toLowerCase();
+    const ls = list.filter(h => (!st.ly || h.Layanan === st.ly) && (!q || [h.Asal, h.Tujuan, h.Armada, h.Keterangan].join(' ').toLowerCase().includes(q)))
+      .sort((a, b) => String(a.Layanan + a.Tujuan + a.Armada).localeCompare(String(b.Layanan + b.Tujuan + b.Armada)));
+    $('#hrgList').innerHTML = ls.length ? `<div class="table-wrap"><table class="table cards"><thead><tr><th>Layanan</th><th>Rute</th><th>Armada / jenis</th><th class="t-right">Harga</th><th>Keterangan</th>${isSA() ? '<th class="t-actions">Aksi</th>' : ''}</tr></thead><tbody>
+      ${ls.map(h => `<tr class="${String(h.Aktif) === 'false' ? 'row-muted' : ''}"><td data-label="Layanan">${esc(h.Layanan)}</td><td class="card-title" data-label="Rute"><b>${esc([h.Asal, h.Tujuan].filter(Boolean).join(' → ') || '—')}</b></td><td data-label="Armada">${esc(h.Armada || '—')}</td>
+        <td class="t-right mono" data-label="Harga"><b>${rp(h.Harga)}</b><span class="t-sub">${esc(h.Satuan)}</span></td><td data-label="Keterangan">${esc(h.Keterangan || '')}${String(h.Aktif) === 'false' ? ' <span class="badge b-slate">Nonaktif</span>' : ''}</td>
+        ${isSA() ? `<td class="t-actions"><button class="icon-btn" data-hrg="${esc(h.ID)}" title="Ubah"><i class="bi bi-pencil"></i></button></td>` : ''}</tr>`).join('')}
+    </tbody></table></div>` : `<div style="padding:20px">${emptyHTML('bi-tags', 'Belum ada daftar harga', isSA() ? 'Tambahkan harga standar per rute dan armada.' : 'Super Admin belum mengisi daftar harga.')}</div>`;
+  };
+  $('#hrgQ').addEventListener('input', debounce(e => { st.q = e.target.value; draw(); }, 120));
+  $('#hrgLy').onchange = e => { st.ly = e.target.value; draw(); };
+  if ($('#hrgAdd')) $('#hrgAdd').onclick = () => openHargaForm(null);
+  $('#hrgList').onclick = e => { const b = e.target.closest('[data-hrg]'); if (b) openHargaForm((S.d.harga || []).find(h => h.ID === b.dataset.hrg)); };
+  draw();
+}
+function openHargaForm(h) {
+  const d = Object.assign({ Layanan: 'Pengiriman Barang', Satuan: 'per trip', Aktif: 'true' }, h || {});
+  openModal({ title: h ? 'Ubah harga' : 'Tambah harga', icon: 'bi-tags', size: 'lg',
+    body: `<form id="hrgForm" novalidate><div class="grid-2">
+      <label class="field"><span class="label req">Layanan</span><select class="input" name="Layanan">${crmOpts(HARGA_LAYANAN, d.Layanan)}</select></label>
+      <label class="field"><span class="label">Armada / jenis</span><input class="input" name="Armada" maxlength="80" value="${esc(d.Armada || '')}" placeholder="mis. CDD Box, Car carrier, Paket reguler"></label>
+      <label class="field"><span class="label">Asal</span><input class="input" name="Asal" maxlength="80" value="${esc(d.Asal || '')}" placeholder="mis. Jakarta"></label>
+      <label class="field"><span class="label">Tujuan</span><input class="input" name="Tujuan" maxlength="80" value="${esc(d.Tujuan || '')}" placeholder="mis. Medan"></label>
+      <label class="field"><span class="label req">Harga (Rp)</span><input class="input t-right mono" name="Harga" inputmode="numeric" data-money value="${num(d.Harga) ? num(d.Harga).toLocaleString('id-ID') : ''}"></label>
+      <label class="field"><span class="label">Satuan</span><input class="input" name="Satuan" list="dlSatuan" maxlength="30" value="${esc(d.Satuan)}"><datalist id="dlSatuan">${HARGA_SATUAN.map(x => `<option>${x}</option>`).join('')}</datalist></label>
+      <label class="field full"><span class="label">Keterangan</span><input class="input" name="Keterangan" maxlength="300" value="${esc(d.Keterangan || '')}" placeholder="mis. Min. 100 kg, belum termasuk asuransi"></label>
+      <label class="field"><span class="label">Status</span><select class="input" name="Aktif"><option value="true" ${String(d.Aktif) !== 'false' ? 'selected' : ''}>Aktif</option><option value="false" ${String(d.Aktif) === 'false' ? 'selected' : ''}>Nonaktif</option></select></label>
+    </div></form>`,
+    foot: `${h ? '<button class="btn btn-ghost" id="hrgDel" style="margin-right:auto;color:var(--red)"><i class="bi bi-trash"></i> Hapus</button>' : ''}<button class="btn btn-secondary" data-close>Batal</button><button class="btn btn-primary" id="hrgSave"><i class="bi bi-check2"></i> Simpan</button>` });
+  $('#hrgForm [data-money]').addEventListener('input', e => formatMoneyInput(e.target));
+  $('#hrgSave').onclick = () => {
+    const v = formValues($('#hrgForm')); v.Harga = num(v.Harga); if (h) v.ID = h.ID;
+    const b = $('#hrgSave'); btnBusy(b, true, 'Menyimpan…');
+    api('saveHarga', S.token, v).then(r => { upsert('harga', r.data); saveCache(); ok(r.message); closeModal(); renderHarga(); }).catch(fail).finally(() => btnBusy(b, false));
+  };
+  if ($('#hrgDel')) $('#hrgDel').onclick = () => confirmDialog({ title: 'Hapus harga ini?', variant: 'danger', icon: 'bi-trash', ok: 'Hapus' }).then(v => {
+    if (v !== true) return;
+    api('deleteHarga', S.token, h.ID).then(r => { removeFrom('harga', h.ID); saveCache(); ok(r.message); closeModal(); renderHarga(); }).catch(fail);
+  });
+}
+
+// ── Surat menyurat ──
+const SURAT_JENIS = { SPH: 'Surat Penawaran Harga', RC: 'Rate Card / Daftar Harga', SP: 'Surat Pemberitahuan', SK: 'Surat Keterangan', SU: 'Surat Undangan', ST: 'Surat Tagihan', UM: 'Surat Umum' };
+const SURAT_STATUS_CLS = { Draft: 'b-slate', 'Menunggu Persetujuan': 'b-amber', Disetujui: 'b-green', Ditolak: 'b-red', Diarsipkan: 'b-slate' };
+function suratTemplate(j, kepada) {
+  const st = S.settings || {}, nm = st.companyName || st.appName || 'kami';
+  const salam = 'Dengan hormat,\n\n';
+  const t = {
+    SPH: ['Penawaran Harga Jasa Pengiriman', salam + `Bersama surat ini, ${nm} bermaksud mengajukan penawaran harga jasa pengiriman/transportasi untuk kebutuhan ${kepada || 'Bapak/Ibu'}. Rincian harga terlampir pada tabel di bawah ini.\n\nHarga belum termasuk asuransi dan biaya bongkar muat, kecuali disebutkan lain. Penawaran ini berlaku 30 hari sejak tanggal surat.`],
+    RC: ['Daftar Harga (Rate Card)', salam + `Berikut kami sampaikan daftar harga layanan ${nm} yang berlaku saat ini.`],
+    SP: ['Pemberitahuan', salam + 'Melalui surat ini kami memberitahukan bahwa …'],
+    SK: ['Surat Keterangan', 'Yang bertanda tangan di bawah ini menerangkan bahwa …'],
+    SU: ['Undangan', salam + 'Dengan ini kami mengundang Bapak/Ibu untuk hadir pada:\n\nHari/tanggal : …\nWaktu : …\nTempat : …\nAcara : …'],
+    ST: ['Pemberitahuan Tagihan', salam + 'Bersama surat ini kami sampaikan tagihan atas layanan yang telah kami berikan dengan rincian sebagai berikut: …'],
+    UM: ['', salam]
+  }[j] || ['', salam];
+  return { Perihal: t[0], Isi: t[1], Penutup: 'Demikian surat ini kami sampaikan. Atas perhatian dan kerja samanya, kami ucapkan terima kasih.' };
+}
+function renderSurat() {
+  const el = $('#page-surat'), st = S.ui.srt = S.ui.srt || { f: isSA() ? 'Menunggu Persetujuan' : 'aktif', q: '', j: '' };
+  const all = S.d.surat || [];
+  const chips = [['aktif', 'Semua aktif', x => x.Status !== 'Diarsipkan'], ['Draft', 'Draft'], ['Menunggu Persetujuan', 'Menunggu persetujuan'], ['Disetujui', 'Disetujui'], ['Ditolak', 'Ditolak'], ['Diarsipkan', 'Arsip']]
+    .map(c => [c[0], c[1], c[2] || (x => x.Status === c[0])]);
+  if (st.f === 'Menunggu Persetujuan' && !all.some(x => x.Status === st.f)) st.f = 'aktif';
+  el.innerHTML = `
+  <div class="page-head"><div class="ph-icon"><i class="bi bi-envelope-paper"></i></div><div class="grow"><h1>Surat Menyurat</h1><p class="muted">Nomor otomatis saat dikonfirmasi. Semua surat perlu persetujuan Super Admin sebelum dicetak, dengan tanda tangan QR.</p></div>
+    <div class="chips-row">${isSA() ? '<button class="btn btn-ghost" id="srtSet"><i class="bi bi-gear"></i> Pengaturan</button>' : ''}<button class="btn btn-secondary" data-surat-new="RC"><i class="bi bi-file-earmark-spreadsheet"></i> Rate card</button><button class="btn btn-primary" data-surat-new="SPH"><i class="bi bi-plus-lg"></i> Buat surat</button></div></div>
+  <div class="card" style="margin-bottom:16px"><div class="toolbar"><div class="search grow"><i class="bi bi-search"></i><input class="input" id="srtQ" placeholder="Cari nomor, perihal, tujuan…" value="${esc(st.q)}"></div>
+    <select class="input" id="srtJ" style="max-width:240px"><option value="">Semua jenis</option>${Object.entries(SURAT_JENIS).map(([k, v]) => `<option value="${k}" ${st.j === k ? 'selected' : ''}>${k} · ${v}</option>`).join('')}</select></div>
+    <div class="chips-row">${chips.map(c => `<button class="fchip ${st.f === c[0] ? 'active' : ''}" data-sf="${esc(c[0])}">${c[1]}<span class="cnt">${all.filter(c[2]).length}</span></button>`).join('')}</div></div>
+  <div class="table-card" id="srtList"></div>`;
+  const draw = () => {
+    const chip = chips.find(c => c[0] === st.f), q = st.q.trim().toLowerCase();
+    const ls = all.filter(x => chip[2](x) && (!st.j || x.Jenis === st.j) && (!q || [x.NoSurat, x.Perihal, x.KepadaNama, x.DibuatNama].join(' ').toLowerCase().includes(q)))
+      .sort((a, b) => String(b.DiubahPada).localeCompare(String(a.DiubahPada)));
+    $('#srtList').innerHTML = ls.length ? `<div class="table-wrap"><table class="table cards"><thead><tr><th>Nomor</th><th>Perihal</th><th>Kepada</th><th>Status</th><th>Dibuat</th></tr></thead><tbody>
+      ${ls.map(x => `<tr class="clickable" data-srt="${esc(x.ID)}"><td class="card-title" data-label="Nomor"><span class="${x.NoSurat ? 't-link mono' : 'muted'}">${esc(x.NoSurat || 'Belum bernomor')}</span><span class="t-sub">${esc(x.Jenis)} · ${tgl(x.Tanggal)}</span></td>
+        <td data-label="Perihal"><b>${esc(x.Perihal)}</b></td><td data-label="Kepada">${esc(x.KepadaNama)}${x.KepadaUP ? `<span class="t-sub">u.p. ${esc(x.KepadaUP)}</span>` : ''}</td>
+        <td data-label="Status"><span class="badge ${SURAT_STATUS_CLS[x.Status]}">${esc(x.Status)}</span></td><td data-label="Dibuat">${esc(x.DibuatNama || '')}<span class="t-sub">${tglPendek(x.DibuatPada)}</span></td></tr>`).join('')}
+    </tbody></table></div>` : `<div style="padding:20px">${emptyHTML('bi-envelope-paper', 'Belum ada surat', 'Klik Buat surat untuk memulai.')}</div>`;
+  };
+  $('#srtQ').addEventListener('input', debounce(e => { st.q = e.target.value; draw(); }, 120));
+  $('#srtJ').onchange = e => { st.j = e.target.value; draw(); };
+  el.querySelectorAll('[data-sf]').forEach(b => b.onclick = () => { st.f = b.dataset.sf; renderSurat(); });
+  if ($('#srtSet')) $('#srtSet').onclick = openSuratSetting;
+  draw();
+}
+function openSuratSetting() {
+  const st = S.settings || {};
+  openModal({ title: 'Pengaturan surat', icon: 'bi-gear', size: 'sm',
+    body: `<label class="field"><span class="label">Kode perusahaan di nomor surat</span><input class="input mono" id="ssKode" maxlength="10" value="${esc(st.kodeSurat || 'KGM')}"><small class="muted">Contoh nomor: 001/<b>${esc(st.kodeSurat || 'KGM')}</b>/SPH/XI/2026</small></label>
+      <label class="field"><span class="label">Kota di tanggal surat</span><input class="input" id="ssKota" maxlength="40" value="${esc(st.kotaSurat || '')}"></label>
+      <label class="field"><span class="label">Jabatan penandatangan (bawaan)</span><input class="input" id="ssJab" maxlength="60" value="${esc(st.jabatanTtd || 'Direktur')}"><small class="muted">Dipakai bila kolom Divisi akun Super Admin kosong.</small></label>`,
+    foot: '<button class="btn btn-secondary" data-close>Batal</button><button class="btn btn-primary" id="ssOk"><i class="bi bi-check2"></i> Simpan</button>' });
+  $('#ssOk').onclick = () => {
+    const b = $('#ssOk'); btnBusy(b, true);
+    api('saveSettings', S.token, { kodeSurat: $('#ssKode').value.trim().toUpperCase(), kotaSurat: $('#ssKota').value.trim(), jabatanTtd: $('#ssJab').value.trim() })
+      .then(r => { S.settings = r.data; saveCache(); ok('Pengaturan surat tersimpan'); closeModal(); }).catch(fail).finally(() => btnBusy(b, false));
+  };
+}
+function rcParse(v) { try { const a = JSON.parse(v || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+function rcRowHTML(r) {
+  const m = v => (num(v) ? num(v).toLocaleString('id-ID') : '');
+  return `<tr data-rc><td><input class="input" data-rf="layanan" maxlength="40" value="${esc(r.layanan || '')}"></td><td><input class="input" data-rf="asal" maxlength="80" value="${esc(r.asal || '')}"></td><td><input class="input" data-rf="tujuan" maxlength="80" value="${esc(r.tujuan || '')}"></td>
+    <td><input class="input" data-rf="armada" maxlength="80" value="${esc(r.armada || '')}"></td><td><input class="input t-right mono" data-rf="harga" inputmode="numeric" value="${m(r.harga)}"></td><td><input class="input" data-rf="satuan" maxlength="30" value="${esc(r.satuan || '')}"></td>
+    <td><input class="input" data-rf="ket" maxlength="200" value="${esc(r.ket || '')}"></td><td><button type="button" class="icon-btn" data-rcdel title="Hapus"><i class="bi bi-x-lg"></i></button></td></tr>`;
+}
+function openSuratForm(x, jenisBaru) {
+  const edit = !!(x && x.ID);
+  const jenis = edit ? x.Jenis : (jenisBaru || 'SPH');
+  const d = Object.assign({ Tanggal: today(), Jenis: jenis, KepadaTipe: 'manual' }, edit ? {} : suratTemplate(jenis), x || {});
+  const kontak = S.d.kontakSurat || [];
+  const lbl = k => k.nama + (k.tipe === 'crm' ? ' (prospek CRM)' : ' (pelanggan)');
+  let tplAwal = edit ? null : suratTemplate(jenis);
+  openModal({ title: edit ? 'Ubah surat' : 'Buat surat', sub: edit && x.NoSurat ? x.NoSurat : 'Nomor dibuat otomatis saat dikonfirmasi', icon: 'bi-envelope-paper', size: 'lg',
+    body: `<form id="srtForm" novalidate>
+      ${x && x.Status === 'Ditolak' ? `<div class="alert alert-warning"><i class="bi bi-arrow-return-left"></i><div><b>Dikembalikan Super Admin:</b> ${esc(x.CatatanTolak)}</div></div>` : ''}
+      <div class="grid-2">
+        <label class="field"><span class="label req">Jenis surat</span><select class="input" name="Jenis" ${edit && x.NoSurat ? 'disabled' : ''}>${Object.entries(SURAT_JENIS).map(([k, v]) => `<option value="${k}" ${k === d.Jenis ? 'selected' : ''}>${k} · ${v}</option>`).join('')}</select></label>
+        <label class="field"><span class="label">Tanggal</span><input class="input" type="date" name="Tanggal" value="${esc(String(d.Tanggal).slice(0, 10))}"></label>
+        <label class="field full"><span class="label req">Kepada Yth.</span><input class="input" id="srtKe" list="dlKontak" autocomplete="off" placeholder="Ketik nama pelanggan / perusahaan, atau tulis manual" value="${esc(d.KepadaNama || '')}"><datalist id="dlKontak">${kontak.map(k => `<option value="${esc(lbl(k))}"></option>`).join('')}</datalist></label>
+        <label class="field"><span class="label">U.p. (nama penerima)</span><input class="input" name="KepadaUP" maxlength="100" value="${esc(d.KepadaUP || '')}" placeholder="mis. Bapak Budi, Manajer Logistik"></label>
+        <label class="field"><span class="label">Lampiran</span><input class="input" name="Lampiran" maxlength="60" value="${esc(d.Lampiran || '')}" placeholder="mis. 1 berkas / -"></label>
+        <label class="field full"><span class="label">Alamat tujuan</span><textarea class="input" name="KepadaAlamat" rows="2" maxlength="300">${esc(d.KepadaAlamat || '')}</textarea></label>
+        <label class="field full"><span class="label req">Perihal</span><input class="input" name="Perihal" maxlength="200" value="${esc(d.Perihal || '')}"></label>
+        <label class="field full"><span class="label">Isi surat</span><textarea class="input" name="Isi" rows="9" maxlength="20000">${esc(d.Isi || '')}</textarea><small class="muted">Pisahkan paragraf dengan baris kosong. Isi bebas diubah sesuai kebutuhan.</small></label>
+      </div>
+      <div id="rcBox" ${['SPH', 'RC'].includes(d.Jenis) ? '' : 'hidden'}><div class="card-title-row"><h4 style="margin:6px 0">Tabel harga</h4><div class="chips-row"><button type="button" class="btn btn-secondary btn-sm" id="rcPick"><i class="bi bi-list-check"></i> Ambil dari daftar harga</button><button type="button" class="btn btn-ghost btn-sm" id="rcAdd"><i class="bi bi-plus-lg"></i> Baris</button></div></div>
+        <div class="table-wrap rc-wrap"><table class="table rc-table"><thead><tr><th>Layanan</th><th>Asal</th><th>Tujuan</th><th>Armada / jenis</th><th>Harga (Rp)</th><th>Satuan</th><th>Keterangan</th><th></th></tr></thead><tbody id="rcBody">${rcParse(d.RateCard).map(rcRowHTML).join('')}</tbody></table></div>
+        <small class="muted">Harga bisa diubah khusus untuk surat ini tanpa mengubah Daftar Harga.</small></div>
+      <div class="grid-2 mt">
+        <label class="field full"><span class="label">Penutup</span><textarea class="input" name="Penutup" rows="2" maxlength="2000">${esc(d.Penutup || '')}</textarea></label>
+        <label class="field full"><span class="label">Tembusan</span><input class="input" name="Tembusan" maxlength="300" value="${esc(d.Tembusan || '')}" placeholder="Opsional, pisahkan dengan koma"></label>
+      </div></form>`,
+    foot: `<button class="btn btn-secondary" data-close>Batal</button><button class="btn btn-secondary" id="srtDraft"><i class="bi bi-save"></i> Simpan draft</button><button class="btn btn-primary" id="srtAjukan"><i class="bi bi-send"></i> Konfirmasi & ajukan</button>` });
+  const form = $('#srtForm');
+  let ke = { tipe: d.KepadaTipe, id: d.KepadaID };
+  $('#srtKe').addEventListener('change', e => {
+    const k = kontak.find(c => lbl(c) === e.target.value);
+    if (k) { e.target.value = k.nama; ke = { tipe: k.tipe, id: k.id }; form.querySelector('[name=KepadaAlamat]').value = k.alamat || ''; if (k.up && !form.querySelector('[name=KepadaUP]').value) form.querySelector('[name=KepadaUP]').value = k.up; }
+    else ke = { tipe: 'manual', id: '' };
+  });
+  form.querySelector('[name=Jenis]').addEventListener('change', e => {
+    const j = e.target.value, tpl = suratTemplate(j, $('#srtKe').value);
+    ['Perihal', 'Isi'].forEach(f => { const i = form.querySelector(`[name=${f}]`); if (!i.value.trim() || (tplAwal && i.value === tplAwal[f])) i.value = tpl[f]; });
+    tplAwal = tpl; $('#rcBox').hidden = !['SPH', 'RC'].includes(j);
+  });
+  const rcBody = $('#rcBody');
+  rcBody.addEventListener('input', e => { if (e.target.dataset.rf === 'harga') formatMoneyInput(e.target); });
+  rcBody.addEventListener('click', e => { const b = e.target.closest('[data-rcdel]'); if (b) b.closest('tr').remove(); });
+  $('#rcAdd').onclick = () => rcBody.insertAdjacentHTML('beforeend', rcRowHTML({ satuan: 'per trip' }));
+  $('#rcPick').onclick = () => pilihHarga(rows => rows.forEach(h => rcBody.insertAdjacentHTML('beforeend', rcRowHTML({ layanan: h.Layanan, asal: h.Asal, tujuan: h.Tujuan, armada: h.Armada, harga: h.Harga, satuan: h.Satuan, ket: h.Keterangan }))));
+  const kumpul = () => {
+    const v = formValues(form); if (edit) v.ID = x.ID; if (edit && x.NoSurat) v.Jenis = x.Jenis;
+    v.KepadaNama = $('#srtKe').value.trim(); v.KepadaTipe = ke.tipe; v.KepadaID = ke.id;
+    v.RateCard = $$('[data-rc]', rcBody).map(tr => { const o = {}; tr.querySelectorAll('[data-rf]').forEach(i => { o[i.dataset.rf] = i.dataset.rf === 'harga' ? num(i.value) : i.value.trim(); }); return o; }).filter(r => r.harga);
+    if (!v.KepadaNama) { toast('warning', 'Isi tujuan surat (Kepada Yth.)'); return null; }
+    if (!v.Perihal.trim()) { toast('warning', 'Isi perihal surat'); return null; }
+    return v;
+  };
+  const simpan = (ajukan, btn) => {
+    const v = kumpul(); if (!v) return;
+    const go = () => { btnBusy(btn, true, 'Menyimpan…');
+      api('saveSurat', S.token, v).then(r => { upsert('surat', r.data); saveCache(); return ajukan ? api('ajukanSurat', S.token, r.data.ID) : r; })
+        .then(r => { upsert('surat', r.data); saveCache(); updateBadges(); ok(r.message); closeModal(); if (S.page === 'surat') renderSurat(); openSuratDetail(r.data.ID); }).catch(fail).finally(() => btnBusy(btn, false)); };
+    if (!ajukan) return go();
+    confirmDialog({ title: 'Konfirmasi & ajukan surat?', html: 'Surat akan mendapat <b>nomor resmi</b> dan dikirim ke Super Admin untuk disetujui. Setelah ini surat <b>tidak bisa dihapus</b>, hanya diarsipkan.', icon: 'bi-send', ok: 'Ya, ajukan' }).then(ok2 => { if (ok2 === true) go(); });
+  };
+  $('#srtDraft').onclick = e => simpan(false, e.currentTarget);
+  $('#srtAjukan').onclick = e => simpan(true, e.currentTarget);
+}
+function pilihHarga(cb) {
+  const list = (S.d.harga || []).filter(h => String(h.Aktif) !== 'false');
+  if (!list.length) return toast('info', 'Daftar harga masih kosong', isSA() ? 'Isi dulu di menu Daftar Harga.' : 'Minta Super Admin mengisi Daftar Harga.');
+  const box = document.createElement('div'); box.className = 'pick-overlay';
+  box.innerHTML = `<div class="pick-box"><div class="card-title-row"><h3 style="margin:0">Pilih dari daftar harga</h3><button type="button" class="icon-btn" data-pclose><i class="bi bi-x-lg"></i></button></div>
+    <select class="input" id="pkLy" style="margin:10px 0">${crmOpts(HARGA_LAYANAN, '', 'Semua layanan')}</select>
+    <div class="pick-list">${list.map(h => `<label class="check-row pick-i" data-ly="${esc(h.Layanan)}"><input type="checkbox" value="${esc(h.ID)}"><span><b>${esc([h.Asal, h.Tujuan].filter(Boolean).join(' → ') || h.Armada)}</b> <span class="muted">${esc(h.Armada && (h.Asal || h.Tujuan) ? h.Armada + ' · ' : '')}${esc(h.Layanan)}</span></span><span class="mono" style="margin-left:auto">${rp(h.Harga)} <small class="muted">${esc(h.Satuan)}</small></span></label>`).join('')}</div>
+    <div class="chips-row" style="justify-content:flex-end;margin-top:12px"><button type="button" class="btn btn-secondary" data-pclose>Batal</button><button type="button" class="btn btn-primary" id="pkOk">Tambahkan</button></div></div>`;
+  document.body.appendChild(box);
+  const tutup = () => box.remove();
+  box.querySelectorAll('[data-pclose]').forEach(b => b.onclick = tutup);
+  box.querySelector('#pkLy').onchange = e => box.querySelectorAll('.pick-i').forEach(i => { i.hidden = !!e.target.value && i.dataset.ly !== e.target.value; });
+  box.querySelector('#pkOk').onclick = () => { const ids = [...box.querySelectorAll('input:checked')].map(i => i.value); cb(list.filter(h => ids.includes(h.ID))); tutup(); };
+}
+
+function suratHTML(x, forPdf) {
+  const st = S.settings || {}, rc = rcParse(x.RateCard);
+  const tglIndo = s => { const m = String(s).slice(0, 10).split('-'); return m.length === 3 ? Number(m[2]) + ' ' + BULAN_ID[Number(m[1]) - 1] + ' ' + m[0] : s; };
+  const par = s => String(s || '').split(/\n\s*\n/).map(p => `<p style="margin:0 0 9px;text-align:justify;white-space:pre-wrap">${esc(p.trim())}</p>`).join('');
+  const ok = x.DisetujuiPada && ['Disetujui', 'Diarsipkan'].includes(x.Status);
+  let qr = '';
+  if (ok) { try { qr = KgmQR.dataUrl([st.companyName || st.appName, 'Surat ' + x.NoSurat, 'Perihal: ' + x.Perihal, 'Disetujui: ' + x.DisetujuiNama + ' (' + (x.DisetujuiJabatan || '') + ')', 'Waktu: ' + x.DisetujuiPada + ' WIB', 'Kode verifikasi: ' + x.KodeVerifikasi].join('\n'), 300, 'M'); } catch (e) { qr = ''; } }
+  const tabel = rc.length ? `<table class="t" style="margin:6px 0 12px;font-size:10px"><tr><th style="width:26px">No</th><th>Layanan</th><th>Rute</th><th>Armada / jenis</th><th class="num">Harga</th><th>Keterangan</th></tr>
+    ${rc.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.layanan)}</td><td>${esc([r.asal, r.tujuan].filter(Boolean).join(' → '))}</td><td>${esc(r.armada)}</td><td class="num"><b>${rp(r.harga)}</b><br><span class="muted">${esc(r.satuan)}</span></td><td>${esc(r.ket)}</td></tr>`).join('')}</table>` : '';
+  const body = `<div class="sheet a4" style="font-size:11.5px;line-height:1.55">${kopHTML(st, true)}
+    ${!ok ? '<div style="margin:10px 0;padding:6px 10px;border:1px dashed #B42318;color:#B42318;font-weight:700;text-align:center">DRAF — BELUM DISETUJUI, TIDAK UNTUK DIKIRIM</div>' : ''}
+    <table style="margin-top:14px"><tr><td style="vertical-align:top"><table style="width:auto"><tr><td style="padding:1px 12px 1px 0">Nomor</td><td>: <b>${esc(x.NoSurat || '(belum bernomor)')}</b></td></tr>
+      <tr><td style="padding:1px 12px 1px 0">Lampiran</td><td>: ${esc(x.Lampiran || '-')}</td></tr><tr><td style="padding:1px 12px 1px 0;vertical-align:top">Perihal</td><td>: <b>${esc(x.Perihal)}</b></td></tr></table></td>
+      <td style="vertical-align:top;text-align:right;white-space:nowrap">${esc(st.kotaSurat || '')}${st.kotaSurat ? ', ' : ''}${tglIndo(x.Tanggal)}</td></tr></table>
+    <div style="margin:22px 0 16px">Kepada Yth.<br><b>${esc(x.KepadaNama)}</b>${x.KepadaUP ? '<br>u.p. ' + esc(x.KepadaUP) : ''}${x.KepadaAlamat ? '<br>' + esc(x.KepadaAlamat).replace(/\n/g, '<br>') : ''}<br>di tempat</div>
+    ${par(x.Isi)}${tabel}${par(x.Penutup)}
+    <table style="margin-top:18px;width:auto;margin-left:auto"><tr><td style="text-align:center;min-width:220px">Hormat kami,<br>${esc(st.companyName || st.appName || '')}<br>
+      ${qr ? `<img src="${qr}" width="92" height="92" style="width:92px;height:92px;margin:6px auto 2px;display:block">` : '<div style="height:80px"></div>'}
+      <b><u>${esc(ok ? x.DisetujuiNama : '............................')}</u></b><br>${esc(ok ? x.DisetujuiJabatan || '' : '')}
+      ${qr ? `<div style="font-size:8px;color:#64748B">Ditandatangani elektronik ${esc(x.DisetujuiPada)} WIB<br>Kode verifikasi ${esc(x.KodeVerifikasi)}</div>` : ''}</td></tr></table>
+    ${x.Tembusan ? `<div style="margin-top:16px;font-size:10.5px">Tembusan:<br>${x.Tembusan.split(',').map((t, i) => (i + 1) + '. ' + esc(t.trim())).join('<br>')}</div>` : ''}
+    ${docFooter('Dibuat oleh ' + esc(x.DibuatNama || '') + ' · ' + esc(x.NoSurat || ''))}</div>`;
+  return docShell(x.NoSurat || x.Perihal, body, 'A4 portrait', forPdf);
+}
+function openSuratDetail(id) {
+  const x = (S.d.surat || []).find(s => s.ID === id); if (!x) return;
+  const pemilik = isSA() || x.DibuatOleh === S.me.email;
+  const tombol = [];
+  if (pemilik && ['Draft', 'Ditolak'].includes(x.Status)) tombol.push('<button class="btn btn-secondary" id="sdEdit"><i class="bi bi-pencil"></i> Ubah</button>', '<button class="btn btn-primary" id="sdAjukan"><i class="bi bi-send"></i> Konfirmasi & ajukan</button>');
+  if (pemilik && x.Status === 'Draft' && !x.NoSurat) tombol.unshift('<button class="btn btn-ghost" id="sdDel" style="margin-right:auto;color:var(--red)"><i class="bi bi-trash"></i> Hapus draft</button>');
+  if (isSA() && x.Status === 'Menunggu Persetujuan') tombol.push('<button class="btn btn-secondary" id="sdTolak" style="color:var(--red)"><i class="bi bi-x-lg"></i> Tolak</button>', '<button class="btn btn-primary" id="sdSetuju"><i class="bi bi-check2-circle"></i> Setujui & tanda tangani</button>');
+  if (['Disetujui', 'Diarsipkan'].includes(x.Status) && x.DisetujuiPada) tombol.push('<button class="btn btn-primary" id="sdCetak"><i class="bi bi-printer"></i> Cetak / PDF</button>');
+  if (pemilik && x.NoSurat && x.Status !== 'Diarsipkan') tombol.unshift('<button class="btn btn-ghost" id="sdArsip" style="margin-right:auto"><i class="bi bi-archive"></i> Arsipkan</button>');
+  openModal({ title: x.NoSurat || 'Draft surat', sub: SURAT_JENIS[x.Jenis] + ' · ' + x.Perihal, icon: 'bi-envelope-paper', size: 'lg',
+    body: `<div class="klh-top"><span class="badge ${SURAT_STATUS_CLS[x.Status]}">${esc(x.Status)}</span><span class="muted">Dibuat ${esc(x.DibuatNama || '')} · ${tglJam(x.DibuatPada)}</span>${x.DisetujuiPada ? `<span class="muted">· Disetujui ${esc(x.DisetujuiNama)} ${tglJam(x.DisetujuiPada)}</span>` : ''}</div>
+      ${x.Status === 'Ditolak' ? `<div class="alert alert-warning"><i class="bi bi-arrow-return-left"></i><div><b>Dikembalikan:</b> ${esc(x.CatatanTolak)}</div></div>` : ''}
+      ${x.Status === 'Menunggu Persetujuan' && !isSA() ? '<div class="alert alert-info"><i class="bi bi-hourglass-split"></i><div>Menunggu persetujuan Super Admin. Surat bisa dicetak setelah disetujui.</div></div>' : ''}
+      <iframe class="srt-prev" id="sdPrev" title="Pratinjau surat"></iframe>`,
+    foot: `<button class="btn btn-secondary" data-close>Tutup</button>${tombol.join('')}` });
+  $('#sdPrev').srcdoc = suratHTML(x, false);
+  const lanjut = (p, b) => { btnBusy(b, true); return p.then(r => { upsert('surat', r.data); saveCache(); updateBadges(); ok(r.message); if (S.page === 'surat') renderSurat(); openSuratDetail(id); }).catch(fail).finally(() => btnBusy(b, false)); };
+  if ($('#sdEdit')) $('#sdEdit').onclick = () => openSuratForm(x);
+  if ($('#sdDel')) $('#sdDel').onclick = () => confirmDialog({ title: 'Hapus draft?', variant: 'danger', icon: 'bi-trash', ok: 'Hapus' }).then(v => { if (v === true) api('deleteSurat', S.token, id).then(r => { removeFrom('surat', id); saveCache(); ok(r.message); closeModal(); renderSurat(); }).catch(fail); });
+  if ($('#sdAjukan')) $('#sdAjukan').onclick = e => { const b = e.currentTarget; confirmDialog({ title: 'Konfirmasi & ajukan?', html: 'Surat mendapat nomor resmi dan tidak bisa dihapus lagi, hanya diarsipkan.', icon: 'bi-send', ok: 'Ya, ajukan' }).then(v => { if (v === true) lanjut(api('ajukanSurat', S.token, id), b); }); };
+  if ($('#sdSetuju')) $('#sdSetuju').onclick = e => { const b = e.currentTarget; confirmDialog({ title: 'Setujui surat ' + x.NoSurat + '?', html: 'Tanda tangan QR atas nama <b>' + esc(S.me.nama) + '</b> akan tercetak di surat.', icon: 'bi-check2-circle', ok: 'Setujui' }).then(v => { if (v === true) lanjut(api('putuskanSurat', S.token, id, true, ''), b); }); };
+  if ($('#sdTolak')) $('#sdTolak').onclick = () => {
+    openModal({ title: 'Tolak ' + x.NoSurat, sub: 'Surat dikembalikan ke pembuat untuk diperbaiki', icon: 'bi-x-octagon', size: 'sm',
+      body: '<label class="field"><span class="label req">Alasan / yang perlu diperbaiki</span><textarea class="input" id="sdAlasan" rows="3" maxlength="500"></textarea></label>',
+      foot: '<button class="btn btn-secondary" id="sdBack">Batal</button><button class="btn btn-danger" id="sdTolakOk">Kembalikan</button>' });
+    $('#sdBack').onclick = () => openSuratDetail(id);
+    $('#sdTolakOk').onclick = e => { const a = $('#sdAlasan').value.trim(); if (!a) return toast('warning', 'Isi alasannya'); lanjut(api('putuskanSurat', S.token, id, false, a), e.currentTarget); };
+  };
+  if ($('#sdArsip')) $('#sdArsip').onclick = e => { const b = e.currentTarget; confirmDialog({ title: 'Arsipkan surat?', html: 'Surat tetap tersimpan dan bisa dilihat di filter <b>Arsip</b>.', icon: 'bi-archive', ok: 'Arsipkan' }).then(v => { if (v === true) lanjut(api('arsipSurat', S.token, id), b); }); };
+  if ($('#sdCetak')) $('#sdCetak').onclick = () => { closeModal(); openPrint({ title: x.NoSurat, sub: x.Perihal + ' · A4', build: () => suratHTML(x, false), pdfBuild: () => suratHTML(x, true),
+    onPrint: (v, html, pdf) => pdf ? api('suratPdf', S.token, id, html) : Promise.resolve() }); };
+}
+
+document.addEventListener('click', e => {
+  const s = e.target.closest('[data-srt]'); if (s) { e.preventDefault(); openSuratDetail(s.dataset.srt); return; }
+  const n = e.target.closest('[data-surat-new]'); if (n) openSuratForm(null, n.dataset.suratNew);
 });
 
 // Penanda: js/app.js termuat sampai akhir
