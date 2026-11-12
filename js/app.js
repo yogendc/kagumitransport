@@ -10,7 +10,7 @@
    ============================================================ */
 
 // ── Konstanta ──────────────────────────────────────────────
-const APP_VERSI = '3.1'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
+const APP_VERSI = '3.2'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
 const LS = { token: 'kgm_token', theme: 'kgm_theme', cache: 'kgm_cache_v1', cols: 'kgm_rekap_cols', draft: 'kgm_draft_', master: 'kgm_master_open', login: 'kgm_login_ctx' };
 const STATUS = ['Dijadwalkan', 'Dikirim', 'Diterima', 'Dibatalkan'];
 const STATUS_CLS = { Dijadwalkan: 'b-indigo', Dikirim: 'b-amber', Diterima: 'b-green', Dibatalkan: 'b-red', Draf: 'b-slate' };
@@ -37,7 +37,7 @@ const CDN = {
 // ── State aplikasi (memori) ────────────────────────────────
 const S = {
   token: null, me: null, settings: {}, booted: false, lastSync: 0,
-  d: { pelanggan: [], penerima: [], ekspedisi: [], kendaraan: [], pengemudi: [], rekening: [], orders: [], invoices: [], inspeksi: [], finance: [], users: [], pertanyaan: [], berita: [], crmCompany: [], crmLeads: [], crmActivity: [], crmUsers: [] },
+  d: { pelanggan: [], penerima: [], ekspedisi: [], kendaraan: [], pengemudi: [], rekening: [], orders: [], invoices: [], inspeksi: [], finance: [], users: [], pertanyaan: [], berita: [], crmCompany: [], crmLeads: [], crmActivity: [], crmUsers: [], keluhan: [], keluhanLog: [], orderRingkas: [], csUsers: [] },
   web: null,
   page: 'ringkasan',
   ui: {
@@ -57,6 +57,10 @@ const S = {
 const SA_PAGES = ['finance', 'laporan', 'pengaturan', 'website'];
 const isSales = () => !!(S.me && S.me.role === 'SALES');
 const CRM_PAGES = ['crm', 'crm-perusahaan', 'crm-leads', 'crm-aktivitas'];
+const isCS = () => !!(S.me && S.me.role === 'CS');
+const CS_PAGES = ['keluhan', 'pertanyaan'];
+/** Halaman yang boleh dibuka peran terbatas (Sales / CS); null = semua (Admin & Super Admin). */
+const pagesTerbatas = () => (isSales() ? CRM_PAGES : isCS() ? CS_PAGES : null);
 const isSA = () => !!(S.me && S.me.role === 'SUPER_ADMIN');
 
 // ── Utilitas ───────────────────────────────────────────────
@@ -403,14 +407,14 @@ function logout() {
 function hydrate(d, fromCache) {
   S.me = d.me || S.me;
   S.settings = Object.assign({}, d.settings || {});
-  ['pelanggan', 'penerima', 'ekspedisi', 'kendaraan', 'pengemudi', 'rekening', 'orders', 'invoices', 'inspeksi', 'pertanyaan', 'crmCompany', 'crmLeads', 'crmActivity', 'crmUsers'].forEach(k => { if (d[k]) S.d[k] = d[k]; else if (!fromCache) S.d[k] = []; });
+  ['pelanggan', 'penerima', 'ekspedisi', 'kendaraan', 'pengemudi', 'rekening', 'orders', 'invoices', 'inspeksi', 'pertanyaan', 'crmCompany', 'crmLeads', 'crmActivity', 'crmUsers', 'keluhan', 'keluhanLog', 'orderRingkas', 'csUsers'].forEach(k => { if (d[k]) S.d[k] = d[k]; else if (!fromCache) S.d[k] = []; });
   if (!fromCache) { S.d.finance = d.finance || []; S.d.users = d.users || []; S.d.berita = d.berita || []; S.web = d.webKonten || null; S.lastSync = Date.now(); }
   applyBranding(S.settings);
 }
 function saveCache() {
   // Data keuangan & pengguna tidak disimpan di perangkat
   const c = { me: S.me, settings: S.settings, t: Date.now() };
-  ['pelanggan', 'penerima', 'ekspedisi', 'kendaraan', 'pengemudi', 'rekening', 'orders', 'invoices', 'inspeksi', 'pertanyaan', 'crmCompany', 'crmLeads', 'crmActivity', 'crmUsers'].forEach(k => { c[k] = S.d[k]; });
+  ['pelanggan', 'penerima', 'ekspedisi', 'kendaraan', 'pengemudi', 'rekening', 'orders', 'invoices', 'inspeksi', 'pertanyaan', 'crmCompany', 'crmLeads', 'crmActivity', 'crmUsers', 'keluhan', 'keluhanLog', 'orderRingkas', 'csUsers'].forEach(k => { c[k] = S.d[k]; });
   lsSet(LS.cache, JSON.stringify(c));
 }
 let refreshing = null;
@@ -432,7 +436,7 @@ function refreshData(silent) {
     if (S.booted) {
       applyRole();
       if (wasSA !== isSA() && !isSA() && SA_PAGES.includes(S.page)) navigateTo('ringkasan');
-      if (isSales() && !CRM_PAGES.includes(S.page)) navigateTo('crm');
+      if (pagesTerbatas() && !pagesTerbatas().includes(S.page)) navigateTo(pagesTerbatas()[0]);
       updateBadges();
       if (!isFormPage(S.page)) renderPage(S.page); else syncOpenForms();
     }
@@ -462,15 +466,16 @@ function showApp() {
   updateBadges();
   const d = new Date(today() + 'T00:00:00');
   $('#todayChip span').textContent = HARI[d.getDay()] + ', ' + tgl(today());
-  if (isSales()) navigateTo(CRM_PAGES.includes(S.page) ? S.page : 'crm', { force: true });
+  if (pagesTerbatas()) navigateTo(pagesTerbatas().includes(S.page) ? S.page : pagesTerbatas()[0], { force: true });
   else navigateTo(S.page && (isSA() || !SA_PAGES.includes(S.page)) ? S.page : 'ringkasan', { force: true });
   hideSplash();
 }
 function applyRole() {
   const me = S.me || {};
   $('#sbUserName').textContent = me.nama || me.email || '';
-  $('#sbUserRole').textContent = isSA() ? 'Super Admin' : isSales() ? 'Sales' : 'Admin';
+  $('#sbUserRole').textContent = isSA() ? 'Super Admin' : isSales() ? 'Sales' : isCS() ? 'Customer Service' : 'Admin';
   document.body.classList.toggle('is-sales', isSales());
+  document.body.classList.toggle('is-cs', isCS());
   $('#sbAvatar').textContent = initials(me.nama);
   $$('.sa-only').forEach(el => { el.hidden = !isSA(); });
   const open = lsGet(LS.master, '1') === '1';
@@ -484,6 +489,7 @@ const RENDER = {
   pengemudi: () => renderMaster('pengemudi'), penerima: () => renderMaster('penerima'), ekspedisi: () => renderMaster('ekspedisi'),
   finance: renderFinance, laporan: renderLaporan, pengaturan: renderPengaturan,
   website: renderWebsite, pertanyaan: renderPertanyaan,
+  keluhan: renderKeluhan,
   crm: renderCrm, 'crm-perusahaan': renderCrmPerusahaan, 'crm-leads': renderCrmLeads, 'crm-aktivitas': renderCrmAktivitas,
   inspeksi: renderInspeksiPage
 };
@@ -492,7 +498,7 @@ function renderPage(p) { try { if (RENDER[p]) RENDER[p](); } catch (e) { console
 /** Satu-satunya cara berpindah halaman (tanpa reload, tanpa ubah URL). */
 function navigateTo(page, opt) {
   opt = opt || {};
-  if (isSales() && !CRM_PAGES.includes(page)) page = 'crm';
+  if (pagesTerbatas() && !pagesTerbatas().includes(page)) page = pagesTerbatas()[0];
   if (SA_PAGES.includes(page) && !isSA()) { toast('warning', 'Akses ditolak', 'Halaman ini khusus Super Admin.'); return; }
   const sec = $('#page-' + page); if (!sec) return;
   $$('.page').forEach(p => p.classList.toggle('active', p === sec));
@@ -611,6 +617,9 @@ function updateBadges() {
   set('#badgePty', pty, pty + ' baru');
   const crmDue = (S.d.crmLeads || []).filter(l => ['Lead Baru', 'Dihubungi', 'Berminat', 'Penawaran Dikirim', 'Negosiasi'].includes(l.Tahap) && l.NextFollowup && l.NextFollowup <= today() && (!isSales() || l.PICEmail === (S.me || {}).email)).length;
   set('#badgeCrm', crmDue, crmDue + ' follow-up');
+  const klhBuka = (S.d.keluhan || []).filter(k => ['Baru', 'Diproses', 'Menunggu Pelanggan'].includes(k.Status));
+  const klhLewat = klhBuka.filter(k => k.BatasWaktu && String(k.BatasWaktu) < new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 19).replace('T', ' ')).length;
+  set('#badgeKlh', klhBuka.length, klhLewat ? klhLewat + ' lewat SLA' : klhBuka.length + ' terbuka');
   $('#bellDot').hidden = !(due || armada || driver);
 }
 function renderNotif() {
@@ -4049,7 +4058,7 @@ function setAkun() {
     <div class="card-title-row" style="padding:18px 20px 0"><div><h3>Daftar pengguna</h3><p class="muted">${users.filter(u => u.Status === 'Aktif').length} aktif dari ${users.length} akun</p></div><button class="btn btn-primary" id="uAdd"><i class="bi bi-person-plus"></i> Tambah pengguna</button></div>
     <div class="table-wrap"><table class="table cards"><thead><tr><th>Pengguna</th><th>Peran</th><th>Divisi</th><th>WhatsApp</th><th>Terakhir masuk</th><th>Status</th><th class="t-actions">Aksi</th></tr></thead><tbody>
     ${users.map(u => `<tr class="${u.Status !== 'Aktif' ? 'row-muted' : ''}"><td class="card-title" data-label="Pengguna"><div class="who"><span class="avatar soft">${esc(initials(u.Nama))}</span><div><span class="t-strong">${esc(u.Nama)}${u.Email === S.me.email ? ' <span class="chip chip-soft">Anda</span>' : ''}</span><span class="t-sub">${esc(u.Email)}</span></div></div></td>
-      <td data-label="Peran"><span class="badge ${u.Peran === 'SUPER_ADMIN' ? 'b-green' : u.Peran === 'SALES' ? 'b-amber' : 'b-indigo'}">${u.Peran === 'SUPER_ADMIN' ? 'Super Admin' : u.Peran === 'SALES' ? 'Sales' : 'Admin'}</span></td><td data-label="Divisi">${esc(u.Divisi || '—')}</td>
+      <td data-label="Peran"><span class="badge ${u.Peran === 'SUPER_ADMIN' ? 'b-green' : u.Peran === 'SALES' || u.Peran === 'CS' ? 'b-amber' : 'b-indigo'}">${u.Peran === 'SUPER_ADMIN' ? 'Super Admin' : u.Peran === 'SALES' ? 'Sales' : u.Peran === 'CS' ? 'Customer Service' : 'Admin'}</span></td><td data-label="Divisi">${esc(u.Divisi || '—')}</td>
       <td data-label="WhatsApp" class="mono">${esc(u.NoHP || '—')}</td><td data-label="Terakhir masuk" class="muted">${u.TerakhirLogin ? tglJam(u.TerakhirLogin) : 'Belum pernah'}</td>
       <td data-label="Status"><span class="badge ${u.Status === 'Aktif' ? 'b-green' : 'b-slate'}">${esc(u.Status)}</span></td>
       <td class="t-actions"><button class="icon-btn" data-ue="${esc(u.ID)}" title="Ubah"><i class="bi bi-pencil"></i></button><button class="icon-btn" data-ur="${esc(u.ID)}" title="Reset kata sandi"><i class="bi bi-key"></i></button>${u.Email !== S.me.email ? `<button class="icon-btn" data-ut="${esc(u.ID)}" title="${u.Status === 'Aktif' ? 'Nonaktifkan' : 'Aktifkan'}"><i class="bi ${u.Status === 'Aktif' ? 'bi-slash-circle' : 'bi-check-circle'}"></i></button><button class="icon-btn" data-ud="${esc(u.ID)}" title="Hapus"><i class="bi bi-trash"></i></button>` : ''}</td></tr>`).join('')}
@@ -4083,7 +4092,7 @@ function openUserModal(u) {
     body: `<form id="uForm" class="row-2" novalidate>
       <label class="field" style="grid-column:1/-1"><span class="label req">Nama lengkap</span><input class="input" name="Nama" value="${esc(d.Nama || '')}"></label>
       <label class="field" style="grid-column:1/-1"><span class="label req">Email</span><input class="input" type="email" name="Email" value="${esc(d.Email || '')}" placeholder="nama@gmail.com"><small class="muted">Dipakai untuk masuk. Akun Google pemilik skrip bisa memakai tombol "Masuk dengan Google".</small></label>
-      <label class="field"><span class="label req">Peran</span><select class="input" name="Peran"><option value="ADMIN" ${d.Peran === 'ADMIN' ? 'selected' : ''}>Admin</option><option value="SUPER_ADMIN" ${d.Peran === 'SUPER_ADMIN' ? 'selected' : ''}>Super Admin</option><option value="SALES" ${d.Peran === 'SALES' ? 'selected' : ''}>Sales (hanya menu CRM)</option></select></label>
+      <label class="field"><span class="label req">Peran</span><select class="input" name="Peran"><option value="ADMIN" ${d.Peran === 'ADMIN' ? 'selected' : ''}>Admin</option><option value="SUPER_ADMIN" ${d.Peran === 'SUPER_ADMIN' ? 'selected' : ''}>Super Admin</option><option value="SALES" ${d.Peran === 'SALES' ? 'selected' : ''}>Sales (hanya menu CRM)</option><option value="CS" ${d.Peran === 'CS' ? 'selected' : ''}>Customer Service (keluhan & pertanyaan)</option></select></label>
       <label class="field"><span class="label">Divisi / tanggung jawab</span><input class="input" name="Divisi" value="${esc(d.Divisi || '')}" placeholder="Operasional sewa"></label>
       <label class="field"><span class="label">No. WhatsApp</span><input class="input" name="NoHP" inputmode="tel" value="${esc(d.NoHP || '')}"></label>
       <label class="field"><span class="label">Status</span><select class="input" name="Status" ${u && u.Email === S.me.email ? 'disabled' : ''}><option ${d.Status === 'Aktif' ? 'selected' : ''}>Aktif</option><option ${d.Status === 'Nonaktif' ? 'selected' : ''}>Nonaktif</option></select></label>
@@ -4374,7 +4383,7 @@ function docSuratJalan(o, nominal, forPdf) {
 function waktuCetakTeks() {
   return new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date()).replace(/\./g, ':').replace(',', '') + ' WIB';
 }
-function peranTeks(r) { return r === 'SUPER_ADMIN' ? 'Super Admin' : r === 'ADMIN' ? 'Admin' : r === 'SALES' ? 'Sales' : (r || '-'); }
+function peranTeks(r) { return r === 'SUPER_ADMIN' ? 'Super Admin' : r === 'ADMIN' ? 'Admin' : r === 'SALES' ? 'Sales' : r === 'CS' ? 'Customer Service' : (r || '-'); }
 function petugasQR(docName) {
   const me = S.me || {}, st = S.settings || {};
   const txt = [st.companyName || st.appName || 'KAGUMI Transport', 'Dokumen: ' + docName, 'Dicetak oleh: ' + (me.nama || me.email || '-') + ' (' + peranTeks(me.role) + ')', 'Waktu cetak: ' + waktuCetakTeks()].join('\n');
@@ -4597,7 +4606,7 @@ function ptyCard(r) {
     ${r.Catatan || r.DitanganiOleh ? `<div class="pty-note"><i class="bi bi-journal-check"></i><div>${r.Catatan ? esc(r.Catatan) : ''}<small class="muted">${r.DitanganiOleh ? (r.Catatan ? ' — ' : '') + 'ditangani ' + esc(r.DitanganiOleh) + ', ' + tglJam(r.DiubahPada) : ''}</small></div></div>` : ''}
     <div class="chips-row pty-act">
       <a class="btn btn-secondary btn-sm" href="${wa}" target="_blank" rel="noopener"><i class="bi bi-whatsapp"></i> Balas WA</a>
-      ${(() => { const ld = (S.d.crmLeads || []).find(l => l.PertanyaanID === r.ID); return ld ? `<button class="btn btn-ghost btn-sm" data-lead="${esc(ld.ID)}"><i class="bi bi-funnel"></i> Lead ${esc(ld.Kode)}</button>` : `<button class="btn btn-secondary btn-sm" data-pty-lead="${esc(r.ID)}"><i class="bi bi-funnel"></i> Jadikan lead</button>`; })()}
+      ${(() => { if (isCS()) return ''; const ld = (S.d.crmLeads || []).find(l => l.PertanyaanID === r.ID); return ld ? `<button class="btn btn-ghost btn-sm" data-lead="${esc(ld.ID)}"><i class="bi bi-funnel"></i> Lead ${esc(ld.Kode)}</button>` : `<button class="btn btn-secondary btn-sm" data-pty-lead="${esc(r.ID)}"><i class="bi bi-funnel"></i> Jadikan lead</button>`; })()}
       ${r.Status !== 'Diproses' && r.Status !== 'Selesai' ? `<button class="btn btn-secondary btn-sm" data-ps="Diproses" data-id="${esc(r.ID)}"><i class="bi bi-hourglass-split"></i> Tandai diproses</button>` : ''}
       ${r.Status !== 'Selesai' ? `<button class="btn btn-primary btn-sm" data-ps="Selesai" data-id="${esc(r.ID)}"><i class="bi bi-check2"></i> Selesai</button>` : `<button class="btn btn-ghost btn-sm" data-ps="Baru" data-id="${esc(r.ID)}"><i class="bi bi-arrow-counterclockwise"></i> Buka lagi</button>`}
     </div></div>`;
@@ -5269,6 +5278,209 @@ document.addEventListener('click', e => {
   if (ld && !e.target.closest('[data-akdel]')) { e.preventDefault(); openCrmLeadDetail(ld.dataset.lead); return; }
   const nw = e.target.closest('[data-crm-new]');
   if (nw) { if (nw.dataset.crmNew === 'pt') openCrmPtForm(null); else openCrmLeadForm(null); }
+});
+
+// ============================================================
+// CUSTOMER SERVICE: Keluhan Pelanggan (dashboard + daftar + detail)
+// ============================================================
+const KLH_STATUS = ['Baru', 'Diproses', 'Menunggu Pelanggan', 'Selesai', 'Dibatalkan'];
+const KLH_TERBUKA = ['Baru', 'Diproses', 'Menunggu Pelanggan'];
+const KLH_STATUS_CLS = { Baru: 'b-red', Diproses: 'b-amber', 'Menunggu Pelanggan': 'b-indigo', Selesai: 'b-green', Dibatalkan: 'b-slate' };
+const KLH_KATEGORI = ['Keterlambatan', 'Barang rusak', 'Barang hilang / kurang', 'Kendaraan lecet / rusak', 'Pelayanan sopir / petugas',
+  'Tagihan / pembayaran', 'Dokumen (surat jalan, resi, invoice)', 'Lainnya'];
+const KLH_PRIO_BAWAAN = { 'Barang rusak': 'Tinggi', 'Barang hilang / kurang': 'Tinggi', 'Kendaraan lecet / rusak': 'Tinggi', Keterlambatan: 'Sedang', 'Pelayanan sopir / petugas': 'Sedang' };
+const KLH_PRIO = { Tinggi: '1 hari', Sedang: '3 hari', Rendah: '7 hari' };
+const KLH_PRIO_CLS = { Tinggi: 'b-red', Sedang: 'b-amber', Rendah: 'b-slate' };
+const KLH_SUMBER = ['Telepon', 'WhatsApp', 'Email', 'Datang langsung', 'Website'];
+const LAY_NAMA = { sewa: 'Sewa kendaraan', kirim: 'Kirim mobil', paket: 'Kirim paket' };
+
+const sekarangWIB = () => new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 19).replace('T', ' ');
+const klhTerbuka = k => KLH_TERBUKA.includes(k.Status);
+const klhTelat = k => klhTerbuka(k) && k.BatasWaktu && String(k.BatasWaktu) < sekarangWIB();
+function klhJam(a, b) { const t = s => new Date(String(s).replace(' ', 'T') + '+07:00').getTime(); return (t(b) - t(a)) / 3600e3; }
+function klhSla(k) {
+  if (!k.BatasWaktu) return '';
+  if (!klhTerbuka(k)) {
+    if (k.Status !== 'Selesai') return '<span class="muted">—</span>';
+    return String(k.TanggalSelesai) <= String(k.BatasWaktu) ? '<span class="badge b-green plain"><i class="bi bi-check2"></i> Tepat waktu</span>' : '<span class="badge b-amber plain">Lewat SLA</span>';
+  }
+  const j = klhJam(sekarangWIB(), k.BatasWaktu), abs = Math.abs(j);
+  const teks = abs >= 24 ? Math.round(abs / 24) + ' hari' : Math.max(1, Math.round(abs)) + ' jam';
+  if (j < 0) return `<span class="badge b-red"><i class="bi bi-alarm"></i> Telat ${teks}</span>`;
+  return `<span class="badge ${j < 12 ? 'b-amber' : 'b-slate'} plain"><i class="bi bi-hourglass-split"></i> Sisa ${teks}</span>`;
+}
+const klhBadge = s => `<span class="badge ${KLH_STATUS_CLS[s] || 'b-slate'}">${esc(s)}</span>`;
+function csUserOpts(sel, kosong) {
+  return (kosong !== undefined ? `<option value="">${kosong}</option>` : '') + (S.d.csUsers || []).map(u => `<option value="${esc(u.email)}" ${u.email === sel ? 'selected' : ''}>${esc(u.nama)}${u.peran === 'CS' ? '' : u.peran === 'SUPER_ADMIN' ? ' (Super Admin)' : ' (Admin)'}</option>`).join('');
+}
+function klhApply(d) {
+  if (!d) return;
+  if (d.keluhan) upsert('keluhan', d.keluhan);
+  (d.log || []).forEach(l => upsert('keluhanLog', l));
+  saveCache(); updateBadges();
+}
+
+function renderKeluhan() {
+  const el = $('#page-keluhan'), st = S.ui.klh = S.ui.klh || { f: 'terbuka', q: '', kat: '', pic: '' };
+  const all = S.d.keluhan || [], bln = today().slice(0, 7);
+  const terbuka = all.filter(klhTerbuka), telat = all.filter(klhTelat);
+  const selesai = all.filter(k => k.Status === 'Selesai'), selesaiBln = selesai.filter(k => String(k.TanggalSelesai).slice(0, 7) === bln);
+  const tepat = selesai.filter(k => String(k.TanggalSelesai) <= String(k.BatasWaktu)).length;
+  const rata = selesaiBln.length ? selesaiBln.reduce((s, k) => s + klhJam(k.Tanggal, k.TanggalSelesai), 0) / selesaiBln.length : null;
+  const bulanIni = all.filter(k => String(k.Tanggal).slice(0, 7) === bln);
+  const perKat = KLH_KATEGORI.map(c => ({ c, n: bulanIni.filter(k => k.Kategori === c).length })).filter(x => x.n).sort((a, b) => b.n - a.n);
+  const maxKat = Math.max(1, ...perKat.map(x => x.n));
+  const chips = [['terbuka', 'Terbuka', klhTerbuka], ['telat', 'Lewat SLA', klhTelat], ['saya', 'Tugas saya', k => klhTerbuka(k) && k.PICEmail === S.me.email]]
+    .concat(KLH_STATUS.map(s => [s, s, k => k.Status === s])).concat([['semua', 'Semua', null]]);
+  el.innerHTML = `
+  <div class="hero">
+    <div class="grow"><h1>Keluhan Pelanggan</h1><p>Catat, tangani, dan pantau batas waktu penyelesaian keluhan. Nomor keluhan dibuat otomatis.</p></div>
+    <div class="hero-actions"><button class="btn btn-primary" data-klh-new><i class="bi bi-plus-lg"></i> Catat keluhan</button></div>
+  </div>
+  <div class="kpis">
+    ${kpi('Keluhan terbuka', terbuka.length + '<small>keluhan</small>', 'bi-inbox', 'ic-indigo', `${terbuka.filter(k => k.Status === 'Baru').length} baru · ${terbuka.filter(k => k.Status === 'Menunggu Pelanggan').length} menunggu pelanggan`)}
+    ${kpi('Lewat batas waktu', telat.length + '<small>keluhan</small>', 'bi-alarm', 'ic-red', telat.length ? '<span class="badge b-red">Segera tangani</span>' : 'Semua masih dalam SLA', '', telat.length ? 'danger' : '')}
+    ${kpi('Selesai bulan ini', selesaiBln.length + '<small>keluhan</small>', 'bi-check2-circle', 'ic-green', rata === null ? 'Belum ada yang selesai' : 'Rata-rata ' + (rata >= 24 ? (rata / 24).toFixed(1) + ' hari' : rata.toFixed(1) + ' jam'))}
+    ${kpi('Selesai tepat waktu', selesai.length ? Math.round(tepat / selesai.length * 100) + '<small>%</small>' : '—', 'bi-speedometer', 'ic-amber', `${tepat} dari ${selesai.length} keluhan selesai`)}
+  </div>
+  <div class="dash-grid klh-grid">
+    <div>
+      <div class="card" style="margin-bottom:16px"><div class="toolbar"><div class="search grow"><i class="bi bi-search"></i><input class="input" id="klhQ" placeholder="Cari no. keluhan, no. resi, pelapor, pelanggan…" value="${esc(st.q)}"></div>
+        <select class="input" id="klhKat" style="max-width:240px">${'<option value="">Semua kategori</option>' + KLH_KATEGORI.map(c => `<option ${c === st.kat ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
+        <select class="input" id="klhPic" style="max-width:190px">${csUserOpts(st.pic, 'Semua petugas')}</select></div>
+        <div class="chips-row">${chips.map(c => `<button class="fchip ${st.f === c[0] ? 'active' : ''}" data-kf="${esc(c[0])}">${c[1]}<span class="cnt">${c[2] ? all.filter(c[2]).length : all.length}</span></button>`).join('')}</div></div>
+      <div class="table-card" id="klhList"></div>
+    </div>
+    <div class="stack">
+      <div class="card list-card"><div class="card-title-row"><div><h3>Kategori bulan ini</h3><p class="muted">${bulanIni.length} keluhan masuk</p></div></div>
+        ${perKat.length ? `<div class="funnel">${perKat.map(x => `<div class="fn-row fn-static"><span class="fn-l">${esc(x.c)}</span><span class="fn-bar"><i class="b-red" style="width:${x.n / maxKat * 100}%"></i></span><b class="fn-n">${x.n}</b></div>`).join('')}</div>` : emptyHTML('bi-emoji-smile', 'Belum ada keluhan bulan ini', '')}</div>
+      <div class="card list-card"><div class="card-title-row"><div><h3><i class="bi bi-alarm" style="color:var(--red)"></i> Paling mendesak</h3><p class="muted">Terbuka, urut batas waktu</p></div></div>
+        ${terbuka.length ? terbuka.slice().sort((a, b) => String(a.BatasWaktu).localeCompare(String(b.BatasWaktu))).slice(0, 6).map(k => `<button class="li li-btn" data-klh="${esc(k.ID)}"><div class="grow"><b>${esc(k.NoKeluhan)} · ${esc(k.Kategori)}</b><small>${esc(k.NamaPelanggan || k.NamaPelapor)}${k.PICNama ? ' · ' + esc(k.PICNama) : ' · belum ada PIC'}</small></div>${klhSla(k)}</button>`).join('') : emptyHTML('bi-check2-all', 'Tidak ada keluhan terbuka', '')}</div>
+    </div>
+  </div>`;
+  const draw = () => {
+    const chip = chips.find(c => c[0] === st.f), q = st.q.trim().toLowerCase();
+    const list = all.filter(k => (!chip || !chip[2] || chip[2](k)) && (!st.kat || k.Kategori === st.kat) && (!st.pic || k.PICEmail === st.pic)
+      && (!q || [k.NoKeluhan, k.NoResi, k.NamaPelapor, k.HPPelapor, k.NamaPelanggan, k.Ringkasan, k.Deskripsi].join(' ').toLowerCase().includes(q)))
+      .sort((a, b) => (klhTerbuka(b) - klhTerbuka(a)) || String(klhTerbuka(a) ? a.BatasWaktu : b.Tanggal).localeCompare(String(klhTerbuka(a) ? b.BatasWaktu : a.Tanggal)));
+    $('#klhList').innerHTML = list.length ? `<div class="table-wrap"><table class="table cards"><thead><tr><th>No. keluhan</th><th>Pelanggan / pelapor</th><th>Keluhan</th><th>Status</th><th>Batas waktu</th><th>PIC</th></tr></thead><tbody>
+      ${list.map(k => `<tr class="clickable ${klhTelat(k) ? 'row-alert' : ''}" data-klh="${esc(k.ID)}"><td class="card-title" data-label="No. keluhan"><span class="t-link">${esc(k.NoKeluhan)}</span><span class="t-sub">${tglJam(k.Tanggal)} · ${esc(k.Sumber)}</span></td>
+        <td data-label="Pelanggan"><b class="t-clip">${esc(k.NamaPelanggan || k.NamaPelapor)}</b><span class="t-sub">${esc(k.NamaPelapor)}${k.NoResi ? ' · ' + esc(k.NoResi) : ''}</span></td>
+        <td data-label="Keluhan"><span class="badge ${KLH_PRIO_CLS[k.Prioritas]} plain">${esc(k.Prioritas)}</span> ${esc(k.Kategori)}<span class="t-sub t-clip">${esc(k.Ringkasan !== k.Kategori ? k.Ringkasan : String(k.Deskripsi).slice(0, 80))}</span></td>
+        <td data-label="Status">${klhBadge(k.Status)}</td><td data-label="Batas waktu">${klhSla(k)}</td><td data-label="PIC">${esc(k.PICNama || '—')}</td></tr>`).join('')}
+      </tbody></table></div>` : `<div style="padding:20px">${emptyHTML('bi-inbox', 'Tidak ada keluhan', st.f === 'terbuka' ? 'Semua keluhan sudah ditangani.' : 'Ubah filter atau kata kunci.')}</div>`;
+  };
+  $('#klhQ').addEventListener('input', debounce(e => { st.q = e.target.value; draw(); }, 120));
+  $('#klhKat').onchange = e => { st.kat = e.target.value; draw(); };
+  $('#klhPic').onchange = e => { st.pic = e.target.value; draw(); };
+  el.querySelectorAll('[data-kf]').forEach(b => b.onclick = () => { st.f = b.dataset.kf; renderKeluhan(); });
+  draw();
+}
+
+function klhOrderCard(o) {
+  if (!o) return '';
+  let riw = []; try { riw = JSON.parse(o.RiwayatStatus || '[]'); } catch (e) { riw = []; }
+  return `<div class="klh-order"><div class="klh-order-h"><b>${esc(o.NoSJ)}</b><span class="muted">${esc(LAY_NAMA[o.Layanan] || o.Layanan)} · ${tgl(o.Tanggal)}</span>${statusBadge(o.Status)}</div>
+    <dl class="dl">${[['Pelanggan', o.NamaPelanggan], ['Dari', o.Asal], ['Ke', o.Tujuan], ['Muatan / unit', o.Detail], ['Kontak', o.Kontak], ['Pengemudi / armada', o.Pengemudi]].filter(x => x[1]).map(x => `<dt>${x[0]}</dt><dd>${esc(x[1])}</dd>`).join('')}</dl>
+    ${riw.length ? `<div class="klh-riw">${riw.map(r => `<span><b>${esc(r.s)}</b> ${tglJam(r.w)}</span>`).join('<i class="bi bi-chevron-right"></i>')}</div>` : ''}</div>`;
+}
+
+function openKeluhanForm(k) {
+  const edit = !!(k && k.ID);
+  const d = Object.assign({ Sumber: 'WhatsApp', Prioritas: 'Sedang', PICEmail: isCS() ? S.me.email : '' }, k || {});
+  const f = (name, label, html, o) => `<label class="field${o && o.full ? ' full' : ''}"><span class="label${o && o.req ? ' req' : ''}">${label}</span>${html}</label>`;
+  openModal({ title: edit ? 'Ubah keluhan ' + k.NoKeluhan : 'Catat keluhan', sub: edit ? (k.NamaPelanggan || k.NamaPelapor) : 'Nomor keluhan dibuat otomatis saat disimpan', icon: 'bi-chat-square-text', size: 'lg',
+    body: `<form id="klhForm" novalidate><div class="grid-2">
+      ${edit ? '' : f('Sumber', 'Sumber keluhan', `<select class="input" name="Sumber">${KLH_SUMBER.filter(s => s !== 'Website').map(s => `<option ${s === d.Sumber ? 'selected' : ''}>${s}</option>`).join('')}</select>`)}
+      ${edit ? '' : f('NoResi', 'No. resi / surat jalan', `<div class="row-inline"><input class="input mono grow" name="NoResi" id="klhResi" autocapitalize="characters" placeholder="Opsional, mis. PKT-261112-1" value="${esc(d.NoResi || '')}"><button type="button" class="btn btn-secondary" id="klhCek"><i class="bi bi-search"></i> Cek</button></div>`)}
+      <div class="full" id="klhOrd"></div>
+      ${f('NamaPelapor', 'Nama pelapor', `<input class="input" name="NamaPelapor" maxlength="80" value="${esc(d.NamaPelapor || '')}">`, { req: true })}
+      ${f('HPPelapor', 'No. HP / WA pelapor', `<input class="input mono" name="HPPelapor" inputmode="tel" maxlength="25" value="${esc(d.HPPelapor || '')}">`, { req: true })}
+      ${f('EmailPelapor', 'Email pelapor', `<input class="input" type="email" name="EmailPelapor" maxlength="120" value="${esc(d.EmailPelapor || '')}">`)}
+      ${f('Kategori', 'Kategori', `<select class="input" name="Kategori"><option value="">— Pilih —</option>${KLH_KATEGORI.map(c => `<option ${c === d.Kategori ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`, { req: true })}
+      ${f('Prioritas', 'Prioritas (batas selesai)', `<select class="input" name="Prioritas">${Object.keys(KLH_PRIO).map(p => `<option value="${p}" ${p === d.Prioritas ? 'selected' : ''}>${p} — ${KLH_PRIO[p]}</option>`).join('')}</select>`)}
+      ${f('PICEmail', 'Petugas (PIC)', `<select class="input" name="PICEmail">${csUserOpts(d.PICEmail, 'Belum ditentukan')}</select>`)}
+      ${f('Ringkasan', 'Ringkasan', `<input class="input" name="Ringkasan" maxlength="150" placeholder="mis. Unit telat 1 hari dari jadwal" value="${esc(d.Ringkasan && d.Ringkasan !== d.Kategori ? d.Ringkasan : '')}">`, { full: true })}
+      ${f('Deskripsi', 'Detail keluhan', `<textarea class="input" name="Deskripsi" rows="4" maxlength="3000" placeholder="Apa yang dikeluhkan, kapan, dan apa yang diminta pelanggan">${esc(d.Deskripsi || '')}</textarea>`, { req: true, full: true })}
+    </div></form>`,
+    foot: `<button class="btn btn-secondary" data-close>Batal</button><button class="btn btn-primary" id="klhSave"><i class="bi bi-check2"></i> ${edit ? 'Simpan perubahan' : 'Simpan & buat nomor'}</button>` });
+  const form = $('#klhForm');
+  form.querySelector('[name=Kategori]').onchange = e => { if (!edit && KLH_PRIO_BAWAAN[e.target.value]) form.querySelector('[name=Prioritas]').value = KLH_PRIO_BAWAAN[e.target.value]; else if (!edit) form.querySelector('[name=Prioritas]').value = e.target.value ? 'Rendah' : 'Sedang'; };
+  if ($('#klhCek')) {
+    const cek = () => {
+      const no = $('#klhResi').value.trim().toUpperCase(); $('#klhResi').value = no;
+      if (!no) { $('#klhOrd').innerHTML = ''; return Promise.resolve(); }
+      const b = $('#klhCek'); btnBusy(b, true);
+      return api('cariOrderKeluhan', S.token, no).then(r => {
+        $('#klhOrd').innerHTML = klhOrderCard(r.data.order);
+        const p = r.data.pelanggan;
+        if (p) { const n = form.querySelector('[name=NamaPelapor]'), h = form.querySelector('[name=HPPelapor]'), m = form.querySelector('[name=EmailPelapor]'); if (!n.value) n.value = p.Nama; if (!h.value) h.value = p.NoHP || ''; if (!m.value) m.value = p.Email || ''; }
+      }).catch(e => { $('#klhOrd').innerHTML = `<div class="err-msg"><i class="bi bi-exclamation-triangle"></i> ${esc(e.message)}</div>`; }).finally(() => btnBusy(b, false));
+    };
+    $('#klhCek').onclick = cek;
+    $('#klhResi').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); cek(); } });
+  }
+  $('#klhSave').onclick = () => {
+    const v = formValues(form); if (edit) v.ID = k.ID;
+    if (!v.NamaPelapor.trim() || digits(v.HPPelapor).length < 9) return toast('warning', 'Lengkapi pelapor', 'Isi nama dan no. HP/WA pelapor.');
+    if (!v.Kategori) return toast('warning', 'Pilih kategori keluhan');
+    if (v.Deskripsi.trim().length < 10) return toast('warning', 'Detail keluhan terlalu singkat');
+    const b = $('#klhSave'); btnBusy(b, true, 'Menyimpan…');
+    api('saveKeluhan', S.token, v).then(r => { klhApply(r.data); ok(r.message); closeModal(); if (S.page === 'keluhan') renderKeluhan(); openKeluhanDetail(r.data.keluhan.ID); }).catch(fail).finally(() => btnBusy(b, false));
+  };
+}
+
+function openKeluhanDetail(id) {
+  const k = (S.d.keluhan || []).find(x => x.ID === id); if (!k) return;
+  const logs = (S.d.keluhanLog || []).filter(l => l.KeluhanID === id).sort((a, b) => String(b.Waktu).localeCompare(String(a.Waktu)));
+  const o = (S.d.orderRingkas || []).find(x => x.ID === k.OrderID);
+  const st = S.settings || {};
+  const waTeks = `Halo ${k.NamaPelapor}, kami dari ${st.companyName || st.appName || ''} terkait keluhan no. ${k.NoKeluhan}${k.NoResi ? ' (resi ' + k.NoResi + ')' : ''}. `;
+  const terbuka = klhTerbuka(k);
+  openModal({ title: k.NoKeluhan + ' · ' + k.Kategori, sub: (k.NamaPelanggan || k.NamaPelapor) + ' · masuk ' + tglJam(k.Tanggal) + ' via ' + k.Sumber, icon: 'bi-chat-square-text', size: 'lg',
+    body: `<div class="klh-top">${klhBadge(k.Status)} <span class="badge ${KLH_PRIO_CLS[k.Prioritas]} plain">Prioritas ${esc(k.Prioritas)}</span> ${klhSla(k)} <span class="muted">Batas: ${tglJam(k.BatasWaktu)}</span></div>
+      ${k.Status === 'Selesai' ? `<div class="alert alert-info"><i class="bi bi-check2-circle"></i><div><b>Selesai ${tglJam(k.TanggalSelesai)}.</b> ${esc(k.Solusi)}</div></div>` : ''}
+      <div class="crm-detail">
+        <div class="crm-info">
+          <dl class="dl">${[['Pelapor', k.NamaPelapor], ['HP / WA', k.HPPelapor], ['Email', k.EmailPelapor], ['Ringkasan', k.Ringkasan !== k.Kategori ? k.Ringkasan : ''], ['Detail', k.Deskripsi], ['PIC', k.PICNama || 'Belum ditentukan']].filter(x => x[1]).map(x => `<dt>${x[0]}</dt><dd>${esc(x[1])}</dd>`).join('')}</dl>
+          <div class="chips-row"><a class="btn btn-secondary btn-sm" href="https://wa.me/${waNumber(k.HPPelapor)}?text=${encodeURIComponent(waTeks)}" target="_blank" rel="noopener"><i class="bi bi-whatsapp"></i> WA pelapor</a><button type="button" class="btn btn-ghost btn-sm" id="klhEdit"><i class="bi bi-pencil"></i> Ubah</button></div>
+          ${o ? `<h4 style="margin:16px 0 8px">Order terkait</h4>${klhOrderCard(o)}` : k.NoResi ? `<p class="muted">Resi ${esc(k.NoResi)}</p>` : '<p class="muted mt">Tidak terkait order tertentu.</p>'}
+        </div>
+        <div>
+          <div class="ak-form"><h4>Tindak lanjut</h4>
+            ${terbuka ? `<div class="stepper">${['Diproses', 'Menunggu Pelanggan'].map(s => `<button type="button" class="st-step ${k.Status === s ? 'cur' : ''}" data-ks="${s}">${s}</button>`).join('')}<button type="button" class="st-step" data-ks="Selesai"><i class="bi bi-check2"></i> Selesai</button><button type="button" class="st-step lost" data-ks="Dibatalkan">Batalkan</button></div>`
+              : `<div class="stepper"><button type="button" class="st-step" data-ks="Diproses"><i class="bi bi-arrow-counterclockwise"></i> Buka lagi</button></div>`}
+            <label class="field"><span class="label">Catatan / balasan</span><textarea class="input" id="klhIsi" rows="3" maxlength="3000" placeholder="Apa yang sudah dilakukan atau disampaikan ke pelanggan"></textarea></label>
+            <label class="check-row"><input type="checkbox" id="klhPub"> <span>Tampilkan ke pelanggan (cek status keluhan di website)</span></label>
+            <div class="chips-row mt"><button type="button" class="btn btn-primary btn-sm" id="klhAdd"><i class="bi bi-check2"></i> Simpan catatan</button></div>
+          </div>
+          <h4 style="margin:16px 0 6px">Riwayat (${logs.length})</h4>
+          <ol class="timeline">${logs.map(l => `<li class="${l.Jenis === 'Catatan' || l.Jenis === 'Balasan' ? '' : 'tl-sys'}"><span class="tl-ic"><i class="bi ${{ Dibuat: 'bi-flag', Status: 'bi-signpost-split', Balasan: 'bi-reply', Catatan: 'bi-journal-text', Prioritas: 'bi-exclamation-diamond', PIC: 'bi-person' }[l.Jenis] || 'bi-dot'}"></i></span><div class="grow">
+            <div class="tl-h"><b>${esc(l.Jenis === 'Balasan' ? 'Balasan ke pelanggan' : l.Jenis === 'Catatan' ? 'Catatan internal' : l.Jenis)}</b><small class="muted">${tglJam(l.Waktu)} · ${esc(l.OlehNama)}</small>${String(l.Publik) === 'true' ? '<span class="badge b-primary plain" title="Terlihat pelanggan di website"><i class="bi bi-eye"></i> Publik</span>' : ''}</div>
+            <p>${esc(l.Isi)}</p></div></li>`).join('')}</ol>
+        </div></div>`,
+    foot: '<button class="btn btn-secondary" data-close>Tutup</button>' });
+  $('#klhEdit').onclick = () => openKeluhanForm(k);
+  const kirim = (aksi, btn) => { btnBusy(btn, true); return api('tindakKeluhan', S.token, k.ID, aksi).then(r => { klhApply(r.data); ok(r.message); if (S.page === 'keluhan') renderKeluhan(); openKeluhanDetail(k.ID); }).catch(fail).finally(() => btnBusy(btn, false)); };
+  $('#klhAdd').onclick = e => { const isi = $('#klhIsi').value.trim(); if (!isi) return toast('warning', 'Tulis catatan dulu'); kirim({ Isi: isi, Publik: $('#klhPub').checked }, e.currentTarget); };
+  $('#modalBody').querySelectorAll('[data-ks]').forEach(b => b.onclick = () => {
+    const s = b.dataset.ks, isi = $('#klhIsi').value.trim(), pub = $('#klhPub').checked;
+    if (s === 'Selesai') {
+      openModal({ title: 'Selesaikan ' + k.NoKeluhan, sub: 'Solusi tampil ke pelanggan di cek status website', icon: 'bi-check2-circle', size: 'sm',
+        body: `<label class="field"><span class="label req">Solusi / penyelesaian</span><textarea class="input" id="klhSol" rows="4" maxlength="2000" placeholder="mis. Barang pengganti dikirim 13 Nov, ongkos ditanggung KAGUMI">${esc(isi)}</textarea></label>`,
+        foot: '<button class="btn btn-secondary" id="klhSolBack">Batal</button><button class="btn btn-primary" id="klhSolOk"><i class="bi bi-check2"></i> Tandai selesai</button>' });
+      $('#klhSolBack').onclick = () => openKeluhanDetail(k.ID);
+      $('#klhSolOk').onclick = e => { const sol = $('#klhSol').value.trim(); if (!sol) return toast('warning', 'Isi solusi dulu'); kirim({ Status: 'Selesai', Solusi: sol }, e.currentTarget); };
+      return;
+    }
+    if (s === 'Dibatalkan' && !isi) return toast('warning', 'Isi alasan pembatalan', 'Tulis alasannya di kolom catatan, lalu klik Batalkan lagi.');
+    kirim({ Status: s, Isi: isi, Publik: pub }, b);
+  });
+}
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-klh]'); if (b) { e.preventDefault(); openKeluhanDetail(b.dataset.klh); return; }
+  if (e.target.closest('[data-klh-new]')) openKeluhanForm(null);
 });
 
 // Penanda: js/app.js termuat sampai akhir
