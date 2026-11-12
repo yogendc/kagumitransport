@@ -893,4 +893,5 @@ body:not(.is-cs) .cs-only{display:none!important}
 .pick-i{padding:8px 10px;border:1px solid var(--border);border-radius:10px;gap:10px}
 .pick-i[hidden]{display:none}
 @media (max-width:760px){.tgt-grid,.tgt-row{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.field[hidden]{display:none!important}
 :root{--kgm-css-end:1}

@@ -10,7 +10,7 @@
    ============================================================ */
 
 // ── Konstanta ──────────────────────────────────────────────
-const APP_VERSI = '3.3'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
+const APP_VERSI = '3.4'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
 const LS = { token: 'kgm_token', theme: 'kgm_theme', cache: 'kgm_cache_v1', cols: 'kgm_rekap_cols', draft: 'kgm_draft_', master: 'kgm_master_open', login: 'kgm_login_ctx' };
 const STATUS = ['Dijadwalkan', 'Dikirim', 'Diterima', 'Dibatalkan'];
 const STATUS_CLS = { Dijadwalkan: 'b-indigo', Dikirim: 'b-amber', Diterima: 'b-green', Dibatalkan: 'b-red', Draf: 'b-slate' };
@@ -5722,6 +5722,13 @@ function renderCsKinerja() {
 // ── Daftar Harga ──
 const HARGA_LAYANAN = ['Pengiriman Barang', 'Pengiriman Mobil & Alat Berat', 'Sewa Kendaraan', 'Lainnya'];
 const HARGA_SATUAN = ['per trip', 'per unit', 'per kg', 'per m³', 'per koli', 'per hari', 'per bulan'];
+/** Teks harga: paket → per kg / per m³ / minimal; lainnya → harga + satuan. */
+function hargaTeks(h, html) {
+  const kg = num(h.HargaKg !== undefined ? h.HargaKg : h.kg), m3 = num(h.HargaM3 !== undefined ? h.HargaM3 : h.m3), mn = num(h.HargaMin !== undefined ? h.HargaMin : h.min);
+  const br = html ? '<br>' : ' · ';
+  if (kg || m3) return [kg ? rp(kg) + ' /kg' : '', m3 ? rp(m3) + ' /m³' : '', mn ? 'Min. ' + rp(mn) : ''].filter(Boolean).join(br);
+  return rp(h.Harga !== undefined ? h.Harga : h.harga) + (html ? '<br><span class="muted">' + esc(h.Satuan !== undefined ? h.Satuan : h.satuan || '') + '</span>' : ' ' + (h.Satuan || h.satuan || ''));
+}
 function renderHarga() {
   const el = $('#page-harga'), st = S.ui.hrg = S.ui.hrg || { ly: '', q: '' }, list = S.d.harga || [];
   el.innerHTML = `<div class="page-head"><div class="ph-icon"><i class="bi bi-tags"></i></div><div class="grow"><h1>Daftar Harga</h1><p class="muted">Harga standar per layanan & rute. Dipakai saat membuat Rate Card atau Surat Penawaran Harga${isSA() ? '' : ' (hanya Super Admin yang dapat mengubah)'}.</p></div>
@@ -5736,7 +5743,7 @@ function renderHarga() {
       .sort((a, b) => String(a.Layanan + a.Tujuan + a.Armada).localeCompare(String(b.Layanan + b.Tujuan + b.Armada)));
     $('#hrgList').innerHTML = ls.length ? `<div class="table-wrap"><table class="table cards"><thead><tr><th>Layanan</th><th>Rute</th><th>Armada / jenis</th><th class="t-right">Harga</th><th>Keterangan</th>${isSA() ? '<th class="t-actions">Aksi</th>' : ''}</tr></thead><tbody>
       ${ls.map(h => `<tr class="${String(h.Aktif) === 'false' ? 'row-muted' : ''}"><td data-label="Layanan">${esc(h.Layanan)}</td><td class="card-title" data-label="Rute"><b>${esc([h.Asal, h.Tujuan].filter(Boolean).join(' → ') || '—')}</b></td><td data-label="Armada">${esc(h.Armada || '—')}</td>
-        <td class="t-right mono" data-label="Harga"><b>${rp(h.Harga)}</b><span class="t-sub">${esc(h.Satuan)}</span></td><td data-label="Keterangan">${esc(h.Keterangan || '')}${String(h.Aktif) === 'false' ? ' <span class="badge b-slate">Nonaktif</span>' : ''}</td>
+        <td class="t-right mono" data-label="Harga"><b>${hargaTeks(h, true)}</b></td><td data-label="Keterangan">${esc(h.Keterangan || '')}${String(h.Aktif) === 'false' ? ' <span class="badge b-slate">Nonaktif</span>' : ''}</td>
         ${isSA() ? `<td class="t-actions"><button class="icon-btn" data-hrg="${esc(h.ID)}" title="Ubah"><i class="bi bi-pencil"></i></button></td>` : ''}</tr>`).join('')}
     </tbody></table></div>` : `<div style="padding:20px">${emptyHTML('bi-tags', 'Belum ada daftar harga', isSA() ? 'Tambahkan harga standar per rute dan armada.' : 'Super Admin belum mengisi daftar harga.')}</div>`;
   };
@@ -5748,21 +5755,30 @@ function renderHarga() {
 }
 function openHargaForm(h) {
   const d = Object.assign({ Layanan: 'Pengiriman Barang', Satuan: 'per trip', Aktif: 'true' }, h || {});
+  const m = v => (num(v) ? num(v).toLocaleString('id-ID') : '');
   openModal({ title: h ? 'Ubah harga' : 'Tambah harga', icon: 'bi-tags', size: 'lg',
     body: `<form id="hrgForm" novalidate><div class="grid-2">
       <label class="field"><span class="label req">Layanan</span><select class="input" name="Layanan">${crmOpts(HARGA_LAYANAN, d.Layanan)}</select></label>
       <label class="field"><span class="label">Armada / jenis</span><input class="input" name="Armada" maxlength="80" value="${esc(d.Armada || '')}" placeholder="mis. CDD Box, Car carrier, Paket reguler"></label>
       <label class="field"><span class="label">Asal</span><input class="input" name="Asal" maxlength="80" value="${esc(d.Asal || '')}" placeholder="mis. Jakarta"></label>
       <label class="field"><span class="label">Tujuan</span><input class="input" name="Tujuan" maxlength="80" value="${esc(d.Tujuan || '')}" placeholder="mis. Medan"></label>
-      <label class="field"><span class="label req">Harga (Rp)</span><input class="input t-right mono" name="Harga" inputmode="numeric" data-money value="${num(d.Harga) ? num(d.Harga).toLocaleString('id-ID') : ''}"></label>
-      <label class="field"><span class="label">Satuan</span><input class="input" name="Satuan" list="dlSatuan" maxlength="30" value="${esc(d.Satuan)}"><datalist id="dlSatuan">${HARGA_SATUAN.map(x => `<option>${x}</option>`).join('')}</datalist></label>
+      <label class="field hb-umum"><span class="label req">Harga (Rp)</span><input class="input t-right mono" name="Harga" inputmode="numeric" data-money value="${m(d.Harga)}"></label>
+      <label class="field hb-umum"><span class="label">Satuan</span><select class="input" name="Satuan">${HARGA_SATUAN.concat(d.Satuan && !HARGA_SATUAN.includes(d.Satuan) ? [d.Satuan] : []).map(x => `<option ${x === d.Satuan ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
+      <label class="field hb-paket"><span class="label">Harga per kg (Rp)</span><input class="input t-right mono" name="HargaKg" inputmode="numeric" data-money value="${m(d.HargaKg)}"></label>
+      <label class="field hb-paket"><span class="label">Harga per m³ / kubik (Rp)</span><input class="input t-right mono" name="HargaM3" inputmode="numeric" data-money value="${m(d.HargaM3)}"></label>
+      <label class="field hb-paket"><span class="label">Harga minimal (Rp)</span><input class="input t-right mono" name="HargaMin" inputmode="numeric" data-money value="${m(d.HargaMin)}"><small class="muted">Ongkos paling rendah per kiriman.</small></label>
       <label class="field full"><span class="label">Keterangan</span><input class="input" name="Keterangan" maxlength="300" value="${esc(d.Keterangan || '')}" placeholder="mis. Min. 100 kg, belum termasuk asuransi"></label>
       <label class="field"><span class="label">Status</span><select class="input" name="Aktif"><option value="true" ${String(d.Aktif) !== 'false' ? 'selected' : ''}>Aktif</option><option value="false" ${String(d.Aktif) === 'false' ? 'selected' : ''}>Nonaktif</option></select></label>
     </div></form>`,
     foot: `${h ? '<button class="btn btn-ghost" id="hrgDel" style="margin-right:auto;color:var(--red)"><i class="bi bi-trash"></i> Hapus</button>' : ''}<button class="btn btn-secondary" data-close>Batal</button><button class="btn btn-primary" id="hrgSave"><i class="bi bi-check2"></i> Simpan</button>` });
-  $('#hrgForm [data-money]').addEventListener('input', e => formatMoneyInput(e.target));
+  const form = $('#hrgForm');
+  form.querySelectorAll('[data-money]').forEach(i => i.addEventListener('input', () => formatMoneyInput(i)));
+  // Pengiriman Barang memakai harga per kg / per m³ / minimal; layanan lain memakai harga + satuan
+  const mode = () => { const paket = form.querySelector('[name=Layanan]').value === 'Pengiriman Barang'; form.querySelectorAll('.hb-paket').forEach(x => { x.hidden = !paket; }); form.querySelectorAll('.hb-umum').forEach(x => { x.hidden = paket; }); };
+  form.querySelector('[name=Layanan]').addEventListener('change', mode); mode();
   $('#hrgSave').onclick = () => {
-    const v = formValues($('#hrgForm')); v.Harga = num(v.Harga); if (h) v.ID = h.ID;
+    const v = formValues($('#hrgForm')); ['Harga', 'HargaKg', 'HargaM3', 'HargaMin'].forEach(k => { v[k] = num(v[k]); }); if (h) v.ID = h.ID;
+    if (v.Layanan === 'Pengiriman Barang' ? !(v.HargaKg || v.HargaM3) : !v.Harga) return toast('warning', 'Isi harga', v.Layanan === 'Pengiriman Barang' ? 'Isi harga per kg atau per m³.' : 'Harga wajib diisi.');
     const b = $('#hrgSave'); btnBusy(b, true, 'Menyimpan…');
     api('saveHarga', S.token, v).then(r => { upsert('harga', r.data); saveCache(); ok(r.message); closeModal(); renderHarga(); }).catch(fail).finally(() => btnBusy(b, false));
   };
@@ -5835,7 +5851,8 @@ function rcParse(v) { try { const a = JSON.parse(v || '[]'); return Array.isArra
 function rcRowHTML(r) {
   const m = v => (num(v) ? num(v).toLocaleString('id-ID') : '');
   return `<tr data-rc><td><input class="input" data-rf="layanan" maxlength="40" value="${esc(r.layanan || '')}"></td><td><input class="input" data-rf="asal" maxlength="80" value="${esc(r.asal || '')}"></td><td><input class="input" data-rf="tujuan" maxlength="80" value="${esc(r.tujuan || '')}"></td>
-    <td><input class="input" data-rf="armada" maxlength="80" value="${esc(r.armada || '')}"></td><td><input class="input t-right mono" data-rf="harga" inputmode="numeric" value="${m(r.harga)}"></td><td><input class="input" data-rf="satuan" maxlength="30" value="${esc(r.satuan || '')}"></td>
+    <td><input class="input" data-rf="armada" maxlength="80" value="${esc(r.armada || '')}"></td><td><input class="input t-right mono" data-rf="harga" inputmode="numeric" value="${m(r.harga)}"></td><td><select class="input" data-rf="satuan"><option value=""></option>${HARGA_SATUAN.concat(r.satuan && !HARGA_SATUAN.includes(r.satuan) ? [r.satuan] : []).map(x => `<option ${x === r.satuan ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></td>
+    <td><input class="input t-right mono" data-rf="kg" inputmode="numeric" value="${m(r.kg)}"></td><td><input class="input t-right mono" data-rf="m3" inputmode="numeric" value="${m(r.m3)}"></td><td><input class="input t-right mono" data-rf="min" inputmode="numeric" value="${m(r.min)}"></td>
     <td><input class="input" data-rf="ket" maxlength="200" value="${esc(r.ket || '')}"></td><td><button type="button" class="icon-btn" data-rcdel title="Hapus"><i class="bi bi-x-lg"></i></button></td></tr>`;
 }
 function openSuratForm(x, jenisBaru) {
@@ -5859,8 +5876,8 @@ function openSuratForm(x, jenisBaru) {
         <label class="field full"><span class="label">Isi surat</span><textarea class="input" name="Isi" rows="9" maxlength="20000">${esc(d.Isi || '')}</textarea><small class="muted">Pisahkan paragraf dengan baris kosong. Isi bebas diubah sesuai kebutuhan.</small></label>
       </div>
       <div id="rcBox" ${['SPH', 'RC'].includes(d.Jenis) ? '' : 'hidden'}><div class="card-title-row"><h4 style="margin:6px 0">Tabel harga</h4><div class="chips-row"><button type="button" class="btn btn-secondary btn-sm" id="rcPick"><i class="bi bi-list-check"></i> Ambil dari daftar harga</button><button type="button" class="btn btn-ghost btn-sm" id="rcAdd"><i class="bi bi-plus-lg"></i> Baris</button></div></div>
-        <div class="table-wrap rc-wrap"><table class="table rc-table"><thead><tr><th>Layanan</th><th>Asal</th><th>Tujuan</th><th>Armada / jenis</th><th>Harga (Rp)</th><th>Satuan</th><th>Keterangan</th><th></th></tr></thead><tbody id="rcBody">${rcParse(d.RateCard).map(rcRowHTML).join('')}</tbody></table></div>
-        <small class="muted">Harga bisa diubah khusus untuk surat ini tanpa mengubah Daftar Harga.</small></div>
+        <div class="table-wrap rc-wrap"><table class="table rc-table"><thead><tr><th>Layanan</th><th>Asal</th><th>Tujuan</th><th>Armada / jenis</th><th>Harga (Rp)</th><th>Satuan</th><th>Per kg</th><th>Per m³</th><th>Minimal</th><th>Keterangan</th><th></th></tr></thead><tbody id="rcBody">${rcParse(d.RateCard).map(rcRowHTML).join('')}</tbody></table></div>
+        <small class="muted">Harga bisa diubah khusus untuk surat ini tanpa mengubah Daftar Harga. Kirim paket: isi per kg / per m³ / minimal; layanan lain: harga + satuan.</small></div>
       <div class="grid-2 mt">
         <label class="field full"><span class="label">Penutup</span><textarea class="input" name="Penutup" rows="2" maxlength="2000">${esc(d.Penutup || '')}</textarea></label>
         <label class="field full"><span class="label">Tembusan</span><input class="input" name="Tembusan" maxlength="300" value="${esc(d.Tembusan || '')}" placeholder="Opsional, pisahkan dengan koma"></label>
@@ -5879,14 +5896,14 @@ function openSuratForm(x, jenisBaru) {
     tplAwal = tpl; $('#rcBox').hidden = !['SPH', 'RC'].includes(j);
   });
   const rcBody = $('#rcBody');
-  rcBody.addEventListener('input', e => { if (e.target.dataset.rf === 'harga') formatMoneyInput(e.target); });
+  rcBody.addEventListener('input', e => { if (['harga', 'kg', 'm3', 'min'].includes(e.target.dataset.rf)) formatMoneyInput(e.target); });
   rcBody.addEventListener('click', e => { const b = e.target.closest('[data-rcdel]'); if (b) b.closest('tr').remove(); });
   $('#rcAdd').onclick = () => rcBody.insertAdjacentHTML('beforeend', rcRowHTML({ satuan: 'per trip' }));
-  $('#rcPick').onclick = () => pilihHarga(rows => rows.forEach(h => rcBody.insertAdjacentHTML('beforeend', rcRowHTML({ layanan: h.Layanan, asal: h.Asal, tujuan: h.Tujuan, armada: h.Armada, harga: h.Harga, satuan: h.Satuan, ket: h.Keterangan }))));
+  $('#rcPick').onclick = () => pilihHarga(rows => rows.forEach(h => rcBody.insertAdjacentHTML('beforeend', rcRowHTML({ layanan: h.Layanan, asal: h.Asal, tujuan: h.Tujuan, armada: h.Armada, harga: h.Harga, satuan: h.Satuan, kg: h.HargaKg, m3: h.HargaM3, min: h.HargaMin, ket: h.Keterangan }))));
   const kumpul = () => {
     const v = formValues(form); if (edit) v.ID = x.ID; if (edit && x.NoSurat) v.Jenis = x.Jenis;
     v.KepadaNama = $('#srtKe').value.trim(); v.KepadaTipe = ke.tipe; v.KepadaID = ke.id;
-    v.RateCard = $$('[data-rc]', rcBody).map(tr => { const o = {}; tr.querySelectorAll('[data-rf]').forEach(i => { o[i.dataset.rf] = i.dataset.rf === 'harga' ? num(i.value) : i.value.trim(); }); return o; }).filter(r => r.harga);
+    v.RateCard = $$('[data-rc]', rcBody).map(tr => { const o = {}; tr.querySelectorAll('[data-rf]').forEach(i => { o[i.dataset.rf] = ['harga', 'kg', 'm3', 'min'].includes(i.dataset.rf) ? num(i.value) : i.value.trim(); }); return o; }).filter(r => r.harga || r.kg || r.m3);
     if (!v.KepadaNama) { toast('warning', 'Isi tujuan surat (Kepada Yth.)'); return null; }
     if (!v.Perihal.trim()) { toast('warning', 'Isi perihal surat'); return null; }
     return v;
@@ -5908,7 +5925,7 @@ function pilihHarga(cb) {
   const box = document.createElement('div'); box.className = 'pick-overlay';
   box.innerHTML = `<div class="pick-box"><div class="card-title-row"><h3 style="margin:0">Pilih dari daftar harga</h3><button type="button" class="icon-btn" data-pclose><i class="bi bi-x-lg"></i></button></div>
     <select class="input" id="pkLy" style="margin:10px 0">${crmOpts(HARGA_LAYANAN, '', 'Semua layanan')}</select>
-    <div class="pick-list">${list.map(h => `<label class="check-row pick-i" data-ly="${esc(h.Layanan)}"><input type="checkbox" value="${esc(h.ID)}"><span><b>${esc([h.Asal, h.Tujuan].filter(Boolean).join(' → ') || h.Armada)}</b> <span class="muted">${esc(h.Armada && (h.Asal || h.Tujuan) ? h.Armada + ' · ' : '')}${esc(h.Layanan)}</span></span><span class="mono" style="margin-left:auto">${rp(h.Harga)} <small class="muted">${esc(h.Satuan)}</small></span></label>`).join('')}</div>
+    <div class="pick-list">${list.map(h => `<label class="check-row pick-i" data-ly="${esc(h.Layanan)}"><input type="checkbox" value="${esc(h.ID)}"><span><b>${esc([h.Asal, h.Tujuan].filter(Boolean).join(' → ') || h.Armada)}</b> <span class="muted">${esc(h.Armada && (h.Asal || h.Tujuan) ? h.Armada + ' · ' : '')}${esc(h.Layanan)}</span></span><span class="mono" style="margin-left:auto;text-align:right">${hargaTeks(h, true)}</span></label>`).join('')}</div>
     <div class="chips-row" style="justify-content:flex-end;margin-top:12px"><button type="button" class="btn btn-secondary" data-pclose>Batal</button><button type="button" class="btn btn-primary" id="pkOk">Tambahkan</button></div></div>`;
   document.body.appendChild(box);
   const tutup = () => box.remove();
@@ -5925,7 +5942,7 @@ function suratHTML(x, forPdf) {
   let qr = '';
   if (ok) { try { qr = KgmQR.dataUrl([st.companyName || st.appName, 'Surat ' + x.NoSurat, 'Perihal: ' + x.Perihal, 'Disetujui: ' + x.DisetujuiNama + ' (' + (x.DisetujuiJabatan || '') + ')', 'Waktu: ' + x.DisetujuiPada + ' WIB', 'Kode verifikasi: ' + x.KodeVerifikasi].join('\n'), 300, 'M'); } catch (e) { qr = ''; } }
   const tabel = rc.length ? `<table class="t" style="margin:6px 0 12px;font-size:10px"><tr><th style="width:26px">No</th><th>Layanan</th><th>Rute</th><th>Armada / jenis</th><th class="num">Harga</th><th>Keterangan</th></tr>
-    ${rc.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.layanan)}</td><td>${esc([r.asal, r.tujuan].filter(Boolean).join(' → '))}</td><td>${esc(r.armada)}</td><td class="num"><b>${rp(r.harga)}</b><br><span class="muted">${esc(r.satuan)}</span></td><td>${esc(r.ket)}</td></tr>`).join('')}</table>` : '';
+    ${rc.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.layanan)}</td><td>${esc([r.asal, r.tujuan].filter(Boolean).join(' → '))}</td><td>${esc(r.armada)}</td><td class="num"><b>${hargaTeks(r, true)}</b></td><td>${esc(r.ket)}</td></tr>`).join('')}</table>` : '';
   const body = `<div class="sheet a4" style="font-size:11.5px;line-height:1.55">${kopHTML(st, true)}
     ${!ok ? '<div style="margin:10px 0;padding:6px 10px;border:1px dashed #B42318;color:#B42318;font-weight:700;text-align:center">DRAF — BELUM DISETUJUI, TIDAK UNTUK DIKIRIM</div>' : ''}
     <table style="margin-top:14px"><tr><td style="vertical-align:top"><table style="width:auto"><tr><td style="padding:1px 12px 1px 0">Nomor</td><td>: <b>${esc(x.NoSurat || '(belum bernomor)')}</b></td></tr>
