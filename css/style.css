@@ -912,4 +912,21 @@ body:not(.is-cs) .cs-only{display:none!important}
 .hs-list li:last-child{border-bottom:0}
 .hs-list li>span{display:flex;flex-direction:column;min-width:0}
 .hs-list li>b{text-align:right;white-space:nowrap}
+.tf-cell{display:flex;flex-direction:column;min-width:0}
+.tf-cell small{display:none;font-size:11px;color:var(--muted);margin-bottom:2px}
+.tf-min .tf-row{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,.8fr) 36px}
+.tf-min.tf-nohrg .tf-row{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) 36px}
+@media (max-width:640px){
+  .tf-cell small{display:block}
+  .tf-min .tf-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 36px;row-gap:6px;padding-bottom:8px;border-bottom:1px dashed var(--border);align-items:end}
+  .tf-min .tf-row .tf-kota{grid-column:1/3}
+  .tf-min .tf-row .tf-del{grid-row:1;grid-column:3}
+  .tf-min .tf-row .tf-cell[data-c=kg],.tf-min .tf-row .tf-cell[data-c=min]{grid-column:1}
+  .tf-min .tf-row .tf-cell[data-c=m3],.tf-min .tf-row .tf-cell[data-c=hari]{grid-column:2}
+  .tf-min .tf-head{display:none!important}
+  .tf-min.tf-nohrg .tf-row{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) 36px;border-bottom:0;padding-bottom:0}
+  .tf-min.tf-nohrg .tf-row .tf-kota{grid-column:1}
+  .tf-min.tf-nohrg .tf-row .tf-cell[data-c=hari]{grid-column:2}
+  .tf-min.tf-nohrg .tf-cell small,.tf-table:not(.tf-min) .tf-cell small{display:none}
+}
 :root{--kgm-css-end:1}

@@ -10,7 +10,7 @@
    ============================================================ */
 
 // ── Konstanta ──────────────────────────────────────────────
-const APP_VERSI = '3.5'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
+const APP_VERSI = '3.6'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
 const LS = { token: 'kgm_token', theme: 'kgm_theme', cache: 'kgm_cache_v1', cols: 'kgm_rekap_cols', draft: 'kgm_draft_', master: 'kgm_master_open', login: 'kgm_login_ctx' };
 const STATUS = ['Dijadwalkan', 'Dikirim', 'Diterima', 'Dibatalkan'];
 const STATUS_CLS = { Dijadwalkan: 'b-indigo', Dikirim: 'b-amber', Diterima: 'b-green', Dibatalkan: 'b-red', Draf: 'b-slate' };
@@ -2712,22 +2712,23 @@ const MASTERS = {
   ekspedisi: {
     title: 'Ekspedisi Rekanan', sub: 'Mitra ekspedisi untuk meneruskan paket. Hanya untuk tim internal, tidak tercetak di dokumen pelanggan.', icon: 'bi-buildings', add: 'Tambah ekspedisi', list: 'ekspedisi',
     canEdit: () => isSA(), canDel: () => isSA(), label: r => r.Nama,
-    search: r => [r.Nama, r.Kode, r.NoWA, r.Alamat, r.Catatan, tarifParse(r.Tarif).map(t => t.kota).join(' ')].join(' '),
+    search: r => [r.Nama, r.Kode, r.PIC, r.NoWA, r.Alamat, r.Catatan, tarifParse(r.Tarif).map(t => t.kota).join(' ')].join(' '),
     chips: [['', 'Semua'], ['aktif', 'Pernah dipakai', r => S.d.orders.some(o => o.EkspedisiID === r.ID)]],
     cols: [
       ['ID', r => `<span class="chip chip-soft mono">${esc(r.Kode)}</span>`, 'card-title'],
-      ['Ekspedisi', r => `<span class="t-strong">${esc(r.Nama)}</span><span class="t-sub">${esc(firstPart(r.Alamat) || '—')}</span>`],
+      ['Ekspedisi', r => `<span class="t-strong">${esc(r.Nama)}</span><span class="t-sub">${r.PIC ? '<i class="bi bi-person"></i> PIC ' + esc(r.PIC) + ' · ' : ''}${esc(firstPart(r.Alamat) || '—')}</span>`],
       ['WhatsApp', r => r.NoWA ? `<a class="mono" href="https://wa.me/${waNumber(r.NoWA)}" target="_blank" rel="noopener">${esc(r.NoWA)}</a>` : '—'],
-      ['Tarif', r => { const t = tarifParse(r.Tarif).filter(x => x.kota); return t.length ? `<b class="mono">${t.length}</b><span class="t-sub">${esc(t.slice(0, 3).map(x => x.kota).join(', '))}${t.length > 3 ? ', …' : ''}</span>` : '<span class="muted">—</span>'; }],
+      [isSA() ? 'Tarif' : 'Kota tujuan', r => { const t = tarifParse(r.Tarif).filter(x => x.kota); return t.length ? `<b class="mono">${t.length}</b><span class="t-sub">${esc(t.slice(0, 3).map(x => x.kota + (x.hari ? ' (' + x.hari + ' hr)' : '')).join(', '))}${t.length > 3 ? ', …' : ''}</span>` : '<span class="muted">—</span>'; }],
       ['Paket', r => `<b class="mono">${S.d.orders.filter(o => o.EkspedisiID === r.ID && o.StatusDok === 'Terkonfirmasi').length}</b><span class="t-sub">resi diteruskan</span>`]
     ],
     sections: [
       { t: 'Data ekspedisi', f: [
         { k: 'Nama', l: 'Nama ekspedisi', req: true, full: true, ph: 'Contoh: JNE Cargo Cabang Cikarang' },
+        { k: 'PIC', l: 'Nama PIC', ph: 'Contoh: Pak Hendra' },
         { k: 'NoWA', l: 'No. WhatsApp', t: 'tel', req: true, ph: '08xxxxxxxxxx' },
         { k: 'Alamat', l: 'Alamat (opsional)', t: 'textarea', full: true },
         { k: 'Catatan', l: 'Catatan internal', t: 'textarea', full: true }] },
-      { t: 'Tarif ekspedisi per kota tujuan', f: [{ k: 'Tarif', t: 'tarif', min: true, full: true }] }
+      { t: 'Tarif & estimasi per kota tujuan', f: [{ k: 'Tarif', t: 'tarif', min: true, full: true }] }
     ]
   },
   rekening: {
@@ -2832,12 +2833,12 @@ function openMasterModal(type, rec, opt) {
         <span class="chip b-indigo mono"><i class="bi bi-lock"></i> Sewa: ${esc(d.IDSewa || 'CUST-otomatis')}</span><span class="chip b-indigo mono"><i class="bi bi-lock"></i> Kirim: ${esc(d.IDKirim || 'KRM-otomatis')}</span></div></div>`;
     }
     if (f.t === 'tarif') {
-      const rows = tarifParse(v), mn = !!f.min;
+      const rows = tarifParse(v), mn = !!f.min, nh = mn && !isSA();
       return `<div class="field full" data-f="${f.k}"><input type="hidden" name="${f.k}" value="${esc(v)}" data-tf-hidden>
-        <small class="muted" style="margin-bottom:6px">${mn ? 'Tarif dari ekspedisi ke kita (biaya modal, hanya internal). Tampil sebagai perkiraan biaya saat ekspedisi dipilih di Form Kirim Paket. Kosongkan nama kota untuk tarif umum (semua kota).' : 'Terisi otomatis di Form Kirim Paket sesuai kota tujuan. Kosongkan nama kota untuk tarif umum (semua kota).'}</small>
-        <div class="tf-table${mn ? ' tf-min' : ''}" data-tf-table${mn ? ' data-tf-min' : ''}>
-          <div class="tf-row tf-head"><span>Kota tujuan</span><span>Harga per kg (Rp)</span><span>Harga per m³ (Rp)</span>${mn ? '<span>Harga minimal (Rp)</span>' : ''}<span></span></div>
-          ${(rows.length ? rows : [{}]).map(t => tarifRowHTML(t, ro, mn)).join('')}
+        <small class="muted" style="margin-bottom:6px">${nh ? 'Kota tujuan & estimasi lama kirim. Harga ekspedisi hanya dapat dilihat dan diisi Super Admin.' : mn ? 'Tarif dari ekspedisi ke kita (biaya modal, hanya Super Admin yang melihat harga). Tampil sebagai perkiraan biaya saat ekspedisi dipilih di Form Kirim Paket. Estimasi hari (mis. 3-5) juga tampil untuk Admin. Kosongkan nama kota untuk tarif umum (semua kota).' : 'Terisi otomatis di Form Kirim Paket sesuai kota tujuan. Kosongkan nama kota untuk tarif umum (semua kota).'}</small>
+        <div class="tf-table${mn ? ' tf-min' : ''}${nh ? ' tf-nohrg' : ''}" data-tf-table${mn ? ' data-tf-min' : ''}${nh ? ' data-tf-nohrg' : ''}>
+          <div class="tf-row tf-head"><span>Kota tujuan</span>${nh ? '' : `<span>Harga per kg (Rp)</span><span>Harga per m³ (Rp)</span>${mn ? '<span>Harga minimal (Rp)</span>' : ''}`}${mn ? '<span>Estimasi (hari)</span>' : ''}<span></span></div>
+          ${(rows.length ? rows : [{}]).map(t => tarifRowHTML(t, ro, mn, nh)).join('')}
         </div>
         ${ro ? '' : '<button type="button" class="btn btn-secondary btn-sm" data-tf-add style="margin-top:8px;justify-self:start"><i class="bi bi-plus-lg"></i> Tambah kota</button>'}
         <div class="err-msg" data-err="${f.k}" hidden></div></div>`;
@@ -2895,29 +2896,32 @@ function cariTarif(p, kota) {
   const list = tarifList(p), k = String(kota || '').trim().toLowerCase();
   return (k && list.find(t => String(t.kota || '').trim().toLowerCase() === k)) || list.find(t => !String(t.kota || '').trim()) || null;
 }
-function tarifRowHTML(t, ro, mn) {
+function tarifRowHTML(t, ro, mn, nh) {
   const m = v => (num(v) ? num(v).toLocaleString('id-ID') : '');
-  return `<div class="tf-row" data-tf-row><input class="input tf-kota" data-tf="kota" maxlength="60" placeholder="Semua kota" value="${esc(t.kota || '')}" ${ro ? 'readonly' : ''}>
-    <input class="input t-right" data-tf="kg" inputmode="numeric" placeholder="${mn ? 'per kg' : '0'}" title="Harga per kg" value="${m(t.kg)}" ${ro ? 'readonly' : ''}>
-    <input class="input t-right" data-tf="m3" inputmode="numeric" placeholder="${mn ? 'per m³' : '0'}" title="Harga per m³" value="${m(t.m3)}" ${ro ? 'readonly' : ''}>
-    ${mn ? `<input class="input t-right" data-tf="min" inputmode="numeric" placeholder="minimal" title="Harga minimal" value="${m(t.min)}" ${ro ? 'readonly' : ''}>` : ''}
-    ${ro ? '<span></span>' : '<button type="button" class="icon-btn" data-tf-del title="Hapus kota" aria-label="Hapus kota"><i class="bi bi-trash"></i></button>'}</div>`;
+  const cell = (k, lbl, inner) => `<span class="tf-cell" data-c="${k}"><small>${lbl}</small>${inner}</span>`;
+  const uang = (k, ph, lbl) => cell(k, lbl, `<input class="input t-right" data-tf="${k}" inputmode="numeric" placeholder="${ph}" title="${lbl}" value="${m(t[k])}" ${ro ? 'readonly' : ''}>`);
+  const hari = mn ? cell('hari', 'Estimasi (hari)', `<input class="input t-right" data-tf="hari" maxlength="20" placeholder="mis. 3-5" title="Estimasi lama kirim (hari)" value="${esc(t.hari || '')}" ${ro ? 'readonly' : ''}>`) : '';
+  const del = ro ? '<span class="tf-del"></span>' : '<button type="button" class="icon-btn tf-del" data-tf-del title="Hapus kota" aria-label="Hapus kota"><i class="bi bi-trash"></i></button>';
+  const kota = `<input class="input tf-kota" data-tf="kota" maxlength="60" placeholder="Semua kota" value="${esc(t.kota || '')}" ${ro ? 'readonly' : ''}>`;
+  if (nh) return `<div class="tf-row" data-tf-row>${kota}${hari}${del}</div>`;
+  return `<div class="tf-row" data-tf-row>${kota}${uang('kg', mn ? 'per kg' : '0', 'Harga per kg')}${uang('m3', mn ? 'per m³' : '0', 'Harga per m³')}${mn ? uang('min', 'minimal', 'Harga minimal') : ''}${hari}${del}</div>`;
 }
 function bindTarifEditor(form) {
   const table = form.querySelector('[data-tf-table]'), hidden = form.querySelector('[data-tf-hidden]');
   if (!table) return;
-  const mn = table.hasAttribute('data-tf-min');
+  const mn = table.hasAttribute('data-tf-min'), nh = table.hasAttribute('data-tf-nohrg');
+  const val = (r, k) => { const i = r.querySelector(`[data-tf=${k}]`); return i ? i.value : ''; };
   const sync = () => {
     const rows = $$('[data-tf-row]', table).map(r => {
-      const o = { kota: r.querySelector('[data-tf=kota]').value.trim(), kg: num(r.querySelector('[data-tf=kg]').value), m3: num(r.querySelector('[data-tf=m3]').value) };
-      if (mn) o.min = num(r.querySelector('[data-tf=min]').value);
+      const o = { kota: val(r, 'kota').trim(), kg: num(val(r, 'kg')), m3: num(val(r, 'm3')) };
+      if (mn) { o.min = num(val(r, 'min')); o.hari = val(r, 'hari').trim(); }
       return o;
-    }).filter(t => t.kota || t.kg || t.m3 || t.min);
+    }).filter(t => t.kota || t.kg || t.m3 || t.min || t.hari);
     hidden.value = rows.length ? JSON.stringify(rows) : '';
   };
   table.addEventListener('input', e => { if (['kg', 'm3', 'min'].includes(e.target.dataset.tf)) formatMoneyInput(e.target); sync(); });
   form.addEventListener('click', e => {
-    if (e.target.closest('[data-tf-add]')) { table.insertAdjacentHTML('beforeend', tarifRowHTML({}, false, mn)); const r = $$('[data-tf-row]', table); r[r.length - 1].querySelector('[data-tf=kota]').focus(); }
+    if (e.target.closest('[data-tf-add]')) { table.insertAdjacentHTML('beforeend', tarifRowHTML({}, false, mn, nh)); const r = $$('[data-tf-row]', table); r[r.length - 1].querySelector('[data-tf=kota]').focus(); }
     const del = e.target.closest('[data-tf-del]');
     if (del) { const rows = $$('[data-tf-row]', table); if (rows.length > 1) del.closest('[data-tf-row]').remove(); else rows[0].querySelectorAll('input').forEach(i => { i.value = ''; }); sync(); }
   });
@@ -3006,7 +3010,7 @@ const COMBO_SRC = {
   pelanggan: () => S.d.pelanggan.map(p => ({ id: p.ID, label: p.Nama, sub: `${p.IDSewa}${p.IDKirim !== p.IDSewa ? ' · ' + p.IDKirim : ''}${p.Tipe === 'Corporate' ? ' · Corporate' + (p.Marketing ? ' (' + p.Marketing + ')' : '') : ''}${p.NoHP ? ' · ' + p.NoHP : ''}`, key: [p.Nama, p.IDSewa, p.IDKirim, p.NoHP].join(' ') })),
   kendaraan: () => S.d.kendaraan.map(k => { const a = vehicleAlerts(k); return { id: k.ID, label: k.NoPol + ' — ' + (k.JenisKendaraan || ''), sub: `${[k.Merk, k.Tipe].filter(Boolean).join(' ')}${k.Pool ? ' · ' + k.Pool : ''}${vehicleBusy(k) ? ' · sedang jalan' : ''}${a.length ? ' · ⚠ ' + a.map(x => x.jenis + ' ' + x.text.toLowerCase()).join(', ') : ''}`, key: [k.NoPol, k.Merk, k.Tipe, k.JenisKendaraan, k.Kode].join(' ') }; }),
   pengemudi: () => S.d.pengemudi.map(d => { const a = driverAlert(d); return { id: d.ID, label: d.Nama, sub: `${d.Kode} · SIM ${d.JenisSIM || ''}${driverBusy(d) ? ' · bertugas' : ' · standby'}${a ? ' · ⚠ SIM ' + a.text.toLowerCase() : ''}`, key: [d.Nama, d.Kode, d.NoHP].join(' ') }; }),
-  ekspedisi: () => S.d.ekspedisi.map(e => ({ id: e.ID, label: e.Nama, sub: `${e.Kode}${e.NoWA ? ' · WA ' + e.NoWA : ''}`, key: [e.Nama, e.Kode, e.NoWA].join(' ') })),
+  ekspedisi: () => S.d.ekspedisi.map(e => ({ id: e.ID, label: e.Nama, sub: `${e.Kode}${e.PIC ? ' · ' + e.PIC : ''}${e.NoWA ? ' · WA ' + e.NoWA : ''}`, key: [e.Nama, e.Kode, e.PIC, e.NoWA].join(' ') })),
   penerima: () => S.d.penerima.map(p => ({ id: p.ID, label: p.Nama, sub: `${p.Kode}${p.Kota ? ' · ' + p.Kota : ''}${p.NamaPIC ? ' · PIC ' + p.NamaPIC : ''}`, key: [p.Nama, p.Kode, p.Kota, p.NamaPIC].join(' ') })),
   orderKirim: () => sortOrders(S.d.orders.filter(o => o.Layanan === 'kirim' && o.Status !== 'Dibatalkan')).map(o => ({ id: o.ID, label: orderLabel(o) + ' — ' + (o.NoPolMobil || 'tanpa nopol'), sub: `${o.NamaPelanggan || '—'}${o.Merk ? ' · ' + o.Merk + ' ' + (o.Tipe || '') : ''} · inspeksi: ${o.StatusInspeksi || 'belum'}`, key: [o.NoSJ, o.NoUnik, o.NoPolMobil, o.NamaPelanggan, o.Merk].join(' ') }))
 };
@@ -3568,12 +3572,16 @@ function updateEkspInfo(lay) {
   const form = FORMS[lay].el, box = form.querySelector('[data-eksp-info]'); if (!box) return;
   const e = byId('ekspedisi', form.querySelector('[name=EkspedisiID]').value);
   box.hidden = !e;
-  if (e) box.innerHTML = `<div><b>${esc(e.Nama)}</b><span class="t-sub">${esc(e.Kode)}${e.Alamat ? ' · ' + esc(firstPart(e.Alamat)) : ''}</span></div>${e.NoWA ? `<a class="btn btn-secondary btn-sm" href="https://wa.me/${waNumber(e.NoWA)}" target="_blank" rel="noopener"><i class="bi bi-whatsapp"></i> WA ${esc(e.NoWA)}</a>` : ''}${ekspEstimasiHTML(lay, e)}`;
+  if (e) box.innerHTML = `<div><b>${esc(e.Nama)}</b><span class="t-sub">${esc(e.Kode)}${e.PIC ? ' · PIC ' + esc(e.PIC) : ''}${e.Alamat ? ' · ' + esc(firstPart(e.Alamat)) : ''}</span></div>${e.NoWA ? `<a class="btn btn-secondary btn-sm" href="https://wa.me/${waNumber(e.NoWA)}" target="_blank" rel="noopener"><i class="bi bi-whatsapp"></i> WA ${esc(e.NoWA)}</a>` : ''}${ekspEstimasiHTML(lay, e)}`;
 }
 /** Perkiraan biaya ke ekspedisi = maks(harga minimal, berat × harga/kg atau volume × harga/m³). Hanya info internal. */
 function ekspEstimasiHTML(lay, e) {
   const form = FORMS[lay].el, kota = form.querySelector('[name=KotaTujuan]').value.trim();
   const list = tarifParse(e.Tarif);
+  if (!isSA()) {
+    const t = cariTarifDi(list, kota);
+    return t && t.hari ? `<div class="eksp-est"><div class="eksp-est-r"><span><i class="bi bi-clock-history"></i> Estimasi sampai${t.kota ? ' ' + esc(t.kota) : ''}</span><b>${esc(t.hari)} hari</b></div></div>` : '';
+  }
   if (!list.length) return '<div class="eksp-est muted">Belum ada tarif untuk ekspedisi ini. Isi di Data Master → Ekspedisi Rekanan.</div>';
   const t = cariTarifDi(list, kota);
   if (!t) return `<div class="eksp-est muted">Tarif ke ${esc(kota || 'kota tujuan')} belum ada di ekspedisi ini.</div>`;
@@ -3588,6 +3596,7 @@ function ekspEstimasiHTML(lay, e) {
   const harga = num(form.querySelector('[name=Harga]').value);
   return `<div class="eksp-est"><div class="eksp-est-h"><i class="bi bi-calculator"></i> Perkiraan biaya ekspedisi${t.kota ? ' · ' + esc(t.kota) : ' · tarif umum'}</div>
     <div class="eksp-est-r"><span>${pilih ? esc(pilih.l) : 'Tanpa harga per kg / m³'}${min ? ` · minimal ${rp(min)}` : ''}</span><b class="mono">${rp(nilai)}</b></div>
+    ${t.hari ? `<div class="eksp-est-r"><span>Estimasi lama kirim</span><b>${esc(t.hari)} hari</b></div>` : ''}
     ${harga ? `<div class="eksp-est-r"><span>Ongkos ke pelanggan − biaya ekspedisi</span><b class="mono ${harga - nilai < 0 ? 't-red' : 't-green'}">${rp(harga - nilai)}</b></div>` : ''}</div>`;
 }
 function simpanEkspedisi(lay) {
