@@ -10,7 +10,7 @@
    ============================================================ */
 
 // ── Konstanta ──────────────────────────────────────────────
-const APP_VERSI = '3.8'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
+const APP_VERSI = '3.10'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
 const LS = { token: 'kgm_token', theme: 'kgm_theme', cache: 'kgm_cache_v1', cols: 'kgm_rekap_cols', draft: 'kgm_draft_', master: 'kgm_master_open', login: 'kgm_login_ctx' };
 const STATUS = ['Dijadwalkan', 'Dikirim', 'Diterima', 'Dibatalkan'];
 const STATUS_CLS = { Dijadwalkan: 'b-indigo', Dikirim: 'b-amber', Diterima: 'b-green', Dibatalkan: 'b-red', Draf: 'b-slate' };
@@ -492,6 +492,7 @@ function showApp() {
   updateBadges();
   const d = new Date(today() + 'T00:00:00');
   $('#todayChip span').textContent = HARI[d.getDay()] + ', ' + tgl(today());
+  initJam();
   if (pagesTerbatas()) navigateTo(pagesTerbatas().includes(S.page) ? S.page : pagesTerbatas()[0], { force: true });
   else navigateTo(S.page && (isSA() || !SA_PAGES.includes(S.page)) ? S.page : 'ringkasan', { force: true });
   hideSplash();
@@ -592,6 +593,7 @@ function bindGlobal() {
   bindSearch();
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
+      if (document.getElementById('adzanBox')) { e.preventDefault(); return; } // pengingat adzan hanya ditutup dengan OK
       if (!$('#confirmBox').hidden) { $('#confirmBox [data-r="0"]').click(); return; }
       if (!$('#printModal').hidden) { $('#printModal').hidden = true; return; }
       if (!$('#modal').hidden) { closeModal(); return; }
@@ -6268,6 +6270,145 @@ function modaCetak(o) {
   if (m === 'Dikendarai') return 'Dikendarai' + (o.PengemudiNama ? ' · ' + o.PengemudiNama : '') + (o.PengemudiHP ? ' (' + o.PengemudiHP + ')' : '');
   if (m === 'Towing rekanan') return 'Towing';
   return ['Towing', o.UnitNoPol, o.PengemudiNama].filter(Boolean).join(' · ');
+}
+
+// ── 3.9: Jam & jadwal sholat (dihitung di perangkat, metode Kemenag RI: Subuh 20°, Isya 18°, Ashar Syafi'i, ihtiyat 2 menit) ──
+const KOTA_SHOLAT = {
+  'Banda Aceh': [5.548, 95.324, 7], 'Medan': [3.595, 98.672, 7], 'Padang': [-0.947, 100.417, 7], 'Pekanbaru': [0.507, 101.448, 7], 'Batam': [1.045, 104.031, 7],
+  'Jambi': [-1.61, 103.613, 7], 'Palembang': [-2.976, 104.775, 7], 'Bengkulu': [-3.8, 102.266, 7], 'Bandar Lampung': [-5.45, 105.267, 7],
+  'Serang': [-6.12, 106.15, 7], 'Tangerang': [-6.178, 106.63, 7], 'Jakarta': [-6.2, 106.817, 7], 'Bekasi': [-6.238, 106.976, 7], 'Depok': [-6.4, 106.818, 7],
+  'Bogor': [-6.595, 106.817, 7], 'Karawang': [-6.305, 107.302, 7], 'Bandung': [-6.917, 107.619, 7], 'Cirebon': [-6.706, 108.557, 7], 'Tegal': [-6.869, 109.14, 7],
+  'Semarang': [-6.967, 110.417, 7], 'Yogyakarta': [-7.797, 110.371, 7], 'Solo': [-7.567, 110.817, 7], 'Surabaya': [-7.25, 112.75, 7], 'Malang': [-7.983, 112.633, 7],
+  'Banyuwangi': [-8.219, 114.369, 7], 'Pontianak': [-0.026, 109.343, 7], 'Singkawang': [0.906, 108.985, 7], 'Palangka Raya': [-2.21, 113.92, 7],
+  'Denpasar': [-8.65, 115.217, 8], 'Mataram': [-8.583, 116.117, 8], 'Kupang': [-10.178, 123.597, 8], 'Banjarmasin': [-3.317, 114.59, 8], 'Balikpapan': [-1.265, 116.831, 8],
+  'Samarinda': [-0.502, 117.154, 8], 'Makassar': [-5.147, 119.432, 8], 'Palu': [-0.9, 119.87, 8], 'Kendari': [-3.972, 122.515, 8], 'Manado': [1.474, 124.842, 8],
+  'Gorontalo': [0.543, 123.06, 8], 'Ambon': [-3.695, 128.181, 9], 'Ternate': [0.79, 127.384, 9], 'Sorong': [-0.876, 131.255, 9], 'Jayapura': [-2.533, 140.717, 9]
+};
+const TZ_NAMA = { 7: 'WIB', 8: 'WITA', 9: 'WIT' };
+function kotaSholat() {
+  let k = ''; try { k = localStorage.getItem('kgmKotaSholat') || ''; } catch (e) { k = ''; }
+  if (!KOTA_SHOLAT[k]) k = (S.settings && S.settings.kotaSholat) || 'Jakarta';
+  return KOTA_SHOLAT[k] ? k : 'Jakarta';
+}
+/** Waktu sholat (jam desimal, waktu setempat) untuk tanggal y-m-d. */
+function hitungSholat(y, m, d, lat, lng, tz) {
+  const rad = x => x * Math.PI / 180, deg = x => x * 180 / Math.PI;
+  const fix = (a, b) => { a = a - b * Math.floor(a / b); return a < 0 ? a + b : a; };
+  const jd = (() => { let Y = y, M = m; if (M <= 2) { Y -= 1; M += 12; } const A = Math.floor(Y / 100), B = 2 - A + Math.floor(A / 4); return Math.floor(365.25 * (Y + 4716)) + Math.floor(30.6001 * (M + 1)) + d + B - 1524.5; })() - lng / (15 * 24);
+  const sun = t => {
+    const D = jd + t - 2451545.0, g = fix(357.529 + 0.98560028 * D, 360), q = fix(280.459 + 0.98564736 * D, 360);
+    const L = fix(q + 1.915 * Math.sin(rad(g)) + 0.020 * Math.sin(rad(2 * g)), 360), e = 23.439 - 0.00000036 * D;
+    const RA = fix(deg(Math.atan2(Math.cos(rad(e)) * Math.sin(rad(L)), Math.cos(rad(L)))) / 15, 24);
+    return { decl: deg(Math.asin(Math.sin(rad(e)) * Math.sin(rad(L)))), eqt: q / 15 - RA };
+  };
+  const noon = t => fix(12 - sun(t / 24).eqt, 24);
+  const sudut = (a, t, pagi) => {
+    const dc = sun(t / 24).decl, n = noon(t);
+    const T = deg(Math.acos((-Math.sin(rad(a)) - Math.sin(rad(dc)) * Math.sin(rad(lat))) / (Math.cos(rad(dc)) * Math.cos(rad(lat))))) / 15;
+    return n + (pagi ? -T : T);
+  };
+  const ashar = t => { const dc = sun(t / 24).decl; return sudut(-deg(Math.atan(1 / (1 + Math.tan(rad(Math.abs(lat - dc)))))), t, false); };
+  let w = { subuh: 5, terbit: 6, dzuhur: 12, ashar: 13, maghrib: 18, isya: 18 };
+  for (let i = 0; i < 2; i++) w = { subuh: sudut(20, w.subuh, true), terbit: sudut(0.833, w.terbit, true), dzuhur: noon(w.dzuhur), ashar: ashar(w.ashar), maghrib: sudut(0.833, w.maghrib, false), isya: sudut(18, w.isya, false) };
+  const adj = tz - lng / 15, ih = 2 / 60, out = {};
+  Object.keys(w).forEach(k => { out[k] = w[k] + adj + (k === 'terbit' ? -ih : ih); });
+  out.imsak = out.subuh - 10 / 60;
+  return out;
+}
+const SHOLAT_URUT = [['imsak', 'Imsak'], ['subuh', 'Subuh'], ['terbit', 'Terbit'], ['dzuhur', 'Dzuhur'], ['ashar', 'Ashar'], ['maghrib', 'Maghrib'], ['isya', 'Isya']];
+const SHOLAT_WAJIB = ['subuh', 'dzuhur', 'ashar', 'maghrib', 'isya'];
+function jamTeks(h) { const m = Math.floor(h * 60 + 0.5); return String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); }
+function sekarangDi(tz) { const n = new Date(Date.now() + tz * 3600000); return { y: n.getUTCFullYear(), m: n.getUTCMonth() + 1, d: n.getUTCDate(), h: n.getUTCHours() + n.getUTCMinutes() / 60 + n.getUTCSeconds() / 3600, hh: n.getUTCHours(), mm: n.getUTCMinutes(), ss: n.getUTCSeconds() }; }
+const JS = { key: '', w: null };
+function jadwalHariIni() {
+  const k = kotaSholat(), [lat, lng, tz] = KOTA_SHOLAT[k], n = sekarangDi(tz), key = k + n.y + '-' + n.m + '-' + n.d;
+  if (JS.key !== key) { JS.key = key; JS.w = hitungSholat(n.y, n.m, n.d, lat, lng, tz); JS.besok = null; }
+  return { kota: k, tz, n, w: JS.w };
+}
+function sholatBerikut(j) {
+  const nx = SHOLAT_WAJIB.find(k => j.w[k] > j.n.h);
+  if (nx) return { k: nx, t: j.w[nx], sisa: j.w[nx] - j.n.h };
+  if (!JS.besok) { const [lat, lng, tz] = KOTA_SHOLAT[j.kota], b = new Date(Date.UTC(j.n.y, j.n.m - 1, j.n.d + 1)); JS.besok = hitungSholat(b.getUTCFullYear(), b.getUTCMonth() + 1, b.getUTCDate(), lat, lng, tz); }
+  return { k: 'subuh', t: JS.besok.subuh, sisa: JS.besok.subuh + 24 - j.n.h, besok: true };
+}
+function sisaTeks(h) { const m = Math.max(0, Math.ceil(h * 60)); return m >= 60 ? Math.floor(m / 60) + ' j ' + (m % 60) + ' m' : m + ' m'; }
+function tickJam() {
+  const box = $('#clockBox'); if (!box) return;
+  const j = jadwalHariIni(), tzn = TZ_NAMA[j.tz] || '';
+  $('#clockNow').innerHTML = String(j.n.hh).padStart(2, '0') + ':' + String(j.n.mm).padStart(2, '0') + '<span class="cb-sec">:' + String(j.n.ss).padStart(2, '0') + '</span> ' + tzn;
+  const nx = sholatBerikut(j), nama = (SHOLAT_URUT.find(x => x[0] === nx.k) || [])[1];
+  const pr = $('#prayNext span');
+  const t = `${nama} ${jamTeks(nx.t)}<span class="cb-sisa"> · ${sisaTeks(nx.sisa)} lagi</span>`;
+  if (pr.innerHTML !== t) pr.innerHTML = t;
+  $('#clockBox').title = `${nama} ${jamTeks(nx.t)} (${sisaTeks(nx.sisa)} lagi) · ${j.kota}`;
+  box.classList.toggle('near', nx.sisa <= 10 / 60);
+  // tanggal ikut berganti saat lewat tengah malam
+  const tg = HARI[new Date(Date.UTC(j.n.y, j.n.m - 1, j.n.d)).getUTCDay()] + ', ' + tgl(`${j.n.y}-${String(j.n.m).padStart(2, '0')}-${String(j.n.d).padStart(2, '0')}`);
+  const ts = $('#todayChip span'); if (ts.textContent !== tg) ts.textContent = tg;
+  if (!$('#prayMenu').hidden) renderPrayMenu(true);
+  cekAdzan(j);
+}
+function renderPrayMenu(soft) {
+  const j = jadwalHariIni(), nx = sholatBerikut(j), m = $('#prayMenu'), tzn = TZ_NAMA[j.tz] || '';
+  const rows = SHOLAT_URUT.map(([k, l]) => `<div class="pm-row${!nx.besok && nx.k === k ? ' on' : ''}${j.w[k] <= j.n.h ? ' lewat' : ''}"><span>${l}${SHOLAT_WAJIB.includes(k) ? '' : ' <small class="muted">(perkiraan)</small>'}</span><b class="mono">${jamTeks(j.w[k])}</b></div>`).join('');
+  if (soft && m.querySelector('.pm-list')) { m.querySelector('.pm-list').innerHTML = rows; return; }
+  m.innerHTML = `<div class="pm-head"><b><i class="bi bi-moon-stars"></i> Jadwal sholat hari ini</b><span class="muted">${esc(j.kota)} · ${tzn}</span></div>
+    <div class="pm-list">${rows}</div>
+    <label class="check-row pm-adzan"><input type="checkbox" id="pmAdzan" ${adzanAktif() ? 'checked' : ''}> <span>Pengingat saat adzan <small class="muted">(perangkat ini)</small></span></label>
+    <label class="field pm-kota"><span class="label">Kota</span><select class="input" id="pmKota">${Object.keys(KOTA_SHOLAT).map(k => `<option ${k === j.kota ? 'selected' : ''}>${esc(k)}</option>`).join('')}</select>
+    <small class="muted">${isSA() ? 'Berlaku untuk semua pengguna.' : 'Hanya untuk perangkat ini.'} Metode Kemenag RI (Subuh 20°, Isya 18°), ihtiyat 2 menit. Selisih ±1–2 menit dengan jadwal masjid setempat itu wajar.</small></label>`;
+  $('#pmAdzan').onchange = e => { try { localStorage.setItem('kgmAdzanOff', e.target.checked ? '' : '1'); } catch (x) {} };
+  $('#pmKota').onchange = e => {
+    const k = e.target.value;
+    if (isSA()) api('saveSettings', S.token, { kotaSholat: k }).then(r => { S.settings = r.data; saveCache(); try { localStorage.removeItem('kgmKotaSholat'); } catch (x) {} JS.key = ''; tickJam(); renderPrayMenu(); ok('Kota jadwal sholat: ' + k); }).catch(fail);
+    else { try { localStorage.setItem('kgmKotaSholat', k); } catch (x) {} JS.key = ''; tickJam(); renderPrayMenu(); }
+  };
+}
+function initJam() {
+  if (initJam.done) { tickJam(); return; } initJam.done = true;
+  $('#clockBox').onclick = e => { e.stopPropagation(); const m = $('#prayMenu'); m.hidden = !m.hidden; if (!m.hidden) renderPrayMenu(); };
+  document.addEventListener('click', e => { if (!e.target.closest('.clock-wrap')) $('#prayMenu').hidden = true; });
+  tickJam(); setInterval(tickJam, 1000);
+}
+
+// ── 3.10: Pengingat adzan — layar diredupkan 50%, hanya bisa ditutup dengan OK. Muncul sekali per waktu sholat per perangkat. ──
+const ADZAN_JENDELA = 20 / 60; // tampil bila aplikasi dibuka sampai 20 menit setelah masuk waktu
+function adzanAktif() { try { return localStorage.getItem('kgmAdzanOff') !== '1'; } catch (e) { return true; } }
+function cekAdzan(j) {
+  if (!S.booted || document.getElementById('adzanBox') || !adzanAktif()) return;
+  const k = SHOLAT_WAJIB.find(x => j.n.h >= j.w[x] && j.n.h < j.w[x] + ADZAN_JENDELA);
+  if (!k) return;
+  const kunci = `${j.n.y}-${j.n.m}-${j.n.d}|${k}`;
+  let sudah = ''; try { sudah = localStorage.getItem('kgmAdzan') || ''; } catch (e) { sudah = ''; }
+  if (sudah === kunci) return;
+  tampilAdzan(k, j, kunci);
+}
+function tampilAdzan(k, j, kunci) {
+  const nama = (SHOLAT_URUT.find(x => x[0] === k) || [])[1], tzn = TZ_NAMA[j.tz] || '';
+  const box = document.createElement('div');
+  box.id = 'adzanBox'; box.className = 'adzan-overlay';
+  box.setAttribute('role', 'alertdialog'); box.setAttribute('aria-modal', 'true'); box.setAttribute('aria-labelledby', 'adzanJudul');
+  box.innerHTML = `<div class="adzan-card">
+    <div class="adzan-ic"><i class="bi bi-moon-stars-fill"></i></div>
+    <div class="adzan-kecil">Telah masuk waktu</div>
+    <h2 id="adzanJudul">Sholat ${esc(nama)}</h2>
+    <div class="adzan-waktu mono">${jamTeks(j.w[k])} ${tzn} · ${esc(j.kota)}</div>
+    <p class="adzan-ar" lang="ar" dir="rtl">وَٱسْتَعِينُوا۟ بِٱلصَّبْرِ وَٱلصَّلَوٰةِ ۚ وَإِنَّهَا لَكَبِيرَةٌ إِلَّا عَلَى ٱلْخَٰشِعِينَ</p>
+    <blockquote class="adzan-quote">“Jadikanlah sabar dan sholat sebagai penolongmu, dan sesungguhnya yang demikian itu sungguh berat, kecuali bagi orang-orang yang khusyu.”</blockquote>
+    <div class="adzan-src">QS. Al-Baqarah: 45</div>
+    <button type="button" class="btn btn-primary adzan-ok" id="adzanOk"><i class="bi bi-check2"></i> OK</button>
+  </div>`;
+  document.body.appendChild(box);
+  document.body.classList.add('adzan-on');
+  const okBtn = box.querySelector('#adzanOk');
+  // fokus terkunci di tombol OK; klik di luar kartu tidak menutup
+  box.addEventListener('keydown', e => { if (e.key === 'Tab') { e.preventDefault(); okBtn.focus(); } });
+  setTimeout(() => okBtn.focus(), 50);
+  okBtn.onclick = () => {
+    try { localStorage.setItem('kgmAdzan', kunci); } catch (e) {}
+    box.classList.add('keluar'); document.body.classList.remove('adzan-on');
+    setTimeout(() => box.remove(), 200);
+  };
 }
 // Penanda: js/app.js termuat sampai akhir
 window.__KGM_JS_END = true;

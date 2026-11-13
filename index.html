@@ -7,9 +7,9 @@
   <title>KAGUMI Transport</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=3.8.0">
+  <link rel="stylesheet" href="css/style.css?v=3.10.0">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2216%22 fill=%22%23006C49%22/%3E%3Cpath d=%22M14 22h22v18H14zM36 28h8l6 6v6H36z%22 fill=%22white%22/%3E%3Ccircle cx=%2222%22 cy=%2243%22 r=%225%22 fill=%22white%22/%3E%3Ccircle cx=%2244%22 cy=%2243%22 r=%225%22 fill=%22white%22/%3E%3C/svg%3E">
 </head>
 <body>
@@ -197,7 +197,13 @@
         <div class="search-pop" id="searchPop" hidden></div>
       </div>
       <div class="top-right">
-        <span class="chip chip-date" id="todayChip"><i class="bi bi-calendar3"></i><span></span></span>
+        <div class="pos-rel clock-wrap">
+          <button type="button" class="clock-box" id="clockBox" aria-label="Jam dan jadwal sholat" aria-haspopup="true">
+            <span class="cb-row"><span class="chip chip-date" id="todayChip"><i class="bi bi-calendar3"></i><span></span></span><b class="cb-time mono" id="clockNow">--:--</b></span>
+            <span class="cb-pray" id="prayNext"><i class="bi bi-moon-stars"></i> <span>Jadwal sholat</span></span>
+          </button>
+          <div class="menu pray-menu" id="prayMenu" hidden></div>
+        </div>
         <span class="sync-dot" id="syncDot" title="Data tersinkron"></span>
         <button class="icon-btn" id="btnTheme" aria-label="Ganti tema"><i class="bi bi-moon-stars"></i></button>
         <div class="pos-rel staff-only">
@@ -716,8 +722,8 @@
   setTimeout(function () { window.__kgmCheck(true); }, 15000);
 })();
 </script>
-<script src="js/config.js?v=3.8.0"></script>
-<script src="js/app.js?v=3.8.0"></script>
+<script src="js/config.js?v=3.10.0"></script>
+<script src="js/app.js?v=3.10.0"></script>
 <script>setTimeout(function () { window.__kgmCheck(false); }, 0);</script>
 </body>
 </html>
