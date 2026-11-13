@@ -999,4 +999,7 @@ body:not(.is-cs) .cs-only{display:none!important}
 .adzan-ok{margin-top:20px;min-width:140px;justify-content:center}
 body.adzan-on{overflow:hidden}
 .pm-adzan{margin:0 0 10px;font-size:13px}
+.doa-latin{margin:0 0 10px;font-size:14px;font-weight:600;color:var(--primary);line-height:1.6}
+.adzan-ok:disabled{opacity:.6;cursor:not-allowed}
+.adzan-latin,.doa-latin{margin-top:16px;font-size:16px}
 :root{--kgm-css-end:1}

@@ -10,7 +10,7 @@
    ============================================================ */
 
 // ── Konstanta ──────────────────────────────────────────────
-const APP_VERSI = '3.10'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
+const APP_VERSI = '3.12'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
 const LS = { token: 'kgm_token', theme: 'kgm_theme', cache: 'kgm_cache_v1', cols: 'kgm_rekap_cols', draft: 'kgm_draft_', master: 'kgm_master_open', login: 'kgm_login_ctx' };
 const STATUS = ['Dijadwalkan', 'Dikirim', 'Diterima', 'Dibatalkan'];
 const STATUS_CLS = { Dijadwalkan: 'b-indigo', Dikirim: 'b-amber', Diterima: 'b-green', Dibatalkan: 'b-red', Draf: 'b-slate' };
@@ -392,7 +392,7 @@ function onLoginSuccess(r) {
   lsSet(LS.token, d.token);
   $('#loginAlert').hidden = true;
   S.me = { email: d.email, nama: d.nama, role: d.role };
-  return refreshData(true).then(() => { showApp(); ok('Selamat datang', d.nama); });
+  return refreshData(true).then(() => { showApp(); ok('Selamat datang', d.nama); doaMulaiKerja(); });
 }
 function bindLogin() {
   $('#loginForm').addEventListener('submit', e => {
@@ -426,7 +426,7 @@ function logout() {
   if (t) api('logout', t).catch(() => {});
   $('#userMenu').hidden = true;
   showLogin();
-  toast('info', 'Anda telah keluar');
+  doaSelesaiKerja();
 }
 
 // ── Sinkron data ───────────────────────────────────────────
@@ -593,7 +593,7 @@ function bindGlobal() {
   bindSearch();
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
-      if (document.getElementById('adzanBox')) { e.preventDefault(); return; } // pengingat adzan hanya ditutup dengan OK
+      if (document.getElementById('adzanBox') || document.getElementById('doaBox')) { e.preventDefault(); return; } // pengingat adzan hanya ditutup dengan OK
       if (!$('#confirmBox').hidden) { $('#confirmBox [data-r="0"]').click(); return; }
       if (!$('#printModal').hidden) { $('#printModal').hidden = true; return; }
       if (!$('#modal').hidden) { closeModal(); return; }
@@ -6375,7 +6375,7 @@ function initJam() {
 const ADZAN_JENDELA = 20 / 60; // tampil bila aplikasi dibuka sampai 20 menit setelah masuk waktu
 function adzanAktif() { try { return localStorage.getItem('kgmAdzanOff') !== '1'; } catch (e) { return true; } }
 function cekAdzan(j) {
-  if (!S.booted || document.getElementById('adzanBox') || !adzanAktif()) return;
+  if (!S.booted || !S.token || document.getElementById('adzanBox') || document.getElementById('doaBox') || !adzanAktif()) return;
   const k = SHOLAT_WAJIB.find(x => j.n.h >= j.w[x] && j.n.h < j.w[x] + ADZAN_JENDELA);
   if (!k) return;
   const kunci = `${j.n.y}-${j.n.m}-${j.n.d}|${k}`;
@@ -6393,7 +6393,7 @@ function tampilAdzan(k, j, kunci) {
     <div class="adzan-kecil">Telah masuk waktu</div>
     <h2 id="adzanJudul">Sholat ${esc(nama)}</h2>
     <div class="adzan-waktu mono">${jamTeks(j.w[k])} ${tzn} · ${esc(j.kota)}</div>
-    <p class="adzan-ar" lang="ar" dir="rtl">وَٱسْتَعِينُوا۟ بِٱلصَّبْرِ وَٱلصَّلَوٰةِ ۚ وَإِنَّهَا لَكَبِيرَةٌ إِلَّا عَلَى ٱلْخَٰشِعِينَ</p>
+    <p class="doa-latin adzan-latin">Wasta'iinuu bish-shabri wash-shalaah, wa innahaa lakabiiratun illaa 'alal khaasyi'iin.</p>
     <blockquote class="adzan-quote">“Jadikanlah sabar dan sholat sebagai penolongmu, dan sesungguhnya yang demikian itu sungguh berat, kecuali bagi orang-orang yang khusyu.”</blockquote>
     <div class="adzan-src">QS. Al-Baqarah: 45</div>
     <button type="button" class="btn btn-primary adzan-ok" id="adzanOk"><i class="bi bi-check2"></i> OK</button>
@@ -6409,6 +6409,48 @@ function tampilAdzan(k, j, kunci) {
     box.classList.add('keluar'); document.body.classList.remove('adzan-on');
     setTimeout(() => box.remove(), 200);
   };
+}
+
+// ── 3.11: Doa sebelum mulai bekerja (setelah login) & ucapan syukur saat keluar ──
+function overlayDoa({ html, tunggu = 0, tombol = 'Aamiin', ikon = 'bi-stars', onClose }) {
+  const lama = document.getElementById('doaBox'); if (lama) lama.remove();
+  const box = document.createElement('div');
+  box.id = 'doaBox'; box.className = 'adzan-overlay';
+  box.setAttribute('role', 'alertdialog'); box.setAttribute('aria-modal', 'true'); box.setAttribute('aria-labelledby', 'doaJudul');
+  box.innerHTML = `<div class="adzan-card"><div class="adzan-ic"><i class="bi ${ikon}"></i></div>${html}
+    <button type="button" class="btn btn-primary adzan-ok" id="doaOk"${tunggu ? ' disabled' : ''}><i class="bi bi-check2"></i> <span>${esc(tombol)}${tunggu ? ` (${tunggu})` : ''}</span></button></div>`;
+  document.body.appendChild(box); document.body.classList.add('adzan-on');
+  const b = box.querySelector('#doaOk'), lbl = b.querySelector('span');
+  box.addEventListener('keydown', e => { if (e.key === 'Tab') { e.preventDefault(); b.focus(); } });
+  let sisa = tunggu;
+  if (sisa) {
+    const t = setInterval(() => {
+      sisa--;
+      if (sisa > 0) { lbl.textContent = `${tombol} (${sisa})`; return; }
+      clearInterval(t); b.disabled = false; lbl.textContent = tombol; b.focus();
+    }, 1000);
+  } else setTimeout(() => b.focus(), 50);
+  b.onclick = () => {
+    if (b.disabled) return;
+    box.classList.add('keluar'); document.body.classList.remove('adzan-on');
+    setTimeout(() => { box.remove(); if (onClose) onClose(); }, 200);
+  };
+}
+function doaMulaiKerja() {
+  overlayDoa({ tunggu: 4, ikon: 'bi-sunrise', html: `
+    <div class="adzan-kecil">Sebelum mulai bekerja</div>
+    <h2 id="doaJudul">Mari kita berdoa dahulu</h2>
+    <p class="doa-latin">Bismillahirrahmanirrahim. <br>Robbisyrohli sodri, wayassirli amri, wahlul 'uqdatam mil lisani yafqohu qouli.</p>
+    <blockquote class="adzan-quote">“Ya Tuhanku, lapangkanlah dadaku, mudahkanlah untukku urusanku, dan lepaskanlah kekakuan dari lidahku, agar mereka mengerti perkataanku.”</blockquote>
+    <div class="adzan-src">QS. Thaha: 25–28</div>` });
+}
+function doaSelesaiKerja() {
+  overlayDoa({ ikon: 'bi-moon-stars', tombol: 'Aamiin', html: `
+    <div class="adzan-kecil">Terima kasih atas kerja kerasnya hari ini</div>
+    <h2 id="doaJudul">Alhamdulillah</h2>
+    <p class="doa-latin">Alhamdulillah, alhamdulillahirabbil 'alamin.</p>
+    <blockquote class="adzan-quote">Semoga pekerjaan hari ini diridhoi dan diberkahi Allah SWT.</blockquote>
+    <div class="adzan-src">Anda telah keluar dengan aman</div>` });
 }
 // Penanda: js/app.js termuat sampai akhir
 window.__KGM_JS_END = true;
