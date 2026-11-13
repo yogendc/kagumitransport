@@ -10,7 +10,7 @@
    ============================================================ */
 
 // ── Konstanta ──────────────────────────────────────────────
-const APP_VERSI = '3.4'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
+const APP_VERSI = '3.5'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
 const LS = { token: 'kgm_token', theme: 'kgm_theme', cache: 'kgm_cache_v1', cols: 'kgm_rekap_cols', draft: 'kgm_draft_', master: 'kgm_master_open', login: 'kgm_login_ctx' };
 const STATUS = ['Dijadwalkan', 'Dikirim', 'Diterima', 'Dibatalkan'];
 const STATUS_CLS = { Dijadwalkan: 'b-indigo', Dikirim: 'b-amber', Diterima: 'b-green', Dibatalkan: 'b-red', Draf: 'b-slate' };
@@ -2595,11 +2595,11 @@ const MASTERS = {
   pelanggan: {
     title: 'Data Master Pelanggan', sub: 'Satu pelanggan memiliki dua ID: untuk layanan sewa dan pengiriman.', icon: 'bi-buildings', add: 'Tambah pelanggan', list: 'pelanggan',
     canEdit: () => isSA(), canDel: () => isSA(), label: r => r.Nama,
-    search: r => [r.Nama, r.IDSewa, r.IDKirim, r.NoHP, r.NPWP, r.Email, r.Alamat, tarifList(r).map(t => t.kota).join(' ')].join(' '),
-    chips: [['', 'Semua'], ['termin', 'Pembayaran termin', r => r.PembayaranBawaan === 'Termin'], ['npwp', 'Ber-NPWP', r => !!r.NPWP], ['aktif', 'Ada order aktif', r => S.d.orders.some(o => o.PelangganID === r.ID && o.StatusDok === 'Terkonfirmasi' && (o.Status === 'Dijadwalkan' || o.Status === 'Dikirim'))]],
+    search: r => [r.Nama, r.IDSewa, r.IDKirim, r.NoHP, r.NPWP, r.Email, r.Alamat, r.Tipe, r.Marketing, tarifList(r).map(t => t.kota).join(' ')].join(' '),
+    chips: [['', 'Semua'], ['corp', 'Corporate', r => r.Tipe === 'Corporate'], ['reguler', 'Reguler', r => r.Tipe !== 'Corporate'], ['termin', 'Pembayaran termin', r => r.PembayaranBawaan === 'Termin'], ['npwp', 'Ber-NPWP', r => !!r.NPWP], ['aktif', 'Ada order aktif', r => S.d.orders.some(o => o.PelangganID === r.ID && o.StatusDok === 'Terkonfirmasi' && (o.Status === 'Dijadwalkan' || o.Status === 'Dikirim'))]],
     cols: [
-      ['ID & akun', r => `<span class="chip chip-soft mono">${esc(r.IDSewa)}</span><span class="t-sub mono">Kirim: ${esc(r.IDKirim)}</span>`, 'card-title'],
-      ['Nama pelanggan', r => `<div class="who"><span class="avatar soft">${esc(initials(r.Nama))}</span><div><span class="t-strong">${esc(r.Nama)}</span><span class="t-sub">${esc(firstPart(r.Alamat))}</span></div></div>`],
+      ['ID & akun', r => `<span class="chip chip-soft mono">${esc(r.IDSewa)}</span>${r.IDKirim !== r.IDSewa ? `<span class="t-sub mono">Kirim: ${esc(r.IDKirim)}</span>` : ''}`, 'card-title'],
+      ['Nama pelanggan', r => `<div class="who"><span class="avatar soft">${esc(initials(r.Nama))}</span><div><span class="t-strong">${esc(r.Nama)}</span> ${tipePelBadge(r)}<span class="t-sub">${r.Marketing ? '<i class="bi bi-person-badge"></i> Marketing ' + esc(r.Marketing) + ' · ' : ''}${esc(firstPart(r.Alamat))}</span></div></div>`],
       ['Kontak', r => `${r.NoHP ? `<span class="mono">${esc(r.NoHP)}</span>` : '—'}${r.Email ? `<span class="t-sub">${esc(r.Email)}</span>` : ''}`],
       ['NPWP', r => r.NPWP ? `<span class="mono">${esc(r.NPWP)}</span><span class="t-sub"><i class="bi bi-check2-circle"></i> Format valid</span>` : '<span class="muted">—</span>'],
       ['Pembayaran bawaan', r => r.PembayaranBawaan ? `<span class="badge ${r.PembayaranBawaan === 'Termin' ? 'b-indigo' : r.PembayaranBawaan === 'DP' ? 'b-amber' : 'b-slate'} plain">${esc(r.PembayaranBawaan)}${r.PembayaranBawaan === 'Termin' ? ' ' + esc(r.TerminHari) + ' hari' : ''}</span>` : '<span class="muted">—</span>'],
@@ -2610,6 +2610,8 @@ const MASTERS = {
       { t: 'Identitas pelanggan', f: [
         { k: 'Nama', l: 'Nama pelanggan', req: true, full: true, ph: 'Contoh: PT Mandiri Logistik Sentosa' },
         { k: '_ids', t: 'ids' },
+        { k: 'Tipe', l: 'Tipe pelanggan', t: 'select', opts: ['Reguler', 'Corporate'], help: 'Corporate = pelanggan kontrak/hasil CRM, punya harga khusus di Daftar Harga.' },
+        { k: 'Marketing', l: 'Marketing / sales PIC', ph: 'Contoh: Budi', help: 'Terisi otomatis bila pelanggan berasal dari CRM.' },
         { k: 'NPWP', l: 'NPWP', t: 'npwp', full: true, ph: '01.234.567.8-901.000', help: 'Opsional. Format dicek otomatis, tidak diverifikasi ke DJP.' }] },
       { t: 'Kontak & alamat', f: [
         { k: 'NoHP', l: 'No. HP / WhatsApp', t: 'tel', req: true, ph: '0812-3456-7890' },
@@ -3001,7 +3003,7 @@ function deleteMaster(type, id) {
 // KOMBO (pilihan dengan pencarian)
 // ============================================================
 const COMBO_SRC = {
-  pelanggan: () => S.d.pelanggan.map(p => ({ id: p.ID, label: p.Nama, sub: `${p.IDSewa} · ${p.IDKirim}${p.NoHP ? ' · ' + p.NoHP : ''}`, key: [p.Nama, p.IDSewa, p.IDKirim, p.NoHP].join(' ') })),
+  pelanggan: () => S.d.pelanggan.map(p => ({ id: p.ID, label: p.Nama, sub: `${p.IDSewa}${p.IDKirim !== p.IDSewa ? ' · ' + p.IDKirim : ''}${p.Tipe === 'Corporate' ? ' · Corporate' + (p.Marketing ? ' (' + p.Marketing + ')' : '') : ''}${p.NoHP ? ' · ' + p.NoHP : ''}`, key: [p.Nama, p.IDSewa, p.IDKirim, p.NoHP].join(' ') })),
   kendaraan: () => S.d.kendaraan.map(k => { const a = vehicleAlerts(k); return { id: k.ID, label: k.NoPol + ' — ' + (k.JenisKendaraan || ''), sub: `${[k.Merk, k.Tipe].filter(Boolean).join(' ')}${k.Pool ? ' · ' + k.Pool : ''}${vehicleBusy(k) ? ' · sedang jalan' : ''}${a.length ? ' · ⚠ ' + a.map(x => x.jenis + ' ' + x.text.toLowerCase()).join(', ') : ''}`, key: [k.NoPol, k.Merk, k.Tipe, k.JenisKendaraan, k.Kode].join(' ') }; }),
   pengemudi: () => S.d.pengemudi.map(d => { const a = driverAlert(d); return { id: d.ID, label: d.Nama, sub: `${d.Kode} · SIM ${d.JenisSIM || ''}${driverBusy(d) ? ' · bertugas' : ' · standby'}${a ? ' · ⚠ SIM ' + a.text.toLowerCase() : ''}`, key: [d.Nama, d.Kode, d.NoHP].join(' ') }; }),
   ekspedisi: () => S.d.ekspedisi.map(e => ({ id: e.ID, label: e.Nama, sub: `${e.Kode}${e.NoWA ? ' · WA ' + e.NoWA : ''}`, key: [e.Nama, e.Kode, e.NoWA].join(' ') })),
@@ -3083,6 +3085,20 @@ function payBlockHTML(lay) {
     <div class="field"><label class="label" for="pp-${lay}">Pajak <small class="muted">(% dari harga dasar)</small></label><div class="suffix-input"><input class="input" id="pp-${lay}" name="PajakPersen" inputmode="decimal" placeholder="0" maxlength="6" autocomplete="off"><span>%</span></div>
       <input type="hidden" name="Pajak"><div class="tax-row"><small class="muted mono" data-calc="PajakRp">= Rp 0</small><span class="tax-chips">${['0', '1,1', '2', '11'].map(v => `<button type="button" class="chip-btn" data-pajak="${v}">${v}%</button>`).join('')}</span></div></div>
   </div>
+  <div class="dh-box" data-dh>
+    <div class="dh-top"><button type="button" class="btn btn-secondary btn-sm" data-dh-pick><i class="bi bi-tags"></i> Pilih dari daftar harga</button>
+      <label class="check-row dh-save"><input type="checkbox" data-dh-save> <span>Simpan ke daftar harga <span class="badge b-slate plain">Reguler</span></span></label></div>
+    <div class="dh-src" data-dh-src hidden></div>
+    <div class="dh-fields" data-dh-fields hidden>
+      <div class="row-3">
+        <label class="field"><span class="label">Asal (kota)</span><input class="input" data-dh-f="asal" maxlength="80" placeholder="mis. Jakarta"></label>
+        <label class="field"><span class="label req">Tujuan (kota)</span><input class="input" data-dh-f="tujuan" maxlength="80" placeholder="mis. Surabaya"></label>
+        <label class="field"><span class="label">${lay === 'paket' ? 'Jenis / jalur' : 'Armada / jenis'}</span><input class="input" data-dh-f="armada" maxlength="80"></label>
+      </div>
+      ${lay === 'paket' ? '<label class="field"><span class="label">Harga minimal (opsional)</span><div class="prefix-input"><span>Rp</span><input class="input" data-dh-f="min" inputmode="numeric" placeholder="0"></div></label>' : ''}
+      <small class="muted"><i class="bi bi-info-circle"></i> Disimpan saat order disimpan. ${lay === 'paket' ? 'Tarif per kg / per m³' : 'Harga dasar'} order ini menjadi harga Reguler; bila rute + armada sudah ada, harganya diperbarui.</small>
+    </div>
+  </div>
   <label class="field"><span class="label">Penyesuaian tarif <small class="muted">(boleh minus untuk diskon)</small></span><div class="prefix-input"><span>Rp</span><input class="input money" name="Penyesuaian" inputmode="numeric" placeholder="0"></div></label>
   <div class="pay-total"><div><span class="label">Total tagihan</span><br><span data-calc="TotalText">Harga + pajak + penyesuaian</span></div><b data-calc="Total">Rp 0</b></div>
   <label class="field"><span class="label">Rekening pembayaran</span><select class="input" name="RekeningID"></select><small class="muted"><i class="bi bi-printer"></i> Tercetak hanya pada surat jalan dengan nominal.</small></label>
@@ -3122,6 +3138,7 @@ function setupForm(lay) {
   }
   form.querySelector('[data-pay-block]').innerHTML = payBlockHTML(lay);
   form.querySelector('[data-actionbar]').innerHTML = actionBarHTML(lay);
+  setupDaftarHargaBox(lay);
   form.querySelectorAll('.combo').forEach(c => initCombo(c, (id, el) => onComboPick(lay, el.dataset.target, id)));
   refreshFormLists(lay);
 
@@ -3270,6 +3287,7 @@ function fillForm(lay, rec) {
   m('NoUnik').textContent = rec ? rec.NoUnik : 'Otomatis';
   st.dirty = false;
   applyLock(lay); updateCustomerInfo(lay); updateWarnings(lay); recalc(lay); updateActionBar(lay);
+  dhReset(lay);
   if (lay === 'kirim') updateInspBox();
 }
 function newOrder(lay, isReset) {
@@ -3357,7 +3375,8 @@ function updateCustomerInfo(lay, prefer) {
   const st = FORMS[lay]; if (!st) return; const form = st.el;
   const p = byId('pelanggan', form.querySelector('[name=PelangganID]').value);
   const kode = form.querySelector('[name=KodePelanggan]'), cur = prefer || kode.value;
-  kode.innerHTML = p ? `<option value="${esc(p.IDSewa)}">${esc(p.IDSewa)} · ID sewa</option><option value="${esc(p.IDKirim)}">${esc(p.IDKirim)} · ID kirim</option>` : '<option value="">Pilih pelanggan dulu</option>';
+  kode.innerHTML = !p ? '<option value="">Pilih pelanggan dulu</option>' : p.IDSewa === p.IDKirim ? `<option value="${esc(p.IDSewa)}">${esc(p.IDSewa)} · ${esc(p.Tipe || 'Corporate')}</option>`
+    : `<option value="${esc(p.IDSewa)}">${esc(p.IDSewa)} · ID sewa</option><option value="${esc(p.IDKirim)}">${esc(p.IDKirim)} · ID kirim</option>`;
   if (p) kode.value = cur === p.IDSewa || cur === p.IDKirim ? cur : (lay === 'sewa' ? p.IDSewa : p.IDKirim);
   const set = (k, v) => { const el = form.querySelector(`[data-info="${k}"]`); if (el) el.textContent = v || '—'; };
   set('NoHP', p && p.NoHP); set('NPWP', p && p.NPWP); set('Alamat', p && p.Alamat);
@@ -3440,6 +3459,11 @@ function validateForm(lay) {
 }
 function saveForm(lay, action, btn) {
   const st = FORMS[lay], data = collectForm(lay);
+  const dh = dhNilai(lay);
+  if (dh) {
+    if (!dh.tujuan && !dh.armada) { toast('warning', 'Lengkapi rute untuk daftar harga', 'Isi tujuan (kota) atau armada, atau hilangkan centang "Simpan ke daftar harga".'); const t = st.el.querySelector('[data-dh-f=tujuan]'); t.classList.add('invalid'); t.focus(); return; }
+    data.SimpanHarga = dh;
+  }
   const run = () => {
     btnBusy(btn, true, action === 'confirm' ? 'Menerbitkan…' : 'Menyimpan…');
     api('saveOrder', S.token, lay, data, action).then(r => {
@@ -3447,6 +3471,7 @@ function saveForm(lay, action, btn) {
       upsert('orders', o);
       if (r.data.invoice) upsert('invoices', r.data.invoice);
       (r.data.finance || []).forEach(f => upsert('finance', f));
+      if (r.data.harga) upsert('harga', r.data.harga);
       saveCache(); updateBadges(); clearLocalDraft(lay);
       fillForm(lay, byId('orders', o.ID));
       if (action === 'confirm') {
@@ -4953,6 +4978,7 @@ function crmApplyResult(d) {
   if (d.lead) upsert('crmLeads', d.lead);
   if (d.perusahaan) upsert('crmCompany', d.perusahaan);
   if (d.pelanggan) upsert('pelanggan', d.pelanggan);
+  (d.harga || []).forEach(h => upsert('harga', h));
   if (d.pertanyaan) upsert('pertanyaan', d.pertanyaan);
   [].concat(d.aktivitas || [], d.ubahTahap || []).filter(Boolean).forEach(a => upsert('crmActivity', a));
   saveCache(); updateBadges();
@@ -5208,13 +5234,14 @@ function openCrmLeadDetail(id) {
   openModal({ title: (p.Nama || '-'), sub: `${l.Kode} · ${l.Layanan}`, icon: CRM_LAYANAN_IC[l.Layanan] || 'bi-funnel', size: 'lg',
     body: `<div class="stepper">${CRM_TAHAP.map((tp, i) => `<button type="button" class="st-step ${tp === l.Tahap ? 'cur' : ''} ${tp === 'Gagal' ? 'lost' : i < idx && l.Tahap !== 'Gagal' ? 'done' : ''}" data-tahap="${esc(tp)}" ${boleh ? '' : 'disabled'}>${esc(tp)}</button>`).join('')}</div>
       ${l.Tahap === 'Gagal' ? `<div class="alert alert-warning"><i class="bi bi-x-octagon"></i><div><b>Gagal:</b> ${esc(l.AlasanLost)}</div></div>` : ''}
-      ${l.Tahap === 'Deal' && p.PelangganID ? `<div class="alert alert-info"><i class="bi bi-trophy"></i><div>Deal ${l.TanggalTutup ? 'pada ' + tgl(l.TanggalTutup) : ''}. Perusahaan sudah ada di <b>Data Pelanggan</b> dan bisa dipilih di form order.</div></div>` : ''}
+      ${l.Tahap === 'Deal' && p.PelangganID ? `<div class="alert alert-info"><i class="bi bi-trophy"></i><div>Deal ${l.TanggalTutup ? 'pada ' + tgl(l.TanggalTutup) : ''}. Perusahaan sudah ada di <b>Data Pelanggan</b>${(() => { const pl = (S.d.pelanggan || []).find(x => x.ID === p.PelangganID); return pl ? ' (<b class="mono">' + esc(pl.IDSewa) + '</b>' + (pl.Tipe === 'Corporate' ? ' · Corporate' : '') + (pl.Marketing ? ' · marketing ' + esc(pl.Marketing) : '') + ')' : ''; })()} dan bisa dipilih di form order.</div></div>` : ''}
       ${!boleh ? `<div class="alert alert-info"><i class="bi bi-lock"></i><div>Lead milik <b>${esc(l.PICNama)}</b>. Anda hanya dapat melihat.</div></div>` : ''}
       <div class="crm-detail">
         <div class="crm-info"><dl class="dl">${[['Kebutuhan', l.Kebutuhan], ['Estimasi nilai', l.EstimasiNilai ? rp(l.EstimasiNilai) : ''], ['Frekuensi', l.Frekuensi], ['Rute', l.Rute], ['Prioritas', l.Prioritas],
           ['PIC sales', l.PICNama], ['Prospek sejak', l.TanggalProspek ? tgl(l.TanggalProspek) : ''], ['Follow-up', l.NextFollowup ? tgl(l.NextFollowup) + (crmAktifLead(l) && l.NextFollowup < t ? ' (terlambat)' : '') : ''],
           ['Kontak', [p.KontakNama, p.KontakJabatan].filter(Boolean).join(' · ')]].filter(x => x[1]).map(x => `<dt>${x[0]}</dt><dd>${esc(x[1])}</dd>`).join('')}</dl>
-          <div class="chips-row">${wa ? `<a class="btn btn-secondary btn-sm" href="https://wa.me/${waNumber(wa)}" target="_blank" rel="noopener"><i class="bi bi-whatsapp"></i> WhatsApp</a>` : ''}<button type="button" class="btn btn-ghost btn-sm" id="ldToPt"><i class="bi bi-buildings"></i> Perusahaan</button></div></div>
+          <div class="chips-row">${wa ? `<a class="btn btn-secondary btn-sm" href="https://wa.me/${waNumber(wa)}" target="_blank" rel="noopener"><i class="bi bi-whatsapp"></i> WhatsApp</a>` : ''}<button type="button" class="btn btn-ghost btn-sm" id="ldToPt"><i class="bi bi-buildings"></i> Perusahaan</button></div>
+          ${hargaSepakatHTML(l, boleh && l.Tahap !== 'Gagal')}</div>
         <div>
           ${boleh ? `<form id="akForm" class="ak-form" novalidate><h4>Catat aktivitas</h4><div class="grid-2">
             <label class="field"><span class="label">Jenis</span><select class="input" name="Jenis">${crmOpts(CRM_JENIS, 'WhatsApp')}</select></label>
@@ -5231,6 +5258,7 @@ function openCrmLeadDetail(id) {
         </div></div>`,
     foot: `<button class="btn btn-secondary" data-close>Tutup</button>${boleh ? '<button class="btn btn-secondary" id="ldEdit"><i class="bi bi-pencil"></i> Ubah lead</button>' : ''}` });
   $('#ldToPt').onclick = () => openCrmPtDetail(l.CompanyID);
+  if ($('#hsEdit')) $('#hsEdit').onclick = () => openHargaSepakat(l);
   if ($('#ldEdit')) $('#ldEdit').onclick = () => openCrmLeadForm(l);
   if ($('#akSave')) $('#akSave').onclick = () => {
     const v = formValues($('#akForm')); v.LeadID = id;
@@ -5259,7 +5287,8 @@ function crmPindahTahap(l, tahap) {
   }
   if (tahap === 'Deal') {
     const p = crmPT(l.CompanyID) || {};
-    confirmDialog({ title: 'Tandai Deal?', html: `<b>${esc(p.Nama)}</b> ${p.PelangganID ? 'sudah tertaut ke Data Pelanggan.' : 'akan otomatis dibuatkan <b>Data Pelanggan</b> (nama, alamat, telepon, email) agar bisa dipilih di form order.'}`, icon: 'bi-trophy', ok: 'Ya, Deal' })
+    const nh = rcParse(l.HargaSepakat).length;
+    confirmDialog({ title: 'Tandai Deal?', html: `<b>${esc(p.Nama)}</b> ${p.PelangganID ? 'sudah tertaut ke Data Pelanggan dan akan ditandai <b>Corporate</b>.' : 'akan otomatis dibuatkan <b>Data Pelanggan</b> dengan kode <b>CORP-xxxx</b> (Corporate) agar bisa dipilih di form order.'} Marketing: <b>${esc(l.PICNama || S.me.nama)}</b>.<br><br>${nh ? `<i class="bi bi-tags"></i> ${nh} harga sepakat akan masuk <b>Daftar Harga</b> sebagai harga Corporate pelanggan ini.` : '<span class="muted"><i class="bi bi-info-circle"></i> Belum ada harga sepakat. Bisa diisi nanti di detail lead.</span>'}`, icon: 'bi-trophy', ok: 'Ya, Deal' })
       .then(v => { if (v === true) kirim(); });
     return;
   }
@@ -5730,31 +5759,35 @@ function hargaTeks(h, html) {
   return rp(h.Harga !== undefined ? h.Harga : h.harga) + (html ? '<br><span class="muted">' + esc(h.Satuan !== undefined ? h.Satuan : h.satuan || '') + '</span>' : ' ' + (h.Satuan || h.satuan || ''));
 }
 function renderHarga() {
-  const el = $('#page-harga'), st = S.ui.hrg = S.ui.hrg || { ly: '', q: '' }, list = S.d.harga || [];
-  el.innerHTML = `<div class="page-head"><div class="ph-icon"><i class="bi bi-tags"></i></div><div class="grow"><h1>Daftar Harga</h1><p class="muted">Harga standar per layanan & rute. Dipakai saat membuat Rate Card atau Surat Penawaran Harga${isSA() ? '' : ' (hanya Super Admin yang dapat mengubah)'}.</p></div>
+  const el = $('#page-harga'), st = S.ui.hrg = S.ui.hrg || { ly: '', q: '', k: '' }, list = S.d.harga || [];
+  el.innerHTML = `<div class="page-head"><div class="ph-icon"><i class="bi bi-tags"></i></div><div class="grow"><h1>Daftar Harga</h1><p class="muted"><b>Reguler</b>: harga umum, bisa ditambah dari form order (centang "Simpan ke daftar harga"). <b>Corporate</b>: harga khusus pelanggan hasil negosiasi CRM. Dipakai di form order, Rate Card, dan Surat Penawaran${isSA() ? '' : ' (hanya Super Admin yang dapat mengubah di sini)'}.</p></div>
     ${isSA() ? '<button class="btn btn-primary" id="hrgAdd"><i class="bi bi-plus-lg"></i> Tambah harga</button>' : ''}</div>
   <div class="card" style="margin-bottom:16px"><div class="toolbar"><div class="search grow"><i class="bi bi-search"></i><input class="input" id="hrgQ" placeholder="Cari rute, kota, armada…" value="${esc(st.q)}"></div>
     <select class="input" id="hrgLy" style="max-width:260px">${crmOpts(HARGA_LAYANAN, st.ly, 'Semua layanan')}</select>
+    <select class="input" id="hrgK" style="max-width:180px">${crmOpts(['Reguler', 'Corporate'], st.k, 'Semua kategori')}</select>
     <button class="btn btn-secondary" data-surat-new="RC"><i class="bi bi-file-earmark-spreadsheet"></i> Buat rate card</button></div></div>
   <div class="table-card" id="hrgList"></div>`;
   const draw = () => {
     const q = st.q.trim().toLowerCase();
-    const ls = list.filter(h => (!st.ly || h.Layanan === st.ly) && (!q || [h.Asal, h.Tujuan, h.Armada, h.Keterangan].join(' ').toLowerCase().includes(q)))
-      .sort((a, b) => String(a.Layanan + a.Tujuan + a.Armada).localeCompare(String(b.Layanan + b.Tujuan + b.Armada)));
-    $('#hrgList').innerHTML = ls.length ? `<div class="table-wrap"><table class="table cards"><thead><tr><th>Layanan</th><th>Rute</th><th>Armada / jenis</th><th class="t-right">Harga</th><th>Keterangan</th>${isSA() ? '<th class="t-actions">Aksi</th>' : ''}</tr></thead><tbody>
+    const ls = list.filter(h => (!st.ly || h.Layanan === st.ly) && (!st.k || (h.Kategori || 'Reguler') === st.k) && (!q || [h.Asal, h.Tujuan, h.Armada, h.Keterangan, h.PelangganNama, h.Marketing].join(' ').toLowerCase().includes(q)))
+      .sort((a, b) => String(a.Kategori === 'Corporate' ? 1 : 0).localeCompare(String(b.Kategori === 'Corporate' ? 1 : 0)) || String(a.PelangganNama || '').localeCompare(String(b.PelangganNama || '')) || String(a.Layanan + a.Tujuan + a.Armada).localeCompare(String(b.Layanan + b.Tujuan + b.Armada)));
+    $('#hrgList').innerHTML = ls.length ? `<div class="table-wrap"><table class="table cards"><thead><tr><th>Layanan</th><th>Rute</th><th>Armada / jenis</th><th class="t-right">Harga</th><th>Kategori</th><th>Keterangan</th>${isSA() ? '<th class="t-actions">Aksi</th>' : ''}</tr></thead><tbody>
       ${ls.map(h => `<tr class="${String(h.Aktif) === 'false' ? 'row-muted' : ''}"><td data-label="Layanan">${esc(h.Layanan)}</td><td class="card-title" data-label="Rute"><b>${esc([h.Asal, h.Tujuan].filter(Boolean).join(' → ') || '—')}</b></td><td data-label="Armada">${esc(h.Armada || '—')}</td>
-        <td class="t-right mono" data-label="Harga"><b>${hargaTeks(h, true)}</b></td><td data-label="Keterangan">${esc(h.Keterangan || '')}${String(h.Aktif) === 'false' ? ' <span class="badge b-slate">Nonaktif</span>' : ''}</td>
+        <td class="t-right mono" data-label="Harga"><b>${hargaTeks(h, true)}</b></td>
+        <td data-label="Kategori">${hargaBadge(h, true)}${h.Kategori === 'Corporate' ? `<span class="t-sub">${esc(h.PelangganNama || '')}</span>${h.Marketing ? `<span class="t-sub"><i class="bi bi-person-badge"></i> Marketing ${esc(h.Marketing)}</span>` : ''}` : ''}</td><td data-label="Keterangan">${esc(h.Keterangan || '')}${String(h.Aktif) === 'false' ? ' <span class="badge b-slate">Nonaktif</span>' : ''}${h.Sumber && h.Sumber !== 'Manual' ? `<span class="t-sub">Dari ${esc(h.Sumber)}</span>` : ''}</td>
         ${isSA() ? `<td class="t-actions"><button class="icon-btn" data-hrg="${esc(h.ID)}" title="Ubah"><i class="bi bi-pencil"></i></button></td>` : ''}</tr>`).join('')}
     </tbody></table></div>` : `<div style="padding:20px">${emptyHTML('bi-tags', 'Belum ada daftar harga', isSA() ? 'Tambahkan harga standar per rute dan armada.' : 'Super Admin belum mengisi daftar harga.')}</div>`;
   };
   $('#hrgQ').addEventListener('input', debounce(e => { st.q = e.target.value; draw(); }, 120));
   $('#hrgLy').onchange = e => { st.ly = e.target.value; draw(); };
+  $('#hrgK').onchange = e => { st.k = e.target.value; draw(); };
   if ($('#hrgAdd')) $('#hrgAdd').onclick = () => openHargaForm(null);
   $('#hrgList').onclick = e => { const b = e.target.closest('[data-hrg]'); if (b) openHargaForm((S.d.harga || []).find(h => h.ID === b.dataset.hrg)); };
   draw();
 }
 function openHargaForm(h) {
-  const d = Object.assign({ Layanan: 'Pengiriman Barang', Satuan: 'per trip', Aktif: 'true' }, h || {});
+  const d = Object.assign({ Layanan: 'Pengiriman Barang', Satuan: 'per trip', Aktif: 'true', Kategori: 'Reguler' }, h || {});
+  const pels = (S.d.pelanggan || []).slice().sort((a, b) => (a.Tipe === 'Corporate' ? 0 : 1) - (b.Tipe === 'Corporate' ? 0 : 1) || String(a.Nama).localeCompare(String(b.Nama)));
   const m = v => (num(v) ? num(v).toLocaleString('id-ID') : '');
   openModal({ title: h ? 'Ubah harga' : 'Tambah harga', icon: 'bi-tags', size: 'lg',
     body: `<form id="hrgForm" novalidate><div class="grid-2">
@@ -5768,6 +5801,9 @@ function openHargaForm(h) {
       <label class="field hb-paket"><span class="label">Harga per m³ / kubik (Rp)</span><input class="input t-right mono" name="HargaM3" inputmode="numeric" data-money value="${m(d.HargaM3)}"></label>
       <label class="field hb-paket"><span class="label">Harga minimal (Rp)</span><input class="input t-right mono" name="HargaMin" inputmode="numeric" data-money value="${m(d.HargaMin)}"><small class="muted">Ongkos paling rendah per kiriman.</small></label>
       <label class="field full"><span class="label">Keterangan</span><input class="input" name="Keterangan" maxlength="300" value="${esc(d.Keterangan || '')}" placeholder="mis. Min. 100 kg, belum termasuk asuransi"></label>
+      <label class="field"><span class="label">Kategori</span><select class="input" name="Kategori">${crmOpts(['Reguler', 'Corporate'], d.Kategori || 'Reguler')}</select></label>
+      <label class="field hb-corp"><span class="label req">Pelanggan</span><select class="input" name="PelangganID"><option value="">— Pilih pelanggan —</option>${pels.map(p => `<option value="${esc(p.ID)}" ${p.ID === d.PelangganID ? 'selected' : ''}>${esc(p.Nama)} · ${esc(p.IDSewa)}${p.Tipe === 'Corporate' ? ' (Corporate)' : ''}</option>`).join('')}</select></label>
+      <label class="field hb-corp"><span class="label">Marketing</span><input class="input" name="Marketing" maxlength="80" value="${esc(d.Marketing || '')}" placeholder="mis. Budi"></label>
       <label class="field"><span class="label">Status</span><select class="input" name="Aktif"><option value="true" ${String(d.Aktif) !== 'false' ? 'selected' : ''}>Aktif</option><option value="false" ${String(d.Aktif) === 'false' ? 'selected' : ''}>Nonaktif</option></select></label>
     </div></form>`,
     foot: `${h ? '<button class="btn btn-ghost" id="hrgDel" style="margin-right:auto;color:var(--red)"><i class="bi bi-trash"></i> Hapus</button>' : ''}<button class="btn btn-secondary" data-close>Batal</button><button class="btn btn-primary" id="hrgSave"><i class="bi bi-check2"></i> Simpan</button>` });
@@ -5776,8 +5812,12 @@ function openHargaForm(h) {
   // Pengiriman Barang memakai harga per kg / per m³ / minimal; layanan lain memakai harga + satuan
   const mode = () => { const paket = form.querySelector('[name=Layanan]').value === 'Pengiriman Barang'; form.querySelectorAll('.hb-paket').forEach(x => { x.hidden = !paket; }); form.querySelectorAll('.hb-umum').forEach(x => { x.hidden = paket; }); };
   form.querySelector('[name=Layanan]').addEventListener('change', mode); mode();
+  const kat = () => { const c = form.querySelector('[name=Kategori]').value === 'Corporate'; form.querySelectorAll('.hb-corp').forEach(x => { x.hidden = !c; }); };
+  form.querySelector('[name=Kategori]').addEventListener('change', kat); kat();
+  form.querySelector('[name=PelangganID]').addEventListener('change', e => { const p = (S.d.pelanggan || []).find(x => x.ID === e.target.value), mk = form.querySelector('[name=Marketing]'); if (p && p.Marketing && !mk.value.trim()) mk.value = p.Marketing; });
   $('#hrgSave').onclick = () => {
     const v = formValues($('#hrgForm')); ['Harga', 'HargaKg', 'HargaM3', 'HargaMin'].forEach(k => { v[k] = num(v[k]); }); if (h) v.ID = h.ID;
+    if (v.Kategori === 'Corporate' && !v.PelangganID) return toast('warning', 'Pilih pelanggan', 'Harga Corporate berlaku khusus untuk satu pelanggan.');
     if (v.Layanan === 'Pengiriman Barang' ? !(v.HargaKg || v.HargaM3) : !v.Harga) return toast('warning', 'Isi harga', v.Layanan === 'Pengiriman Barang' ? 'Isi harga per kg atau per m³.' : 'Harga wajib diisi.');
     const b = $('#hrgSave'); btnBusy(b, true, 'Menyimpan…');
     api('saveHarga', S.token, v).then(r => { upsert('harga', r.data); saveCache(); ok(r.message); closeModal(); renderHarga(); }).catch(fail).finally(() => btnBusy(b, false));
@@ -5919,19 +5959,149 @@ function openSuratForm(x, jenisBaru) {
   $('#srtDraft').onclick = e => simpan(false, e.currentTarget);
   $('#srtAjukan').onclick = e => simpan(true, e.currentTarget);
 }
-function pilihHarga(cb) {
-  const list = (S.d.harga || []).filter(h => String(h.Aktif) !== 'false');
-  if (!list.length) return toast('info', 'Daftar harga masih kosong', isSA() ? 'Isi dulu di menu Daftar Harga.' : 'Minta Super Admin mengisi Daftar Harga.');
+/** Pilih dari daftar harga. opt: { single, layanan, pelangganID } — di form order: harga Corporate pelanggan itu tampil paling atas, Corporate pelanggan lain disembunyikan. */
+function pilihHarga(cb, opt) {
+  opt = opt || {};
+  const ctxPel = opt.pelangganID !== undefined;
+  const list = (S.d.harga || []).filter(h => String(h.Aktif) !== 'false' && (!ctxPel || h.Kategori !== 'Corporate' || h.PelangganID === opt.pelangganID))
+    .sort((a, b) => (hrgKorp(b, opt.pelangganID) - hrgKorp(a, opt.pelangganID)) || String(a.Layanan + a.Tujuan + a.Armada).localeCompare(String(b.Layanan + b.Tujuan + b.Armada)));
+  if (!list.length) return toast('info', 'Daftar harga masih kosong', isSA() ? 'Isi dulu di menu Daftar Harga, atau centang "Simpan ke daftar harga" di form order.' : 'Centang "Simpan ke daftar harga" saat membuat order, atau minta Super Admin mengisi Daftar Harga.');
+  const nKorp = ctxPel && opt.pelangganID ? list.filter(h => hrgKorp(h, opt.pelangganID)).length : 0;
   const box = document.createElement('div'); box.className = 'pick-overlay';
-  box.innerHTML = `<div class="pick-box"><div class="card-title-row"><h3 style="margin:0">Pilih dari daftar harga</h3><button type="button" class="icon-btn" data-pclose><i class="bi bi-x-lg"></i></button></div>
-    <select class="input" id="pkLy" style="margin:10px 0">${crmOpts(HARGA_LAYANAN, '', 'Semua layanan')}</select>
-    <div class="pick-list">${list.map(h => `<label class="check-row pick-i" data-ly="${esc(h.Layanan)}"><input type="checkbox" value="${esc(h.ID)}"><span><b>${esc([h.Asal, h.Tujuan].filter(Boolean).join(' → ') || h.Armada)}</b> <span class="muted">${esc(h.Armada && (h.Asal || h.Tujuan) ? h.Armada + ' · ' : '')}${esc(h.Layanan)}</span></span><span class="mono" style="margin-left:auto;text-align:right">${hargaTeks(h, true)}</span></label>`).join('')}</div>
-    <div class="chips-row" style="justify-content:flex-end;margin-top:12px"><button type="button" class="btn btn-secondary" data-pclose>Batal</button><button type="button" class="btn btn-primary" id="pkOk">Tambahkan</button></div></div>`;
+  box.innerHTML = `<div class="pick-box"><div class="card-title-row"><h3 style="margin:0">Pilih dari daftar harga</h3><button type="button" class="icon-btn" data-pclose aria-label="Tutup"><i class="bi bi-x-lg"></i></button></div>
+    ${nKorp ? `<p class="muted" style="margin:6px 0 0"><i class="bi bi-building-check"></i> ${nKorp} harga khusus (Corporate) untuk pelanggan ini ditampilkan paling atas.</p>` : ''}
+    <div class="pick-tools"><input class="input" id="pkQ" placeholder="Cari kota, armada, pelanggan…"><select class="input" id="pkLy">${crmOpts(HARGA_LAYANAN, opt.layanan || '', 'Semua layanan')}</select></div>
+    <div class="pick-list">${list.map(h => `<label class="check-row pick-i${opt.single ? ' single' : ''}" data-ly="${esc(h.Layanan)}" data-k="${esc([h.Asal, h.Tujuan, h.Armada, h.Keterangan, h.PelangganNama, h.Marketing, h.Kategori].join(' ').toLowerCase())}">${opt.single ? `<input type="radio" name="pkOne" value="${esc(h.ID)}">` : `<input type="checkbox" value="${esc(h.ID)}">`}<span><b>${esc([h.Asal, h.Tujuan].filter(Boolean).join(' → ') || h.Armada)}</b> <span class="muted">${esc(h.Armada && (h.Asal || h.Tujuan) ? h.Armada + ' · ' : '')}${esc(h.Layanan)}</span><br>${hargaBadge(h)}</span><span class="mono" style="margin-left:auto;text-align:right">${hargaTeks(h, true)}</span></label>`).join('')}</div>
+    <div class="pick-empty muted" hidden style="padding:14px 4px">Tidak ada harga yang cocok.</div>
+    <div class="chips-row" style="justify-content:flex-end;margin-top:12px"><button type="button" class="btn btn-secondary" data-pclose>Batal</button><button type="button" class="btn btn-primary" id="pkOk">${opt.single ? 'Pakai harga ini' : 'Tambahkan'}</button></div></div>`;
   document.body.appendChild(box);
   const tutup = () => box.remove();
   box.querySelectorAll('[data-pclose]').forEach(b => b.onclick = tutup);
-  box.querySelector('#pkLy').onchange = e => box.querySelectorAll('.pick-i').forEach(i => { i.hidden = !!e.target.value && i.dataset.ly !== e.target.value; });
-  box.querySelector('#pkOk').onclick = () => { const ids = [...box.querySelectorAll('input:checked')].map(i => i.value); cb(list.filter(h => ids.includes(h.ID))); tutup(); };
+  box.addEventListener('click', e => { if (e.target === box) tutup(); });
+  const saring = () => {
+    const ly = box.querySelector('#pkLy').value, q = box.querySelector('#pkQ').value.trim().toLowerCase();
+    let n = 0; box.querySelectorAll('.pick-i').forEach(i => { i.hidden = (!!ly && i.dataset.ly !== ly) || (!!q && !i.dataset.k.includes(q)); if (!i.hidden) n++; });
+    box.querySelector('.pick-empty').hidden = n > 0;
+  };
+  box.querySelector('#pkLy').onchange = saring; box.querySelector('#pkQ').addEventListener('input', debounce(saring, 100)); saring();
+  if (opt.single) box.querySelector('.pick-list').addEventListener('dblclick', e => { const i = e.target.closest('.pick-i'); if (i) box.querySelector('#pkOk').click(); });
+  box.querySelector('#pkOk').onclick = () => {
+    const ids = [...box.querySelectorAll('input:checked')].map(i => i.value);
+    if (!ids.length) return toast('info', 'Pilih salah satu harga');
+    cb(list.filter(h => ids.includes(h.ID))); tutup();
+  };
+}
+const hrgKorp = (h, pid) => (h.Kategori === 'Corporate' && pid && h.PelangganID === pid ? 1 : 0);
+function hargaBadge(h, singkat) {
+  if (h.Kategori !== 'Corporate') return '<span class="badge b-slate plain">Reguler</span>';
+  return `<span class="badge b-indigo plain"><i class="bi bi-building-check"></i> Corporate</span>${singkat ? '' : ` <small class="muted">${esc(h.PelangganNama || '')}${h.Marketing ? ' · Marketing ' + esc(h.Marketing) : ''}</small>`}`;
+}
+function tipePelBadge(p) { return p && p.Tipe === 'Corporate' ? '<span class="badge b-indigo plain">Corporate</span>' : ''; }
+
+// ── Form order: pilih dari daftar harga & simpan ke daftar harga (Reguler) ──
+const DH_LAYANAN = { sewa: 'Sewa Kendaraan', kirim: 'Pengiriman Mobil & Alat Berat', paket: 'Pengiriman Barang' };
+function kotaDari(alamat) {
+  const seg = String(alamat || '').split(/[,\n]/).map(x => x.replace(/\b\d{5}\b/g, '').trim()).filter(Boolean);
+  return (seg[seg.length - 1] || '').replace(/^(kota|kab\.?|kabupaten)\s+/i, '').slice(0, 80);
+}
+function setupDaftarHargaBox(lay) {
+  const form = FORMS[lay].el, box = form.querySelector('[data-dh]');
+  const f = k => box.querySelector(`[data-dh-f="${k}"]`);
+  box.addEventListener('input', e => { if (e.target.dataset.dhF === 'min') formatMoneyInput(e.target); e.target.classList.remove('invalid'); e.stopPropagation(); });
+  box.addEventListener('change', e => e.stopPropagation());
+  box.querySelector('[data-dh-save]').addEventListener('change', e => {
+    box.querySelector('[data-dh-fields]').hidden = !e.target.checked;
+    if (e.target.checked) dhIsiOtomatis(lay);
+  });
+  box.querySelector('[data-dh-pick]').onclick = () => {
+    if (form.classList.contains('locked')) return;
+    const pid = form.querySelector('[name=PelangganID]').value;
+    pilihHarga(rows => dhPakai(lay, rows[0]), { single: true, layanan: DH_LAYANAN[lay], pelangganID: pid });
+  };
+  FORMS[lay].dhField = f;
+}
+function dhIsiOtomatis(lay) {
+  const form = FORMS[lay].el, f = FORMS[lay].dhField, v = n => (form.querySelector(`[name="${n}"]`) || {}).value || '';
+  const isi = (k, val) => { if (!f(k).value.trim() && val) f(k).value = val; };
+  if (lay === 'sewa') { isi('asal', kotaDari(v('MuatAlamat'))); isi('tujuan', kotaDari(v('BongkarAlamat'))); isi('armada', v('JenisKendaraan')); }
+  else if (lay === 'kirim') { const r = byId('penerima', v('PenerimaID')); isi('asal', kotaDari(v('AsalAlamat'))); isi('tujuan', (r && r.Kota) || kotaDari(r ? r.Alamat : '')); isi('armada', v('JenisLayanan')); }
+  else { isi('asal', (S.settings && S.settings.kotaSurat) || kotaDari(v('PengirimAlamat'))); isi('tujuan', v('KotaTujuan')); isi('armada', 'Paket ' + (v('Jalur') || 'Darat').toLowerCase()); }
+}
+function dhPakai(lay, h) {
+  if (!h) return;
+  const st = FORMS[lay], form = st.el, q = n => form.querySelector(`[name="${n}"]`), f = st.dhField;
+  if (lay === 'paket') {
+    setMoney(q('TarifKg'), num(h.HargaKg) || ''); setMoney(q('TarifVolume'), num(h.HargaM3) || '');
+    q('DasarTarif').value = num(h.HargaKg) ? 'kg' : 'volume';
+    if (!q('KotaTujuan').value.trim() && h.Tujuan) q('KotaTujuan').value = h.Tujuan;
+    if (num(h.HargaMin)) f('min').value = num(h.HargaMin).toLocaleString('id-ID');
+  } else {
+    setMoney(q('Harga'), num(h.Harga));
+    if (lay === 'sewa' && JENIS_KENDARAAN.includes(h.Armada) && !q('JenisKendaraan').value) q('JenisKendaraan').value = h.Armada;
+  }
+  ['asal', 'tujuan', 'armada'].forEach(k => { f(k).value = h[{ asal: 'Asal', tujuan: 'Tujuan', armada: 'Armada' }[k]] || ''; });
+  st.dhSrc = h;
+  q('Harga').classList.remove('invalid');
+  markDirty(lay); recalc(lay); dhInfo(lay);
+  ok('Harga dipakai', [h.Asal, h.Tujuan].filter(Boolean).join(' → ') + ' · ' + hargaTeks(h));
+}
+function dhInfo(lay) {
+  const st = FORMS[lay], el = st.el.querySelector('[data-dh-src]'), h = st.dhSrc;
+  if (!h) { el.hidden = true; return; }
+  const ongkos = num(st.el.querySelector('[name=Harga]').value), mn = num(h.HargaMin);
+  el.hidden = false;
+  el.innerHTML = `<i class="bi bi-tags"></i> Dari daftar harga: <b>${esc([h.Asal, h.Tujuan].filter(Boolean).join(' → ') || h.Armada)}</b> ${hargaBadge(h)}` +
+    (lay === 'paket' && mn && ongkos && ongkos < mn ? `<div class="warn-line amber"><i class="bi bi-exclamation-triangle"></i> Ongkos ${rp(ongkos)} di bawah harga minimal ${rp(mn)} — tambahkan selisihnya di Penyesuaian tarif bila berlaku.</div>` : '');
+}
+function dhNilai(lay) {
+  const st = FORMS[lay]; if (!st) return null;
+  const box = st.el.querySelector('[data-dh]');
+  if (!box || box.hidden || !box.querySelector('[data-dh-save]').checked) return null;
+  const f = st.dhField;
+  return { asal: f('asal').value.trim(), tujuan: f('tujuan').value.trim(), armada: f('armada').value.trim(), min: lay === 'paket' ? num(f('min').value) : 0 };
+}
+function dhReset(lay) {
+  const st = FORMS[lay]; if (!st || !st.dhField) return;
+  const box = st.el.querySelector('[data-dh]');
+  box.hidden = st.el.classList.contains('locked');
+  box.querySelector('[data-dh-save]').checked = false;
+  box.querySelector('[data-dh-fields]').hidden = true;
+  box.querySelectorAll('[data-dh-f]').forEach(i => { i.value = ''; i.classList.remove('invalid'); });
+  st.dhSrc = null; dhInfo(lay);
+}
+
+// ── CRM: harga sepakat hasil negosiasi ──
+function hargaSepakatHTML(l, boleh) {
+  const rows = rcParse(l.HargaSepakat);
+  return `<div class="hs-box"><div class="card-title-row"><h4 style="margin:0"><i class="bi bi-patch-check"></i> Harga sepakat</h4>${boleh ? `<button type="button" class="btn btn-secondary btn-sm" id="hsEdit"><i class="bi bi-pencil-square"></i> ${rows.length ? 'Ubah' : 'Isi harga'}</button>` : ''}</div>
+    ${rows.length ? `<ul class="hs-list">${rows.map(r => `<li><span><b>${esc([r.asal, r.tujuan].filter(Boolean).join(' → ') || r.armada)}</b><small class="muted">${esc(r.armada && (r.asal || r.tujuan) ? r.armada + ' · ' : '')}${esc(r.layanan || l.Layanan)}</small></span><b class="mono">${hargaTeks(r)}</b></li>`).join('')}</ul>` : '<p class="muted" style="margin:6px 0 0">Belum ada. Catat harga hasil negosiasi di sini.</p>'}
+    <small class="muted">${l.Tahap === 'Deal' ? 'Sudah masuk Daftar Harga sebagai harga <b>Corporate</b> pelanggan ini.' : 'Saat lead <b>Deal</b>, harga ini otomatis masuk Daftar Harga (Corporate) khusus pelanggan ini, dengan nama marketing.'}</small></div>`;
+}
+function openHargaSepakat(l) {
+  const rows = rcParse(l.HargaSepakat);
+  openModal({ title: 'Harga sepakat', sub: crmNama(l) + ' · ' + l.Kode, icon: 'bi-patch-check', size: 'lg',
+    body: `<p class="muted" style="margin-top:0">Ambil dari daftar harga lalu ubah sesuai hasil negosiasi, atau tambah baris baru. Kirim paket: isi per kg / per m³ / minimal; layanan lain: harga + satuan.</p>
+      <div class="chips-row" style="margin-bottom:8px"><button type="button" class="btn btn-secondary btn-sm" id="hsPick"><i class="bi bi-list-check"></i> Ambil dari daftar harga</button><button type="button" class="btn btn-ghost btn-sm" id="hsAdd"><i class="bi bi-plus-lg"></i> Baris</button></div>
+      <div class="table-wrap rc-wrap"><table class="table rc-table"><thead><tr><th>Layanan</th><th>Asal</th><th>Tujuan</th><th>Armada / jenis</th><th>Harga (Rp)</th><th>Satuan</th><th>Per kg</th><th>Per m³</th><th>Minimal</th><th>Keterangan</th><th></th></tr></thead><tbody id="hsBody">${(rows.length ? rows : [{ layanan: l.Layanan, satuan: 'per trip' }]).map(rcRowHTML).join('')}</tbody></table></div>`,
+    foot: `<button class="btn btn-secondary" id="hsBack">Batal</button><button class="btn btn-primary" id="hsSave"><i class="bi bi-check2"></i> Simpan harga sepakat</button>` });
+  const body = $('#hsBody');
+  body.addEventListener('input', e => { if (['harga', 'kg', 'm3', 'min'].includes(e.target.dataset.rf)) formatMoneyInput(e.target); });
+  body.addEventListener('click', e => { const b = e.target.closest('[data-rcdel]'); if (b) b.closest('tr').remove(); });
+  $('#hsAdd').onclick = () => body.insertAdjacentHTML('beforeend', rcRowHTML({ layanan: l.Layanan, satuan: 'per trip' }));
+  $('#hsPick').onclick = () => pilihHarga(hs => {
+    // buang baris kosong bawaan sebelum menambah
+    $$('[data-rc]', body).forEach(tr => { if (![...tr.querySelectorAll('[data-rf]')].some(i => i.dataset.rf !== 'layanan' && i.dataset.rf !== 'satuan' && i.value.trim())) tr.remove(); });
+    hs.forEach(h => body.insertAdjacentHTML('beforeend', rcRowHTML({ layanan: h.Layanan, asal: h.Asal, tujuan: h.Tujuan, armada: h.Armada, harga: h.Harga, satuan: h.Satuan, kg: h.HargaKg, m3: h.HargaM3, min: h.HargaMin, ket: h.Keterangan })));
+  }, { layanan: l.Layanan, pelangganID: (crmPT(l.CompanyID) || {}).PelangganID || '' });
+  $('#hsBack').onclick = () => openCrmLeadDetail(l.ID);
+  $('#hsSave').onclick = () => {
+    const data = $$('[data-rc]', body).map(tr => { const o = {}; tr.querySelectorAll('[data-rf]').forEach(i => { o[i.dataset.rf] = ['harga', 'kg', 'm3', 'min'].includes(i.dataset.rf) ? num(i.value) : i.value.trim(); }); return o; })
+      .filter(r => r.harga || r.kg || r.m3 || r.tujuan || r.armada);
+    const bad = data.find(r => !(r.tujuan || r.armada) || !(r.harga || r.kg || r.m3));
+    if (bad) return toast('warning', 'Lengkapi baris harga', 'Setiap baris perlu tujuan/armada dan harga (atau per kg / per m³).');
+    const b = $('#hsSave'); btnBusy(b, true, 'Menyimpan…');
+    api('saveCrmLead', S.token, { ID: l.ID, HargaSepakat: data }).then(res => { crmApplyResult(res.data); ok(res.message || 'Harga sepakat tersimpan'); crmRerender(); openCrmLeadDetail(l.ID); }).catch(fail).finally(() => btnBusy(b, false));
+  };
 }
 
 function suratHTML(x, forPdf) {
