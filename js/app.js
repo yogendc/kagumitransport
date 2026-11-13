@@ -10,7 +10,7 @@
    ============================================================ */
 
 // ── Konstanta ──────────────────────────────────────────────
-const APP_VERSI = '3.7'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
+const APP_VERSI = '3.8'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
 const LS = { token: 'kgm_token', theme: 'kgm_theme', cache: 'kgm_cache_v1', cols: 'kgm_rekap_cols', draft: 'kgm_draft_', master: 'kgm_master_open', login: 'kgm_login_ctx' };
 const STATUS = ['Dijadwalkan', 'Dikirim', 'Diterima', 'Dibatalkan'];
 const STATUS_CLS = { Dijadwalkan: 'b-indigo', Dikirim: 'b-amber', Diterima: 'b-green', Dibatalkan: 'b-red', Draf: 'b-slate' };
@@ -622,7 +622,7 @@ function expBadge(d, prefix) {
   const cls = x.lvl === 'exp' ? 'b-red' : x.lvl === 'warn' ? 'b-amber' : x.lvl === 'ok' ? 'b-green' : 'b-slate';
   return `<span class="badge ${cls}">${prefix ? esc(prefix) + ' · ' : ''}${esc(x.lvl === 'ok' ? tgl(d) : x.text)}</span>`;
 }
-function vehicleAlerts(k) { return [['KIR', k.MasaKIR], ['Pajak', k.MasaPajak]].map(([l, d]) => Object.assign({ jenis: l, tgl: d }, expInfo(d))).filter(x => x.lvl === 'exp' || x.lvl === 'warn'); }
+function vehicleAlerts(k) { return [['KIR', k.MasaKIR], ['Pajak', k.MasaPajak]].concat(k.Kepemilikan === 'Sewa' && k.SewaSampai ? [['Kontrak sewa', k.SewaSampai]] : []).map(([l, d]) => Object.assign({ jenis: l, tgl: d }, expInfo(d))).filter(x => x.lvl === 'exp' || x.lvl === 'warn'); }
 function driverAlert(d) { const x = expInfo(d.MasaSIM); return (x.lvl === 'exp' || x.lvl === 'warn') ? Object.assign({ jenis: 'SIM', tgl: d.MasaSIM }, x) : null; }
 function dueInvoices() { const t = today(); return S.d.invoices.filter(i => i.Status === 'Belum Lunas' && i.JatuhTempo && i.JatuhTempo <= t); }
 function legalAlerts() {
@@ -2627,11 +2627,12 @@ const MASTERS = {
   kendaraan: {
     title: 'Data Master Kendaraan', sub: 'Armada sewa dan unit towing / car carrier.', icon: 'bi-car-front', add: 'Tambah armada', list: 'kendaraan',
     canEdit: () => true, canDel: () => isSA(), label: r => r.NoPol,
-    search: r => [r.NoPol, r.Kode, r.JenisKendaraan, r.Merk, r.Tipe, r.NoKa, r.NoSin, r.Pool].join(' '),
-    chips: [['', 'Semua'], ['tindak', 'KIR / pajak perlu tindakan', r => vehicleAlerts(r).length > 0, 'danger'], ['jalan', 'Sedang jalan', r => !!vehicleBusy(r)], ['siap', 'Siap operasi', r => !vehicleBusy(r) && !vehicleAlerts(r).some(a => a.lvl === 'exp')]],
+    search: r => [r.NoPol, r.Kode, r.JenisKendaraan, r.Merk, r.Tipe, r.NoKa, r.NoSin, r.Pool, r.PemilikSewa].join(' '),
+    chips: [['', 'Semua'], ['sendiri', 'Milik sendiri', r => r.Kepemilikan !== 'Sewa'], ['sewa', 'Sewa', r => r.Kepemilikan === 'Sewa'], ['tindak', 'KIR / pajak / sewa perlu tindakan', r => vehicleAlerts(r).length > 0, 'danger'], ['jalan', 'Sedang jalan', r => !!vehicleBusy(r)], ['siap', 'Siap operasi', r => !vehicleBusy(r) && !vehicleAlerts(r).some(a => a.lvl === 'exp')]],
     cols: [
       ['No. polisi', r => { const a = vehicleAlerts(r); return `<span class="plate ${a.some(x => x.lvl === 'exp') ? 'red' : ''}">${esc(r.NoPol)}</span><span class="t-sub mono">${esc(r.Kode)}${r.Pool ? ' · ' + esc(r.Pool) : ''}</span>`; }, 'card-title'],
       ['Jenis & kategori', r => `<span class="t-strong">${esc(r.JenisKendaraan)}</span><span class="t-sub">${esc([r.Merk, r.Tipe].filter(Boolean).join(' '))}${r.Tahun ? ' · ' + esc(r.Tahun) : ''}</span>`],
+      ['Kepemilikan', r => r.Kepemilikan === 'Sewa' ? `<span class="badge b-amber plain">Sewa</span><span class="t-sub">${esc(r.PemilikSewa || '—')}</span>${r.SewaSampai ? `<span class="t-sub">Kontrak s/d</span>${expBadge(r.SewaSampai)}` : ''}` : '<span class="badge b-green plain">Milik sendiri</span>'],
       ['Rangka & mesin', r => `<span class="mono" style="white-space:nowrap">NoKa ${esc(r.NoKa)}</span><span class="t-sub mono" style="white-space:nowrap">NoSin ${esc(r.NoSin)}</span>`],
       ['Uji KIR', r => expBadge(r.MasaKIR)],
       ['Pajak / STNK', r => expBadge(r.MasaPajak)],
@@ -2647,6 +2648,11 @@ const MASTERS = {
         { k: 'Tipe', l: 'Tipe / model', ph: 'Canter HD 125 PS' },
         { k: 'Tahun', l: 'Tahun pembuatan', t: 'year' },
         { k: 'Warna', l: 'Warna' }] },
+      { t: 'Kepemilikan', f: [
+        { k: 'Kepemilikan', l: 'Status kepemilikan', t: 'radio', full: true, opts: [['Milik sendiri', 'Aset perusahaan'], ['Sewa', 'Disewa dari perusahaan / pemilik lain']] },
+        { k: 'PemilikSewa', l: 'Disewa dari (nama PT / pemilik)', req: true, ph: 'Contoh: PT Armada Sentosa', show: d => d.Kepemilikan === 'Sewa' },
+        { k: 'KontakPemilik', l: 'Kontak pemilik (nama / HP)', ph: 'Contoh: Pak Joko 0812xxxx', show: d => d.Kepemilikan === 'Sewa' },
+        { k: 'SewaSampai', l: 'Kontrak sewa berakhir', t: 'date', exp: true, show: d => d.Kepemilikan === 'Sewa', help: 'Opsional. Pengingat muncul sebelum kontrak habis.' }] },
       { t: 'Masa berlaku dokumen', note: 'Peringatan muncul sebelum habis dan tidak memblokir pembuatan surat jalan.', f: [
         { k: 'MasaKIR', l: 'Masa berlaku uji KIR', t: 'date', exp: true },
         { k: 'MasaPajak', l: 'Masa berlaku pajak / STNK', t: 'date', exp: true }] },
@@ -2819,7 +2825,8 @@ function openMasterModal(type, rec, opt) {
   opt = opt || {};
   const cfg = MASTERS[type];
   const canEdit = !rec || cfg.canEdit(rec);
-  const d = Object.assign({ Aktif: 'true', TipeEntitas: 'Perusahaan', JenisSIM: 'B2 Umum' }, rec ? {} : (opt.preset || {}), rec || {});
+  const d = Object.assign({ Aktif: 'true', TipeEntitas: 'Perusahaan', JenisSIM: 'B2 Umum', Kepemilikan: 'Milik sendiri' }, rec ? {} : (opt.preset || {}), rec || {});
+  if (type === 'kendaraan' && d.Kepemilikan !== 'Sewa') d.Kepemilikan = 'Milik sendiri';
   const pools = Array.from(new Set(S.d.kendaraan.map(k => k.Pool).concat(S.d.pengemudi.map(x => x.Pool)).filter(Boolean)));
   $('#dlPool').innerHTML = pools.map(p => `<option>${esc(p)}</option>`).join('');
   const thisYear = Number(today().slice(0, 4));
@@ -3019,7 +3026,7 @@ function deleteMaster(type, id) {
 // ============================================================
 const COMBO_SRC = {
   pelanggan: () => S.d.pelanggan.map(p => ({ id: p.ID, label: p.Nama, sub: `${p.IDSewa}${p.IDKirim !== p.IDSewa ? ' · ' + p.IDKirim : ''}${p.Tipe === 'Corporate' ? ' · Corporate' + (p.Marketing ? ' (' + p.Marketing + ')' : '') : ''}${p.NoHP ? ' · ' + p.NoHP : ''}`, key: [p.Nama, p.IDSewa, p.IDKirim, p.NoHP].join(' ') })),
-  kendaraan: () => S.d.kendaraan.map(k => { const a = vehicleAlerts(k); return { id: k.ID, label: k.NoPol + ' — ' + (k.JenisKendaraan || ''), sub: `${[k.Merk, k.Tipe].filter(Boolean).join(' ')}${k.Pool ? ' · ' + k.Pool : ''}${vehicleBusy(k) ? ' · sedang jalan' : ''}${a.length ? ' · ⚠ ' + a.map(x => x.jenis + ' ' + x.text.toLowerCase()).join(', ') : ''}`, key: [k.NoPol, k.Merk, k.Tipe, k.JenisKendaraan, k.Kode].join(' ') }; }),
+  kendaraan: () => S.d.kendaraan.map(k => { const a = vehicleAlerts(k); return { id: k.ID, label: k.NoPol + ' — ' + (k.JenisKendaraan || ''), sub: `${k.Kepemilikan === 'Sewa' ? 'Sewa ' + (k.PemilikSewa || '') + ' · ' : ''}${[k.Merk, k.Tipe].filter(Boolean).join(' ')}${k.Pool ? ' · ' + k.Pool : ''}${vehicleBusy(k) ? ' · sedang jalan' : ''}${a.length ? ' · ⚠ ' + a.map(x => x.jenis + ' ' + x.text.toLowerCase()).join(', ') : ''}`, key: [k.NoPol, k.Merk, k.Tipe, k.JenisKendaraan, k.Kode].join(' ') }; }),
   pengemudi: () => S.d.pengemudi.map(d => { const a = driverAlert(d); return { id: d.ID, label: d.Nama, sub: `${d.Kode} · SIM ${d.JenisSIM || ''}${driverBusy(d) ? ' · bertugas' : ' · standby'}${a ? ' · ⚠ SIM ' + a.text.toLowerCase() : ''}`, key: [d.Nama, d.Kode, d.NoHP].join(' ') }; }),
   ekspedisi: () => S.d.ekspedisi.filter(e => ekspPunya(e, 'Paket')).map(e => ({ id: e.ID, label: e.Nama, sub: `${e.Kode}${e.PIC ? ' · ' + e.PIC : ''}${e.NoWA ? ' · WA ' + e.NoWA : ''}`, key: [e.Nama, e.Kode, e.PIC, e.NoWA].join(' ') })),
   ekspTowing: () => S.d.ekspedisi.filter(e => ekspPunya(e, 'Towing')).map(e => ({ id: e.ID, label: e.Nama, sub: `${e.Kode}${e.PIC ? ' · ' + e.PIC : ''}${e.NoWA ? ' · WA ' + e.NoWA : ''}`, key: [e.Nama, e.Kode, e.PIC, e.NoWA].join(' ') })),
