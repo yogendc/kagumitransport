@@ -10,7 +10,7 @@
    ============================================================ */
 
 // ── Konstanta ──────────────────────────────────────────────
-const APP_VERSI = '3.6'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
+const APP_VERSI = '3.7'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
 const LS = { token: 'kgm_token', theme: 'kgm_theme', cache: 'kgm_cache_v1', cols: 'kgm_rekap_cols', draft: 'kgm_draft_', master: 'kgm_master_open', login: 'kgm_login_ctx' };
 const STATUS = ['Dijadwalkan', 'Dikirim', 'Diterima', 'Dibatalkan'];
 const STATUS_CLS = { Dijadwalkan: 'b-indigo', Dikirim: 'b-amber', Diterima: 'b-green', Dibatalkan: 'b-red', Draf: 'b-slate' };
@@ -1074,7 +1074,7 @@ function openOrderDrawer(id) {
   } else {
     body += '<div class="sec-title">Pengiriman</div>' + dl([['Jenis layanan', o.JenisLayanan], ['Penerima', `${esc(o.PenerimaNama)} · ${esc(o.PenerimaHP)}<br><span class="muted">${esc(o.PenerimaAlamat)}</span>`, 1],
       ['Mobil', [o.Merk, o.Tipe, o.JenisMobil, o.Model].filter(Boolean).join(' ')], ['No. polisi', o.NoPolMobil], ['Warna / tahun', [o.Warna, o.Tahun].filter(Boolean).join(' · ')], ['No. rangka', o.NoRangka],
-      ['Unit pengangkut', o.UnitNoPol], ['Pengemudi', o.PengemudiNama], ['Inspeksi', insp ? `${insp.Status === 'Disahkan' ? 'Disahkan · ' + insp.KondisiRingkas : 'Draf'}` : 'Belum diisi']]);
+      ['Cara pengiriman', o.ModaAngkut || 'Towing'], ...((o.ModaAngkut || 'Towing') === 'Towing rekanan' ? [['Towing rekanan (internal)', o.EkspedisiNama]] : [['Unit pengangkut', (o.ModaAngkut || 'Towing') === 'Towing' ? o.UnitNoPol : '—'], ['Pengemudi', [o.PengemudiNama, o.PengemudiHP].filter(Boolean).join(' · ')]]), ['Inspeksi', insp ? `${insp.Status === 'Disahkan' ? 'Disahkan · ' + insp.KondisiRingkas : 'Draf'}` : 'Belum diisi']]);
   }
   body += '<div class="sec-title">Pembayaran</div>' + dl([['Metode', o.Pembayaran], ['Harga', o.Harga !== '' ? rp(o.Harga) : ''], [labelPajak(o), o.Pajak ? rp(o.Pajak) : ''], ['Penyesuaian tarif', o.Penyesuaian ? rp(o.Penyesuaian) : ''],
     ['Total', `<b>${rp(o.Total)}</b>`, 1], ['DP', o.Pembayaran === 'DP' ? rp(o.DP) : ''], ['Sisa', o.Pembayaran === 'DP' ? rp(o.Sisa) : ''], ['Jatuh tempo', o.JatuhTempo ? tgl(o.JatuhTempo) : ''],
@@ -2713,17 +2713,18 @@ const MASTERS = {
     title: 'Ekspedisi Rekanan', sub: 'Mitra ekspedisi untuk meneruskan paket. Hanya untuk tim internal, tidak tercetak di dokumen pelanggan.', icon: 'bi-buildings', add: 'Tambah ekspedisi', list: 'ekspedisi',
     canEdit: () => isSA(), canDel: () => isSA(), label: r => r.Nama,
     search: r => [r.Nama, r.Kode, r.PIC, r.NoWA, r.Alamat, r.Catatan, tarifParse(r.Tarif).map(t => t.kota).join(' ')].join(' '),
-    chips: [['', 'Semua'], ['aktif', 'Pernah dipakai', r => S.d.orders.some(o => o.EkspedisiID === r.ID)]],
+    chips: [['', 'Semua'], ['towing', 'Towing', r => ekspPunya(r, 'Towing')], ['paket', 'Paket', r => ekspPunya(r, 'Paket')], ['aktif', 'Pernah dipakai', r => S.d.orders.some(o => o.EkspedisiID === r.ID)]],
     cols: [
       ['ID', r => `<span class="chip chip-soft mono">${esc(r.Kode)}</span>`, 'card-title'],
-      ['Ekspedisi', r => `<span class="t-strong">${esc(r.Nama)}</span><span class="t-sub">${r.PIC ? '<i class="bi bi-person"></i> PIC ' + esc(r.PIC) + ' · ' : ''}${esc(firstPart(r.Alamat) || '—')}</span>`],
+      ['Ekspedisi', r => `<span class="t-strong">${esc(r.Nama)}</span><span class="t-sub">${ekspLayananBadge(r)}</span><span class="t-sub">${r.PIC ? '<i class="bi bi-person"></i> PIC ' + esc(r.PIC) + ' · ' : ''}${esc(firstPart(r.Alamat) || '—')}</span>`],
       ['WhatsApp', r => r.NoWA ? `<a class="mono" href="https://wa.me/${waNumber(r.NoWA)}" target="_blank" rel="noopener">${esc(r.NoWA)}</a>` : '—'],
       [isSA() ? 'Tarif' : 'Kota tujuan', r => { const t = tarifParse(r.Tarif).filter(x => x.kota); return t.length ? `<b class="mono">${t.length}</b><span class="t-sub">${esc(t.slice(0, 3).map(x => x.kota + (x.hari ? ' (' + x.hari + ' hr)' : '')).join(', '))}${t.length > 3 ? ', …' : ''}</span>` : '<span class="muted">—</span>'; }],
-      ['Paket', r => `<b class="mono">${S.d.orders.filter(o => o.EkspedisiID === r.ID && o.StatusDok === 'Terkonfirmasi').length}</b><span class="t-sub">resi diteruskan</span>`]
+      ['Order', r => `<b class="mono">${S.d.orders.filter(o => o.EkspedisiID === r.ID && o.StatusDok === 'Terkonfirmasi').length}</b><span class="t-sub">order diteruskan</span>`]
     ],
     sections: [
       { t: 'Data ekspedisi', f: [
         { k: 'Nama', l: 'Nama ekspedisi', req: true, full: true, ph: 'Contoh: JNE Cargo Cabang Cikarang' },
+        { k: 'Layanan', l: 'Layanan rekanan', t: 'layanan', req: true, full: true },
         { k: 'PIC', l: 'Nama PIC', ph: 'Contoh: Pak Hendra' },
         { k: 'NoWA', l: 'No. WhatsApp', t: 'tel', req: true, ph: '08xxxxxxxxxx' },
         { k: 'Alamat', l: 'Alamat (opsional)', t: 'textarea', full: true },
@@ -2818,7 +2819,7 @@ function openMasterModal(type, rec, opt) {
   opt = opt || {};
   const cfg = MASTERS[type];
   const canEdit = !rec || cfg.canEdit(rec);
-  const d = Object.assign({ Aktif: 'true', TipeEntitas: 'Perusahaan', JenisSIM: 'B2 Umum' }, rec || {});
+  const d = Object.assign({ Aktif: 'true', TipeEntitas: 'Perusahaan', JenisSIM: 'B2 Umum' }, rec ? {} : (opt.preset || {}), rec || {});
   const pools = Array.from(new Set(S.d.kendaraan.map(k => k.Pool).concat(S.d.pengemudi.map(x => x.Pool)).filter(Boolean)));
   $('#dlPool').innerHTML = pools.map(p => `<option>${esc(p)}</option>`).join('');
   const thisYear = Number(today().slice(0, 4));
@@ -2832,12 +2833,21 @@ function openMasterModal(type, rec, opt) {
       return `<div class="field full"><div class="readonly" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><i class="bi bi-info-circle muted"></i><span class="muted" style="font-size:12.5px">ID otomatis:</span>
         <span class="chip b-indigo mono"><i class="bi bi-lock"></i> Sewa: ${esc(d.IDSewa || 'CUST-otomatis')}</span><span class="chip b-indigo mono"><i class="bi bi-lock"></i> Kirim: ${esc(d.IDKirim || 'KRM-otomatis')}</span></div></div>`;
     }
+    if (f.t === 'layanan') {
+      const sel = ekspLayananList(v, !rec);
+      const ck = (x, lbl) => `<label class="lyn-chip"><input type="checkbox" data-lyn="${esc(x)}" ${sel.includes(x) ? 'checked' : ''} ${ro ? 'disabled' : ''}><span>${lbl}</span></label>`;
+      return `<div class="field full" data-f="${f.k}"><span class="label req">${esc(f.l)}</span><input type="hidden" name="${f.k}" value="${esc(sel.join(', '))}">
+        <div class="lyn-grid"><div class="lyn-grp"><small class="muted">Kirim mobil</small>${ck('Towing', '<i class="bi bi-truck-flatbed"></i> Towing')}</div>
+        <div class="lyn-grp"><small class="muted">Paket</small>${ck('Paket Darat', 'Darat')}${ck('Paket Laut', 'Laut')}${ck('Paket Udara', 'Udara')}${ck('Paket Kereta', 'Kereta')}</div></div>
+        <div class="err-msg" data-err="${f.k}" hidden></div></div>`;
+    }
     if (f.t === 'tarif') {
       const rows = tarifParse(v), mn = !!f.min, nh = mn && !isSA();
+      const lynCls = mn ? ' ' + ekspTarifCls(ekspLayananList(d.Layanan, !rec)) : '';
       return `<div class="field full" data-f="${f.k}"><input type="hidden" name="${f.k}" value="${esc(v)}" data-tf-hidden>
         <small class="muted" style="margin-bottom:6px">${nh ? 'Kota tujuan & estimasi lama kirim. Harga ekspedisi hanya dapat dilihat dan diisi Super Admin.' : mn ? 'Tarif dari ekspedisi ke kita (biaya modal, hanya Super Admin yang melihat harga). Tampil sebagai perkiraan biaya saat ekspedisi dipilih di Form Kirim Paket. Estimasi hari (mis. 3-5) juga tampil untuk Admin. Kosongkan nama kota untuk tarif umum (semua kota).' : 'Terisi otomatis di Form Kirim Paket sesuai kota tujuan. Kosongkan nama kota untuk tarif umum (semua kota).'}</small>
-        <div class="tf-table${mn ? ' tf-min' : ''}${nh ? ' tf-nohrg' : ''}" data-tf-table${mn ? ' data-tf-min' : ''}${nh ? ' data-tf-nohrg' : ''}>
-          <div class="tf-row tf-head"><span>Kota tujuan</span>${nh ? '' : `<span>Harga per kg (Rp)</span><span>Harga per m³ (Rp)</span>${mn ? '<span>Harga minimal (Rp)</span>' : ''}`}${mn ? '<span>Estimasi (hari)</span>' : ''}<span></span></div>
+        <div class="tf-table${mn ? ' tf-min' : ''}${nh ? ' tf-nohrg' : ''}${lynCls}" data-tf-table${mn ? ' data-tf-min' : ''}${nh ? ' data-tf-nohrg' : ''}>
+          <div class="tf-row tf-head"><span>Kota tujuan</span>${nh ? '' : `<span class="tc-pk">Harga per kg (Rp)</span><span class="tc-pk">Harga per m³ (Rp)</span>${mn ? '<span class="tc-pk">Harga minimal (Rp)</span><span class="tc-tw">Towing per unit (Rp)</span>' : ''}`}${mn ? '<span>Estimasi (hari)</span>' : ''}<span></span></div>
           ${(rows.length ? rows : [{}]).map(t => tarifRowHTML(t, ro, mn, nh)).join('')}
         </div>
         ${ro ? '' : '<button type="button" class="btn btn-secondary btn-sm" data-tf-add style="margin-top:8px;justify-self:start"><i class="bi bi-plus-lg"></i> Tambah kota</button>'}
@@ -2882,6 +2892,7 @@ function openMasterModal(type, rec, opt) {
   };
   form.addEventListener('input', live); form.addEventListener('change', live); live();
   if (type === 'pelanggan' || type === 'penerima' || type === 'ekspedisi') bindTarifEditor(form);
+  if (type === 'ekspedisi') bindLayananEksp(form);
   const save = $('#mfSave');
   if (save) save.onclick = e => { e.preventDefault(); submitMaster(type, rec, form, save, opt); };
 }
@@ -2904,7 +2915,7 @@ function tarifRowHTML(t, ro, mn, nh) {
   const del = ro ? '<span class="tf-del"></span>' : '<button type="button" class="icon-btn tf-del" data-tf-del title="Hapus kota" aria-label="Hapus kota"><i class="bi bi-trash"></i></button>';
   const kota = `<input class="input tf-kota" data-tf="kota" maxlength="60" placeholder="Semua kota" value="${esc(t.kota || '')}" ${ro ? 'readonly' : ''}>`;
   if (nh) return `<div class="tf-row" data-tf-row>${kota}${hari}${del}</div>`;
-  return `<div class="tf-row" data-tf-row>${kota}${uang('kg', mn ? 'per kg' : '0', 'Harga per kg')}${uang('m3', mn ? 'per m³' : '0', 'Harga per m³')}${mn ? uang('min', 'minimal', 'Harga minimal') : ''}${hari}${del}</div>`;
+  return `<div class="tf-row" data-tf-row>${kota}${uang('kg', mn ? 'per kg' : '0', 'Harga per kg')}${uang('m3', mn ? 'per m³' : '0', 'Harga per m³')}${mn ? uang('min', 'minimal', 'Harga minimal') + uang('unit', 'per unit', 'Towing per unit') : ''}${hari}${del}</div>`;
 }
 function bindTarifEditor(form) {
   const table = form.querySelector('[data-tf-table]'), hidden = form.querySelector('[data-tf-hidden]');
@@ -2914,12 +2925,12 @@ function bindTarifEditor(form) {
   const sync = () => {
     const rows = $$('[data-tf-row]', table).map(r => {
       const o = { kota: val(r, 'kota').trim(), kg: num(val(r, 'kg')), m3: num(val(r, 'm3')) };
-      if (mn) { o.min = num(val(r, 'min')); o.hari = val(r, 'hari').trim(); }
+      if (mn) { o.min = num(val(r, 'min')); o.unit = num(val(r, 'unit')); o.hari = val(r, 'hari').trim(); }
       return o;
-    }).filter(t => t.kota || t.kg || t.m3 || t.min || t.hari);
+    }).filter(t => t.kota || t.kg || t.m3 || t.min || t.unit || t.hari);
     hidden.value = rows.length ? JSON.stringify(rows) : '';
   };
-  table.addEventListener('input', e => { if (['kg', 'm3', 'min'].includes(e.target.dataset.tf)) formatMoneyInput(e.target); sync(); });
+  table.addEventListener('input', e => { if (['kg', 'm3', 'min', 'unit'].includes(e.target.dataset.tf)) formatMoneyInput(e.target); sync(); });
   form.addEventListener('click', e => {
     if (e.target.closest('[data-tf-add]')) { table.insertAdjacentHTML('beforeend', tarifRowHTML({}, false, mn, nh)); const r = $$('[data-tf-row]', table); r[r.length - 1].querySelector('[data-tf=kota]').focus(); }
     const del = e.target.closest('[data-tf-del]');
@@ -3010,7 +3021,8 @@ const COMBO_SRC = {
   pelanggan: () => S.d.pelanggan.map(p => ({ id: p.ID, label: p.Nama, sub: `${p.IDSewa}${p.IDKirim !== p.IDSewa ? ' · ' + p.IDKirim : ''}${p.Tipe === 'Corporate' ? ' · Corporate' + (p.Marketing ? ' (' + p.Marketing + ')' : '') : ''}${p.NoHP ? ' · ' + p.NoHP : ''}`, key: [p.Nama, p.IDSewa, p.IDKirim, p.NoHP].join(' ') })),
   kendaraan: () => S.d.kendaraan.map(k => { const a = vehicleAlerts(k); return { id: k.ID, label: k.NoPol + ' — ' + (k.JenisKendaraan || ''), sub: `${[k.Merk, k.Tipe].filter(Boolean).join(' ')}${k.Pool ? ' · ' + k.Pool : ''}${vehicleBusy(k) ? ' · sedang jalan' : ''}${a.length ? ' · ⚠ ' + a.map(x => x.jenis + ' ' + x.text.toLowerCase()).join(', ') : ''}`, key: [k.NoPol, k.Merk, k.Tipe, k.JenisKendaraan, k.Kode].join(' ') }; }),
   pengemudi: () => S.d.pengemudi.map(d => { const a = driverAlert(d); return { id: d.ID, label: d.Nama, sub: `${d.Kode} · SIM ${d.JenisSIM || ''}${driverBusy(d) ? ' · bertugas' : ' · standby'}${a ? ' · ⚠ SIM ' + a.text.toLowerCase() : ''}`, key: [d.Nama, d.Kode, d.NoHP].join(' ') }; }),
-  ekspedisi: () => S.d.ekspedisi.map(e => ({ id: e.ID, label: e.Nama, sub: `${e.Kode}${e.PIC ? ' · ' + e.PIC : ''}${e.NoWA ? ' · WA ' + e.NoWA : ''}`, key: [e.Nama, e.Kode, e.PIC, e.NoWA].join(' ') })),
+  ekspedisi: () => S.d.ekspedisi.filter(e => ekspPunya(e, 'Paket')).map(e => ({ id: e.ID, label: e.Nama, sub: `${e.Kode}${e.PIC ? ' · ' + e.PIC : ''}${e.NoWA ? ' · WA ' + e.NoWA : ''}`, key: [e.Nama, e.Kode, e.PIC, e.NoWA].join(' ') })),
+  ekspTowing: () => S.d.ekspedisi.filter(e => ekspPunya(e, 'Towing')).map(e => ({ id: e.ID, label: e.Nama, sub: `${e.Kode}${e.PIC ? ' · ' + e.PIC : ''}${e.NoWA ? ' · WA ' + e.NoWA : ''}`, key: [e.Nama, e.Kode, e.PIC, e.NoWA].join(' ') })),
   penerima: () => S.d.penerima.map(p => ({ id: p.ID, label: p.Nama, sub: `${p.Kode}${p.Kota ? ' · ' + p.Kota : ''}${p.NamaPIC ? ' · PIC ' + p.NamaPIC : ''}`, key: [p.Nama, p.Kode, p.Kota, p.NamaPIC].join(' ') })),
   orderKirim: () => sortOrders(S.d.orders.filter(o => o.Layanan === 'kirim' && o.Status !== 'Dibatalkan')).map(o => ({ id: o.ID, label: orderLabel(o) + ' — ' + (o.NoPolMobil || 'tanpa nopol'), sub: `${o.NamaPelanggan || '—'}${o.Merk ? ' · ' + o.Merk + ' ' + (o.Tipe || '') : ''} · inspeksi: ${o.StatusInspeksi || 'belum'}`, key: [o.NoSJ, o.NoUnik, o.NoPolMobil, o.NamaPelanggan, o.Merk].join(' ') }))
 };
@@ -3148,6 +3160,8 @@ function setupForm(lay) {
 
   form.addEventListener('click', e => {
     if (lay === 'paket' && e.target.closest('[data-eksp-save]')) { simpanEkspedisi(lay); return; }
+    const md = e.target.closest('[data-moda]');
+    if (md && lay === 'kirim') { if (!form.classList.contains('locked')) gantiModa(md.dataset.moda); return; }
     if (lay === 'paket' && !form.classList.contains('locked')) {
       if (e.target.closest('[data-it-add]')) { addItemRow(lay); return; }
       const del = e.target.closest('[data-it-del]'); if (del) { removeItemRow(lay, Number(del.dataset.itDel)); return; }
@@ -3184,7 +3198,8 @@ function setupForm(lay) {
     if (add) {
       e.preventDefault();
       const type = add.dataset.add, combo = add.closest('.field, .sub-box').querySelector('.combo');
-      openMasterModal(type, null, { onSaved: rec => { comboSet(combo, rec.ID); onComboPick(lay, combo.dataset.target, rec.ID); if (!(form.classList.contains('locked') && combo.closest('.no-lock'))) markDirty(lay); } });
+      const preset = type !== 'ekspedisi' ? null : lay === 'kirim' ? { Layanan: 'Towing' } : { Layanan: 'Paket ' + ((form.querySelector('[name=Jalur]') || {}).value || 'Darat') };
+      openMasterModal(type, null, { preset, onSaved: rec => { comboSet(combo, rec.ID); onComboPick(lay, combo.dataset.target, rec.ID); if (!(form.classList.contains('locked') && combo.closest('.no-lock'))) markDirty(lay); } });
       return;
     }
     const b = e.target.closest('[data-act]'); if (!b) return;
@@ -3279,7 +3294,7 @@ function fillForm(lay, rec) {
   const st = FORMS[lay]; const form = st.el;
   st.rec = rec ? Object.assign({}, rec) : null;
   st.loading = true;
-  form.querySelectorAll('[name]').forEach(el => { if (el.type !== 'hidden' || el.closest('.combo') || ['Pajak', 'Barang', 'DasarTarif', 'Pembayar', 'Jalur'].includes(el.name)) el.value = ''; el.classList.remove('invalid'); });
+  form.querySelectorAll('[name]').forEach(el => { if (el.type !== 'hidden' || el.closest('.combo') || ['Pajak', 'Barang', 'DasarTarif', 'Pembayar', 'Jalur', 'ModaAngkut'].includes(el.name)) el.value = ''; el.classList.remove('invalid'); });
   form.querySelectorAll('.combo').forEach(c => comboSet(c, ''));
   form.querySelector('[name=Status]').value = 'Dijadwalkan';
   if (rec) applyValues(lay, rec);
@@ -3360,6 +3375,7 @@ function onComboPick(lay, target, id) {
     if (lay === 'paket') { updateKotaList(lay); applyTarif(lay); }
     if (p && p.PembayaranBawaan && !pay.value && [...pay.options].some(o => o.value === p.PembayaranBawaan)) { pay.value = p.PembayaranBawaan; if (p.PembayaranBawaan === 'Termin') form.querySelector('[name=TerminHari]').value = p.TerminHari || ''; }
   }
+  if (target === 'EkspedisiID' && lay === 'kirim') updateEkspInfo(lay);
   if (target === 'EkspedisiID' && lay === 'paket') {
     updateEkspInfo(lay);
     if (form.classList.contains('locked')) return;
@@ -3410,6 +3426,7 @@ function recalc(lay) {
   const v = n => num(form.querySelector(`[name="${n}"]`).value);
   const pay = form.querySelector('[name=Pembayaran]').value;
   if (lay === 'paket') { hitungOngkos(lay); updateEkspInfo(lay); }
+  if (lay === 'kirim') syncModa();
   const ppEl = form.querySelector('[name=PajakPersen]'), pp = persenNum(ppEl.value);
   const pajak = Math.round(v('Harga') * pp / 100);
   form.querySelector('[name=Pajak]').value = ppEl.value.trim() === '' ? '' : String(pajak);
@@ -3438,6 +3455,11 @@ function validateForm(lay) {
   const ppRaw = String(data.PajakPersen || '').trim();
   if (ppRaw !== '' && (!/^\d{1,3}([.,]\d{1,2})?$/.test(ppRaw) || parseFloat(ppRaw.replace(',', '.')) > 100)) miss.push(['PajakPersen', 'Pajak (0–100%, maks. 2 desimal)']);
   if (data.Pembayaran === 'Termin' && !(num(data.TerminHari) > 0)) miss.push(['TerminHari', 'Jumlah hari termin']);
+  if (lay === 'kirim') {
+    const moda = data.ModaAngkut || 'Towing';
+    if (moda === 'Dikendarai' && !data.PengemudiID) { form.querySelector('[data-combo="pengemudi"] .combo-input').classList.add('invalid'); miss.push(['', 'Sopir (mobil dikendarai)']); }
+    if (moda === 'Towing rekanan' && !data.EkspedisiID) { form.querySelector('[data-combo="ekspTowing"] .combo-input').classList.add('invalid'); miss.push(['', 'Towing rekanan']); }
+  }
   if (lay === 'paket' && data.Pembayar === 'penerima' && !data.PenerimaID) { const c = form.querySelector('[data-combo="penerima"] .combo-input'); if (c) c.classList.add('invalid'); miss.push(['', 'Penerima dari Data Penerima (ongkos ditanggung penerima)']); }
   if (lay === 'paket') {
     const rows = $$('.it-row', form), list = itemsOf(lay);
@@ -3576,6 +3598,7 @@ function updateEkspInfo(lay) {
 }
 /** Perkiraan biaya ke ekspedisi = maks(harga minimal, berat × harga/kg atau volume × harga/m³). Hanya info internal. */
 function ekspEstimasiHTML(lay, e) {
+  if (lay === 'kirim') return towingEstimasiHTML(e);
   const form = FORMS[lay].el, kota = form.querySelector('[name=KotaTujuan]').value.trim();
   const list = tarifParse(e.Tarif);
   if (!isSA()) {
@@ -4429,7 +4452,7 @@ function docSuratJalan(o, nominal, forPdf) {
       <td style="vertical-align:top"><div class="box"><div class="lbl">Penerima &amp; lokasi tujuan</div><div class="val">${esc(o.PenerimaNama)}</div><div>${esc(o.PenerimaAlamat)}</div><div class="muted">Telp. ${esc(o.PenerimaHP)}</div></div></td></tr></table>
     <table class="t" style="margin-bottom:7px"><tr><th>No. polisi</th><th>Merk / tipe / jenis / model</th><th>Warna</th><th>Tahun</th><th>No. rangka</th></tr>
       <tr><td style="font-weight:700">${esc(o.NoPolMobil)}</td><td>${esc([o.Merk, o.Tipe, o.JenisMobil, o.Model].filter(Boolean).join(' / '))}</td><td>${esc(o.Warna)}</td><td>${esc(o.Tahun)}</td><td>${esc(o.NoRangka || '—')}</td></tr></table>
-    <table><tr><td style="width:50%;padding-right:6px;vertical-align:top"><div class="box"><div class="lbl">Unit pengangkut &amp; pengemudi</div><div class="val">${esc([o.UnitNoPol, o.PengemudiNama].filter(Boolean).join(' · ') || '—')}</div></div></td>
+    <table><tr><td style="width:50%;padding-right:6px;vertical-align:top"><div class="box"><div class="lbl">Cara pengiriman</div><div class="val">${esc(modaCetak(o))}</div></div></td>
       <td style="vertical-align:top"><div class="box"><div class="lbl">Form inspeksi body</div><div class="val">${insp && insp.Status === 'Disahkan' ? 'Disahkan · kondisi ' + esc(insp.KondisiRingkas) + ' (terlampir)' : insp ? 'Draf (belum disahkan)' : 'Belum diisi'}</div></div></td></tr></table>`;
   }
   const money = nominal ? priceTable(o) + bankBox(payAccountsFor(o)) : '';
@@ -6033,7 +6056,7 @@ function dhIsiOtomatis(lay) {
   const form = FORMS[lay].el, f = FORMS[lay].dhField, v = n => (form.querySelector(`[name="${n}"]`) || {}).value || '';
   const isi = (k, val) => { if (!f(k).value.trim() && val) f(k).value = val; };
   if (lay === 'sewa') { isi('asal', kotaDari(v('MuatAlamat'))); isi('tujuan', kotaDari(v('BongkarAlamat'))); isi('armada', v('JenisKendaraan')); }
-  else if (lay === 'kirim') { const r = byId('penerima', v('PenerimaID')); isi('asal', kotaDari(v('AsalAlamat'))); isi('tujuan', (r && r.Kota) || kotaDari(r ? r.Alamat : '')); isi('armada', v('JenisLayanan')); }
+  else if (lay === 'kirim') { const r = byId('penerima', v('PenerimaID')); isi('asal', kotaDari(v('AsalAlamat'))); isi('tujuan', (r && r.Kota) || kotaDari(r ? r.Alamat : '')); isi('armada', ((v('ModaAngkut') || 'Towing') === 'Dikendarai' ? 'Dikendarai' : 'Towing') + (v('JenisLayanan') ? ' · ' + v('JenisLayanan') : '')); }
   else { isi('asal', (S.settings && S.settings.kotaSurat) || kotaDari(v('PengirimAlamat'))); isi('tujuan', v('KotaTujuan')); isi('armada', 'Paket ' + (v('Jalur') || 'Darat').toLowerCase()); }
 }
 function dhPakai(lay, h) {
@@ -6175,5 +6198,69 @@ document.addEventListener('click', e => {
   const n = e.target.closest('[data-surat-new]'); if (n) openSuratForm(null, n.dataset.suratNew);
 });
 
+
+// ── 3.7: Ekspedisi rekanan (Towing / Paket darat-laut-udara-kereta) & cara kirim mobil ──
+const EKSP_PAKET = ['Paket Darat', 'Paket Laut', 'Paket Udara', 'Paket Kereta'];
+function ekspLayananList(v, baru) {
+  const l = String(v || '').split(',').map(x => x.trim()).filter(Boolean);
+  return l.length || baru ? l : EKSP_PAKET.slice(); // data lama tanpa layanan = rekanan paket
+}
+function ekspPunya(e, jenis) { return ekspLayananList(e && e.Layanan).some(x => x === jenis || x.startsWith(jenis + ' ')); }
+function ekspLayananBadge(e) {
+  const l = ekspLayananList(e.Layanan), pk = l.filter(x => x.startsWith('Paket ')).map(x => x.slice(6));
+  return (l.includes('Towing') ? '<span class="badge b-amber plain">Towing</span> ' : '') + (pk.length ? `<span class="badge b-indigo plain">Paket ${esc(pk.join('/'))}</span>` : '');
+}
+function ekspTarifCls(l) { return (l.includes('Towing') ? 'tf-tw ' : '') + (l.some(x => x.startsWith('Paket ')) ? 'tf-pk' : ''); }
+function bindLayananEksp(form) {
+  const hid = form.querySelector('[name=Layanan]'), table = form.querySelector('[data-tf-table]');
+  const sync = () => {
+    const l = $$('[data-lyn]', form).filter(c => c.checked).map(c => c.dataset.lyn);
+    hid.value = l.join(', ');
+    if (table) { table.classList.toggle('tf-tw', l.includes('Towing')); table.classList.toggle('tf-pk', l.some(x => x.startsWith('Paket '))); }
+  };
+  form.addEventListener('change', e => { if (e.target.dataset.lyn !== undefined) sync(); });
+}
+const MODA_KODE = { 'Towing': 'tow', 'Dikendarai': 'drv', 'Towing rekanan': 'rek' };
+function gantiModa(m) {
+  const st = FORMS.kirim, form = st.el;
+  form.querySelector('[name=ModaAngkut]').value = m;
+  const kosong = sel => { const c = form.querySelector(`[data-combo="${sel}"]`); if (c) comboSet(c, ''); };
+  if (m !== 'Towing') kosong('kendaraan');
+  if (m === 'Towing rekanan') kosong('pengemudi'); else kosong('ekspTowing');
+  markDirty('kirim'); updateWarnings('kirim'); recalc('kirim');
+}
+function syncModa() {
+  const form = FORMS.kirim.el, moda = form.querySelector('[name=ModaAngkut]').value || 'Towing', kode = MODA_KODE[moda] || 'tow';
+  const locked = form.classList.contains('locked');
+  $$('[data-moda]', form).forEach(b => { b.classList.toggle('on', b.dataset.moda === moda); b.disabled = locked; });
+  $$('[data-moda-show]', form).forEach(x => { x.hidden = !x.dataset.modaShow.split(' ').includes(kode); });
+  const lbl = form.querySelector('[data-drv-label]'); if (lbl) { lbl.textContent = moda === 'Dikendarai' ? 'Sopir' : 'Pengemudi'; lbl.classList.toggle('req', moda === 'Dikendarai'); }
+  const info = form.querySelector('[data-drv-info]'), d = byId('pengemudi', form.querySelector('[name=PengemudiID]').value);
+  if (info) {
+    info.hidden = !d;
+    if (d) info.innerHTML = `<span><i class="bi bi-person-badge"></i> <b>${esc(d.Nama)}</b>${moda === 'Dikendarai' ? ' <span class="muted">· mengendarai mobil pelanggan</span>' : ''}</span>${d.NoHP ? `<a class="btn btn-secondary btn-sm" href="https://wa.me/${waNumber(d.NoHP)}" target="_blank" rel="noopener"><i class="bi bi-whatsapp"></i> WA ${esc(d.NoHP)}</a>` : '<span class="muted">No. WA belum ada di Data Pengemudi</span>'}`;
+  }
+  if (kode === 'rek') updateEkspInfo('kirim');
+}
+/** Towing rekanan: estimasi hari (semua) + biaya per unit dan selisih (Super Admin saja). */
+function towingEstimasiHTML(e) {
+  const form = FORMS.kirim.el, r = byId('penerima', form.querySelector('[name=PenerimaID]').value);
+  const kota = (r && r.Kota) || '';
+  const t = cariTarifDi(tarifParse(e.Tarif), kota);
+  const hari = t && t.hari ? `<div class="eksp-est-r"><span><i class="bi bi-clock-history"></i> Estimasi sampai${t.kota ? ' ' + esc(t.kota) : ''}</span><b>${esc(t.hari)} hari</b></div>` : '';
+  if (!isSA()) return hari ? `<div class="eksp-est">${hari}</div>` : '';
+  if (!t) return `<div class="eksp-est muted">${kota ? 'Tarif towing ke ' + esc(kota) + ' belum ada' : 'Pilih penerima (kota tujuan) untuk melihat tarif'} di rekanan ini.</div>`;
+  const unit = num(t.unit), harga = num(form.querySelector('[name=Harga]').value);
+  return `<div class="eksp-est"><div class="eksp-est-h"><i class="bi bi-calculator"></i> Biaya towing rekanan${t.kota ? ' · ' + esc(t.kota) : ' · tarif umum'}</div>
+    <div class="eksp-est-r"><span>Per unit</span><b class="mono">${unit ? rp(unit) : '—'}</b></div>${hari}
+    ${unit && harga ? `<div class="eksp-est-r"><span>Ongkos ke pelanggan − biaya rekanan</span><b class="mono ${harga - unit < 0 ? 't-red' : 't-green'}">${rp(harga - unit)}</b></div>` : ''}</div>`;
+}
+/** Teks cara pengiriman di surat jalan (nama rekanan tidak dicetak). */
+function modaCetak(o) {
+  const m = o.ModaAngkut || 'Towing';
+  if (m === 'Dikendarai') return 'Dikendarai' + (o.PengemudiNama ? ' · ' + o.PengemudiNama : '') + (o.PengemudiHP ? ' (' + o.PengemudiHP + ')' : '');
+  if (m === 'Towing rekanan') return 'Towing';
+  return ['Towing', o.UnitNoPol, o.PengemudiNama].filter(Boolean).join(' · ');
+}
 // Penanda: js/app.js termuat sampai akhir
 window.__KGM_JS_END = true;

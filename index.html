@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=3.6.0">
+  <link rel="stylesheet" href="css/style.css?v=3.7.0">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2216%22 fill=%22%23006C49%22/%3E%3Cpath d=%22M14 22h22v18H14zM36 28h8l6 6v6H36z%22 fill=%22white%22/%3E%3Ccircle cx=%2222%22 cy=%2243%22 r=%225%22 fill=%22white%22/%3E%3Ccircle cx=%2244%22 cy=%2243%22 r=%225%22 fill=%22white%22/%3E%3C/svg%3E">
 </head>
 <body>
@@ -360,16 +360,34 @@
             </div>
 
             <div class="card">
-              <div class="card-h"><span class="num">03</span><div><h3>Unit pengangkut &amp; pengemudi</h3><p>Opsional, untuk memfilter rekap per unit dan pengemudi.</p></div></div>
+              <div class="card-h"><span class="num">03</span><div><h3>Cara pengiriman &amp; pengemudi</h3><p>Towing dengan unit sendiri, mobil dikendarai sopir, atau towing rekanan.</p></div></div>
               <div class="field">
+                <span class="label">Cara pengiriman mobil</span>
+                <input type="hidden" name="ModaAngkut" value="Towing">
+                <div class="seg seg-wrap" role="group" aria-label="Cara pengiriman mobil">
+                  <button type="button" class="seg-btn" data-moda="Towing"><i class="bi bi-truck-flatbed"></i> Towing</button>
+                  <button type="button" class="seg-btn" data-moda="Dikendarai"><i class="bi bi-person-badge"></i> Dikendarai</button>
+                  <button type="button" class="seg-btn" data-moda="Towing rekanan"><i class="bi bi-buildings"></i> Towing rekanan</button>
+                </div>
+              </div>
+              <div class="field" data-moda-show="tow">
                 <div class="label-row"><span class="label">Unit towing / carrier</span><button type="button" class="link-btn" data-add="kendaraan"><i class="bi bi-plus-circle"></i> Tambah unit</button></div>
                 <div class="combo" data-combo="kendaraan" data-target="UnitID"><i class="bi bi-search"></i><input class="input combo-input" placeholder="Cari nopol unit…"><input type="hidden" name="UnitID"></div>
                 <div class="warn-line" data-warn="kendaraan" hidden></div>
               </div>
-              <div class="field">
-                <div class="label-row"><span class="label">Pengemudi</span><button type="button" class="link-btn" data-add="pengemudi"><i class="bi bi-person-plus"></i> Tambah pengemudi</button></div>
+              <div class="field" data-moda-show="tow drv">
+                <div class="label-row"><span class="label" data-drv-label>Pengemudi</span><button type="button" class="link-btn" data-add="pengemudi"><i class="bi bi-person-plus"></i> Tambah pengemudi</button></div>
                 <div class="combo" data-combo="pengemudi" data-target="PengemudiID"><i class="bi bi-search"></i><input class="input combo-input" placeholder="Cari nama pengemudi…"><input type="hidden" name="PengemudiID"></div>
                 <div class="warn-line" data-warn="pengemudi" hidden></div>
+                <div class="drv-info" data-drv-info hidden></div>
+              </div>
+              <div data-moda-show="rek">
+                <div class="field">
+                  <div class="label-row"><span class="label req">Towing rekanan</span><button type="button" class="link-btn" data-add="ekspedisi"><i class="bi bi-plus-lg"></i> Tambah rekanan</button></div>
+                  <div class="combo" data-combo="ekspTowing" data-target="EkspedisiID"><i class="bi bi-search"></i><input class="input combo-input" placeholder="Cari rekanan towing…"><input type="hidden" name="EkspedisiID"></div>
+                  <small class="muted">Daftar dari Data Master → Ekspedisi Rekanan yang melayani <b>Towing</b>. Internal, tidak tercetak di dokumen pelanggan.</small>
+                </div>
+                <div class="eksp-info" data-eksp-info hidden></div>
               </div>
               <div class="insp-box" id="kirimInspBox">
                 <div><b><i class="bi bi-clipboard2-check"></i> Form inspeksi body</b><span class="muted" data-insp-text>Belum diisi</span></div>
@@ -449,6 +467,7 @@
                   <button type="button" class="seg-btn" data-jalur="Darat"><i class="bi bi-truck"></i> Darat</button>
                   <button type="button" class="seg-btn" data-jalur="Laut"><i class="bi bi-water"></i> Laut</button>
                   <button type="button" class="seg-btn" data-jalur="Kereta"><i class="bi bi-train-front"></i> Kereta</button>
+                  <button type="button" class="seg-btn" data-jalur="Udara"><i class="bi bi-airplane"></i> Udara</button>
                 </div>
               </div>
               <input type="hidden" name="Barang">
@@ -697,8 +716,8 @@
   setTimeout(function () { window.__kgmCheck(true); }, 15000);
 })();
 </script>
-<script src="js/config.js?v=3.6.0"></script>
-<script src="js/app.js?v=3.6.0"></script>
+<script src="js/config.js?v=3.7.0"></script>
+<script src="js/app.js?v=3.7.0"></script>
 <script>setTimeout(function () { window.__kgmCheck(false); }, 0);</script>
 </body>
 </html>
