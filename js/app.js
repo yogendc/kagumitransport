@@ -323,6 +323,12 @@ function applyBranding(st) {
   [['#sbAppName', name], ['#loginAppName', name], ['#loginAppNameSm', name], ['#sbTagline', st.companyName || 'Transport']].forEach(([s, v]) => { const el = $(s); if (el) el.textContent = v; });
   applyLoginTexts(st);
   document.title = name;
+  setFavicon(st.logo);
+}
+/** Ikon tab mengikuti logo di Pengaturan; bila kosong kembali ke favicon.png bawaan. */
+function setFavicon(logo) {
+  const href = /^data:image\/|^https:\/\//.test(logo || '') ? logo : 'favicon.png';
+  $$('link[rel="icon"],link[rel="shortcut icon"],link[rel="apple-touch-icon"]').forEach(l => { if (l.getAttribute('href') !== href) l.setAttribute('href', href); });
 }
 
 // ============================================================
