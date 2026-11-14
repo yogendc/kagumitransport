@@ -10,7 +10,7 @@
    ============================================================ */
 
 // ── Konstanta ──────────────────────────────────────────────
-const APP_VERSI = '4.1'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
+const APP_VERSI = '4.2'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
 const LS = { token: 'kgm_token', theme: 'kgm_theme', cache: 'kgm_cache_v1', cols: 'kgm_rekap_cols', draft: 'kgm_draft_', master: 'kgm_master_open', login: 'kgm_login_ctx' };
 const STATUS = ['Dijadwalkan', 'Dikirim', 'Diterima', 'Dibatalkan'];
 const STATUS_CLS = { Dijadwalkan: 'b-indigo', Dikirim: 'b-amber', Diterima: 'b-green', Dibatalkan: 'b-red', Draf: 'b-slate' };
@@ -4238,9 +4238,13 @@ function setBranding() {
           <label class="field" style="margin:0"><span class="label">Poin ${n} — keterangan</span><input class="input" data-lt="loginP${n}Teks" maxlength="100" value="${esc(st['loginP' + n + 'Teks'])}"></label></div></div>`).join('')}
         <label class="field" style="margin-top:14px"><span class="label">Catatan di bagian bawah</span><input class="input" data-lt="loginFoot" maxlength="60" value="${esc(st.loginFoot)}"></label>
       </div>
-      <div class="card"><div class="card-h"><span class="num"><i class="bi bi-image"></i></span><div><h3>Logo aplikasi</h3><p>Disimpan sebagai thumbnail; tampil di sidebar dan kop dokumen.</p></div></div>
-        <div class="logo-up"><div class="logo-prev" id="bLogoPrev">${logoHTML(st)}</div><div style="flex:1"><b>Logo utama</b><p class="muted" style="font-size:12.5px">PNG, JPG, atau SVG. Diperkecil otomatis menjadi thumbnail persegi.</p>
-          <div class="chips-row" style="margin-top:8px"><button class="btn btn-secondary btn-sm" id="bLogoPick"><i class="bi bi-upload"></i> Ganti logo</button>${st.logo ? '<button class="btn btn-ghost btn-sm" id="bLogoDel" style="color:var(--red)"><i class="bi bi-trash"></i> Hapus</button>' : ''}</div></div></div></div>
+      <div class="card"><div class="card-h"><span class="num"><i class="bi bi-image"></i></span><div><h3>Logo</h3><p>Dua logo: kecil (persegi) untuk aplikasi, besar (melebar) untuk kop dokumen.</p></div></div>
+        <div class="logo-up"><div class="logo-prev" id="bLogoPrev">${logoHTML(st)}</div><div style="flex:1"><b>Logo kecil · aplikasi</b><p class="muted" style="font-size:12.5px">Persegi 1:1 (mis. simbol K). Tampil di sidebar, halaman masuk, dan ikon tab browser. Tidak dipotong; gambar melebar diberi ruang kosong.</p>
+          <div class="chips-row" style="margin-top:8px"><button class="btn btn-secondary btn-sm" id="bLogoPick"><i class="bi bi-upload"></i> Ganti logo</button>${st.logo ? '<button class="btn btn-ghost btn-sm" id="bLogoDel" style="color:var(--red)"><i class="bi bi-trash"></i> Hapus</button>' : ''}</div></div></div>
+        <div class="logo-up mt"><div class="logo-prev wide" id="bDokPrev">${st.logoDok ? `<img src="${esc(st.logoDok)}" alt="">` : '<span class="muted">Belum ada</span>'}</div><div style="flex:1"><b>Logo besar · dokumen</b><p class="muted" style="font-size:12.5px">Melebar (mis. KAGUMI Cargo &amp; Auto Logistics). Dipakai di kop semua dokumen: resi, surat jalan, tanda terima, invoice, inspeksi, surat &amp; rate card. Juga logo website bila logo website kosong. Kosong = kop memakai logo kecil.</p>
+          <div class="chips-row" style="margin-top:8px"><button class="btn btn-secondary btn-sm" id="bDokPick"><i class="bi bi-upload"></i> ${st.logoDok ? 'Ganti' : 'Unggah'} logo dokumen</button><button class="btn btn-ghost btn-sm" id="bDokDel" style="color:var(--red)" ${st.logoDok ? '' : 'hidden'}><i class="bi bi-trash"></i> Hapus</button></div>
+          <label class="check-row" style="margin-top:10px"><input type="checkbox" id="bKopNama" ${st.kopNamaDok !== 'false' ? 'checked' : ''}> <span>Tulis nama perusahaan di kop (sebelah kanan logo)</span></label></div></div>
+        <div class="kop-prev" id="bKopPrev"></div></div>
       <div class="card"><div class="card-h"><span class="num"><i class="bi bi-palette"></i></span><div class="grow"><h3>Warna tema aplikasi</h3><p>Warna aksen tombol utama, menu aktif, dan penanda.</p></div></div>
         <div class="swatches">${THEMES.map(([n, c]) => `<button class="swatch ${st.themeColor.toUpperCase() === c ? 'active' : ''}" data-color="${c}"><i style="background:${c}">${st.themeColor.toUpperCase() === c ? '<span class="bi bi-check-lg"></span>' : ''}</i><span><b>${n}</b><small>${c}</small></span></button>`).join('')}</div>
         <div class="row-2 mt" style="align-items:end"><label class="field" style="margin:0"><span class="label">Kode hex kustom</span><div class="prefix-input"><span>#</span><input class="input mono" id="bHex" maxlength="6" style="text-align:left" value="${esc(st.themeColor.replace('#', ''))}"></div></label><input type="color" id="bColor" value="${esc(st.themeColor)}" style="height:40px;width:100%;border:1px solid var(--field-border);border-radius:8px;background:var(--surface);cursor:pointer"></div></div>
@@ -4253,7 +4257,7 @@ function setBranding() {
       <div class="preview-box" id="bPreview"></div>
       <div class="action-bar" style="position:static;margin-top:16px;box-shadow:none"><span class="ab-info muted" id="bDirty">Belum ada perubahan</span><button class="btn btn-ghost" id="bReset"><i class="bi bi-arrow-counterclockwise"></i> Reset</button><button class="btn btn-primary" id="bSave"><i class="bi bi-check2-circle"></i> Simpan perubahan</button></div></div>
   </div>`;
-  const draft = { appName: st.appName, logo: st.logo, themeColor: st.themeColor, emailDigest: st.emailDigest, peringatanHari: st.peringatanHari, waTemplate: st.waTemplate };
+  const draft = { appName: st.appName, logo: st.logo, logoDok: st.logoDok || '', kopNamaDok: st.kopNamaDok || 'true', themeColor: st.themeColor, emailDigest: st.emailDigest, peringatanHari: st.peringatanHari, waTemplate: st.waTemplate };
   LOGIN_TEXT_KEYS.forEach(k => { draft[k] = st[k] || ''; });
   const preview = () => {
     applyThemeColor(draft.themeColor);
@@ -4264,7 +4268,8 @@ function setBranding() {
       <div class="pv"><div class="pv-label">Menu aktif sidebar</div><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><div class="brand-logo sm" style="background:${draft.themeColor};border:0">${logoHTML(draft)}</div><b style="color:${draft.themeColor};font-family:var(--head)">${esc(draft.appName)}</b></div><div class="sb-link active"><i class="bi bi-gear"></i><span>Pengaturan Sistem</span></div><div class="sb-link"><i class="bi bi-truck-front"></i><span>Form Sewa Kendaraan</span></div></div>
       <div class="pv"><div class="pv-label">Tombol aksi utama</div><div class="chips-row"><button class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> Buat surat jalan</button><button class="btn btn-secondary btn-sm">Batal</button></div></div>
       <div class="pv"><div class="pv-label">Status &amp; tab</div><div class="chips-row"><span class="badge b-indigo">Dijadwalkan</span><span class="badge b-amber">Dikirim</span><span class="badge b-green">Diterima</span><span class="badge b-red">Dibatalkan</span></div><div class="tabs" style="margin:10px 0 0;box-shadow:none"><span class="tab active">Pemasukan sewa</span><span class="tab">Pengeluaran</span></div></div>`;
-    const changed = Object.keys(draft).some(k => String(draft[k]) !== String(st[k]));
+    $('#bKopPrev').innerHTML = `<div class="pv-label">Pratinjau kop dokumen</div><div class="kop-sheet">${kopHTML(Object.assign({}, st, draft), true)}</div>`;
+    const changed = Object.keys(draft).some(k => String(draft[k]) !== String(st[k] === undefined ? '' : st[k]));
     $('#bDirty').innerHTML = changed ? '<span class="dot dirty"></span> Perubahan belum disimpan' : 'Belum ada perubahan';
   };
   const setColor = c => { draft.themeColor = c.toUpperCase(); $('#bHex').value = draft.themeColor.slice(1); $('#bColor').value = draft.themeColor; $$('.swatch').forEach(s => { const on = s.dataset.color === draft.themeColor; s.classList.toggle('active', on); s.querySelector('i').innerHTML = on ? '<span class="bi bi-check-lg"></span>' : ''; }); preview(); };
@@ -4278,6 +4283,10 @@ function setBranding() {
   $('#bDigest').onchange = e => { draft.emailDigest = e.target.checked ? 'true' : 'false'; preview(); };
   $('#bLogoPick').onclick = () => pickLogo(data => { draft.logo = data; $('#bLogoPrev').innerHTML = logoHTML(draft); preview(); });
   if ($('#bLogoDel')) $('#bLogoDel').onclick = () => { draft.logo = ''; $('#bLogoPrev').innerHTML = logoHTML(draft); preview(); };
+  const dokPrev = () => { $('#bDokPrev').innerHTML = draft.logoDok ? `<img src="${esc(draft.logoDok)}" alt="">` : '<span class="muted">Belum ada</span>'; $('#bDokDel').hidden = !draft.logoDok; preview(); };
+  $('#bDokPick').onclick = () => { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/png,image/jpeg,image/webp,image/svg+xml'; inp.onchange = () => { const f = inp.files && inp.files[0]; if (f) bacaLogoWeb(f).then(d => { draft.logoDok = d; dokPrev(); }).catch(fail); }; inp.click(); };
+  $('#bDokDel').onclick = () => { draft.logoDok = ''; dokPrev(); };
+  $('#bKopNama').onchange = e => { draft.kopNamaDok = e.target.checked ? 'true' : 'false'; preview(); };
   $('#bReset').onclick = () => { applyThemeColor(st.themeColor); setBranding(); };
   $('#bSave').onclick = () => saveSettingsUI(draft, $('#bSave'));
   preview();
@@ -4288,7 +4297,8 @@ function pickLogo(cb) {
     const file = fp.files && fp.files[0]; if (!file) return;
     const url = URL.createObjectURL(file), img = new Image();
     img.onload = () => {
-      const make = (size, type, q) => { const c = document.createElement('canvas'); c.width = c.height = size; const ctx = c.getContext('2d'); const s = Math.min(img.width, img.height); ctx.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, size, size); return c.toDataURL(type, q); };
+      // Muat utuh di kotak persegi (tidak dipotong); JPG diberi latar putih agar bagian transparan tidak hitam
+      const make = (size, type, q) => { const c = document.createElement('canvas'); c.width = c.height = size; const ctx = c.getContext('2d'); if (type === 'image/jpeg') { ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, size, size); } const sc = Math.min(size / img.width, size / img.height), w = img.width * sc, h = img.height * sc; ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h); return c.toDataURL(type, q); };
       let data = make(256, 'image/png');
       if (data.length > 46000) data = make(200, 'image/jpeg', 0.88);
       if (data.length > 46000) data = make(140, 'image/jpeg', 0.8);
@@ -4403,7 +4413,16 @@ function openPasswordModal() {
 function kopHTML(st, withNPWP) {
   st = st || S.settings;
   const acc = st.kopAccent === 'mono' ? '#0F172A' : (st.themeColor || '#006C49');
-  const logo = st.showLogo !== 'false' ? (st.logo ? `<img src="${esc(st.logo)}" style="width:54px;height:54px;border-radius:10px;object-fit:cover">` : `<div style="width:54px;height:54px;border-radius:10px;background:${acc};color:#fff;font:700 24px Arial;text-align:center;line-height:54px">${esc(initials(st.companyName || st.appName).slice(0, 1))}</div>`) : '';
+  if (st.showLogo !== 'false' && st.logoDok) {
+    // Logo dokumen (melebar): logo di kiri, identitas perusahaan rata kanan
+    return `<table style="width:100%;border-collapse:collapse;border-bottom:2.5px solid ${acc}"><tr>
+    <td style="padding:0 12px 10px 0;vertical-align:middle;width:45%"><img src="${esc(st.logoDok)}" alt="" style="display:block;height:56px;width:auto;max-width:100%;object-fit:contain;object-position:left center"></td>
+    <td style="padding:0 0 10px;vertical-align:middle;text-align:right">${st.kopNamaDok !== 'false' ? `<div style="font:700 14.5px Arial;color:#0F172A;letter-spacing:.01em">${esc(st.companyName || st.appName || '')}</div>` : ''}
+      <div style="font-size:10px;color:#475569;line-height:1.45">${esc(st.companyAddress || '')}</div>
+      <div style="font-size:10px;color:#475569">${[st.companyPhone ? 'Telp. ' + esc(st.companyPhone) : '', st.companyEmail ? esc(st.companyEmail) : '', withNPWP && st.companyNPWP ? 'NPWP ' + esc(st.companyNPWP) : ''].filter(Boolean).join(' &nbsp;•&nbsp; ')}</div></td>
+  </tr></table>`;
+  }
+  const logo = st.showLogo !== 'false' ? (st.logo ? `<img src="${esc(st.logo)}" style="width:54px;height:54px;border-radius:10px;object-fit:contain">` : `<div style="width:54px;height:54px;border-radius:10px;background:${acc};color:#fff;font:700 24px Arial;text-align:center;line-height:54px">${esc(initials(st.companyName || st.appName).slice(0, 1))}</div>`) : '';
   return `<table style="width:100%;border-collapse:collapse;border-bottom:2.5px solid ${acc}"><tr>
     ${logo ? `<td style="width:64px;padding:0 10px 10px 0;vertical-align:middle">${logo}</td>` : ''}
     <td style="padding:0 0 10px;vertical-align:middle"><div style="font:700 17px Arial;color:#0F172A;letter-spacing:.01em">${esc(st.companyName || st.appName || '')}</div>

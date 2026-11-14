@@ -1059,4 +1059,9 @@ body.adzan-on{overflow:hidden}
 .kq-h3{margin:0;font-size:15.5px;display:flex;gap:8px;align-items:center}
 #kqArsipList .li{display:flex;justify-content:space-between;align-items:center;gap:10px}
 body.is-sa .sb-ops-ringkasan,body:not(.is-sa) .sb-sa-ringkasan{display:none!important}
+.logo-prev.wide{width:180px;height:72px;padding:6px;background:#fff}
+.logo-prev.wide img{width:100%;height:100%;object-fit:contain}
+.logo-up.mt{margin-top:14px}
+.kop-prev{margin-top:14px}.kop-sheet{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;color:#0F172A}
+.brand-logo img,.logo-prev img{object-fit:contain}
 :root{--kgm-css-end:1}
