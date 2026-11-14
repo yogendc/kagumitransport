@@ -10,7 +10,7 @@
    ============================================================ */
 
 // ── Konstanta ──────────────────────────────────────────────
-const APP_VERSI = '4.3'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
+const APP_VERSI = '4.4'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
 const LS = { token: 'kgm_token', theme: 'kgm_theme', cache: 'kgm_cache_v1', cols: 'kgm_rekap_cols', draft: 'kgm_draft_', master: 'kgm_master_open', login: 'kgm_login_ctx' };
 const STATUS = ['Dijadwalkan', 'Dikirim', 'Diterima', 'Dibatalkan'];
 const STATUS_CLS = { Dijadwalkan: 'b-indigo', Dikirim: 'b-amber', Diterima: 'b-green', Dibatalkan: 'b-red', Draf: 'b-slate' };
@@ -4320,7 +4320,7 @@ function saveSettingsUI(obj, btn) {
 }
 function setKop() {
   const st = S.settings;
-  const d = { companyName: st.companyName, companyAddress: st.companyAddress, companyPhone: st.companyPhone, companyEmail: st.companyEmail, companyNPWP: st.companyNPWP, showLogo: st.showLogo, kopAccent: st.kopAccent };
+  const d = { companyName: st.companyName, companyAddress: st.companyAddress, companyPhone: st.companyPhone, companyEmail: st.companyEmail, companyNPWP: st.companyNPWP, companyWebsite: st.companyWebsite || '', showLogo: st.showLogo, kopAccent: st.kopAccent };
   $('#setBody').innerHTML = `<div class="set-grid">
     <div class="card">
       <div class="alert alert-info"><i class="bi bi-info-circle"></i><div>Kop ini dipakai di semua surat jalan, tanda terima, form inspeksi, dan invoice.</div></div>
@@ -4329,6 +4329,7 @@ function setKop() {
       <div class="row-2"><label class="field"><span class="label">Nomor telepon / hotline</span><input class="input" data-k="companyPhone" value="${esc(d.companyPhone)}"></label>
       <label class="field"><span class="label">Email <small class="muted">(opsional)</small></span><input class="input" data-k="companyEmail" value="${esc(d.companyEmail)}"></label></div>
       <label class="field"><span class="label">NPWP perusahaan <small class="muted">(opsional, tampil di invoice &amp; cetak dengan nominal)</small></span><input class="input mono" data-k="companyNPWP" value="${esc(d.companyNPWP)}"></label>
+      <label class="field"><span class="label">Alamat website <small class="muted">(opsional, tampil di kop di bawah email)</small></span><input class="input" data-k="companyWebsite" value="${esc(d.companyWebsite)}" placeholder="mis. www.kagumi.me" maxlength="100" inputmode="url"></label>
       <div class="readonly" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><span><b>Tampilkan logo</b><br><small class="muted">Sisi kiri atas dokumen cetak.</small></span><label class="switch"><input type="checkbox" id="kLogo" ${d.showLogo === 'true' ? 'checked' : ''}><span></span></label></div>
       <span class="label">Aksen garis kop</span>
       <div class="radio-cards" style="grid-template-columns:1fr 1fr;margin-top:6px"><label><input type="radio" name="kAcc" value="primary" ${d.kopAccent !== 'mono' ? 'checked' : ''}><span><b>Warna tema</b><small>Mengikuti warna aplikasi</small></span></label><label><input type="radio" name="kAcc" value="mono" ${d.kopAccent === 'mono' ? 'checked' : ''}><span><b>Monokrom</b><small>Hemat tinta</small></span></label></div>
@@ -4412,6 +4413,8 @@ function openPasswordModal() {
 // ============================================================
 // DOKUMEN CETAK (satu templat untuk pratinjau, cetak, dan arsip PDF Drive)
 // ============================================================
+/** Alamat website untuk dicetak: tanpa https:// dan garis miring di akhir. */
+const webTampil = u => String(u || '').trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
 function kopHTML(st, withNPWP) {
   st = st || S.settings;
   const acc = st.kopAccent === 'mono' ? '#0F172A' : (st.themeColor || '#006C49');
@@ -4421,7 +4424,8 @@ function kopHTML(st, withNPWP) {
     <td style="padding:0 12px 10px 0;vertical-align:middle;width:45%"><img src="${esc(st.logoDok)}" alt="" style="display:block;height:${st.taglineLogo ? 50 : 56}px;width:auto;max-width:100%;object-fit:contain;object-position:left center">${st.taglineLogo ? `<div style="font:italic 600 10px Arial;color:#9A7410;letter-spacing:.06em;margin-top:3px">${esc(st.taglineLogo)}</div>` : ''}</td>
     <td style="padding:0 0 10px;vertical-align:middle;text-align:right">${st.kopNamaDok !== 'false' ? `<div style="font:700 14.5px Arial;color:#0F172A;letter-spacing:.01em">${esc(st.companyName || st.appName || '')}</div>` : ''}
       <div style="font-size:10px;color:#475569;line-height:1.45">${esc(st.companyAddress || '')}</div>
-      <div style="font-size:10px;color:#475569">${[st.companyPhone ? 'Telp. ' + esc(st.companyPhone) : '', st.companyEmail ? esc(st.companyEmail) : '', withNPWP && st.companyNPWP ? 'NPWP ' + esc(st.companyNPWP) : ''].filter(Boolean).join(' &nbsp;•&nbsp; ')}</div></td>
+      <div style="font-size:10px;color:#475569">${[st.companyPhone ? 'Telp. ' + esc(st.companyPhone) : '', st.companyEmail ? esc(st.companyEmail) : '', withNPWP && st.companyNPWP ? 'NPWP ' + esc(st.companyNPWP) : ''].filter(Boolean).join(' &nbsp;•&nbsp; ')}</div>
+      ${st.companyWebsite ? `<div style="font-size:10px;color:#475569">${esc(webTampil(st.companyWebsite))}</div>` : ''}</td>
   </tr></table>`;
   }
   const logo = st.showLogo !== 'false' ? (st.logo ? `<img src="${esc(st.logo)}" style="width:54px;height:54px;border-radius:10px;object-fit:contain">` : `<div style="width:54px;height:54px;border-radius:10px;background:${acc};color:#fff;font:700 24px Arial;text-align:center;line-height:54px">${esc(initials(st.companyName || st.appName).slice(0, 1))}</div>`) : '';
@@ -4429,7 +4433,8 @@ function kopHTML(st, withNPWP) {
     ${logo ? `<td style="width:64px;padding:0 10px 10px 0;vertical-align:middle">${logo}</td>` : ''}
     <td style="padding:0 0 10px;vertical-align:middle"><div style="font:700 17px Arial;color:#0F172A;letter-spacing:.01em">${esc(st.companyName || st.appName || '')}</div>
       <div style="font-size:10.5px;color:#475569;line-height:1.45">${esc(st.companyAddress || '')}</div>
-      <div style="font-size:10.5px;color:#475569">${[st.companyPhone ? 'Telp. ' + esc(st.companyPhone) : '', st.companyEmail ? esc(st.companyEmail) : '', withNPWP && st.companyNPWP ? 'NPWP ' + esc(st.companyNPWP) : ''].filter(Boolean).join(' &nbsp;•&nbsp; ')}</div></td>
+      <div style="font-size:10.5px;color:#475569">${[st.companyPhone ? 'Telp. ' + esc(st.companyPhone) : '', st.companyEmail ? esc(st.companyEmail) : '', withNPWP && st.companyNPWP ? 'NPWP ' + esc(st.companyNPWP) : ''].filter(Boolean).join(' &nbsp;•&nbsp; ')}</div>
+      ${st.companyWebsite ? `<div style="font-size:10.5px;color:#475569">${esc(webTampil(st.companyWebsite))}</div>` : ''}</td>
   </tr></table>`;
 }
 function docShell(title, body, page, forPdf) {
