@@ -1055,4 +1055,7 @@ body.adzan-on{overflow:hidden}
 .az-ring{display:grid;gap:6px;border:1px solid var(--border);border-radius:12px;padding:10px 14px;margin:10px 0}
 .az-ring>div{display:flex;justify-content:space-between;font-size:13.5px}.az-ring .tot{border-top:1px solid var(--border);padding-top:6px;font-weight:700}
 .az-dampak{margin:10px 0;padding-left:18px;font-size:13px;line-height:1.7}
+.kq-page{align-items:start}.kq-page>*{min-width:0}
+.kq-h3{margin:0;font-size:15.5px;display:flex;gap:8px;align-items:center}
+#kqArsipList .li{display:flex;justify-content:space-between;align-items:center;gap:10px}
 :root{--kgm-css-end:1}

@@ -54,7 +54,7 @@ const S = {
   thumbs: {},
   charts: {}
 };
-const SA_PAGES = ['finance', 'laporan', 'pengaturan', 'website', 'notif', 'kontak'];
+const SA_PAGES = ['finance', 'laporan', 'pengaturan', 'website', 'notif', 'kontak', 'kuota'];
 const isSales = () => !!(S.me && S.me.role === 'SALES');
 const CRM_PAGES = ['crm', 'crm-kinerja', 'crm-perusahaan', 'crm-leads', 'crm-aktivitas'];
 const isCS = () => !!(S.me && S.me.role === 'CS');
@@ -517,7 +517,7 @@ const RENDER = {
   pengemudi: () => renderMaster('pengemudi'), penerima: () => renderMaster('penerima'), ekspedisi: () => renderMaster('ekspedisi'),
   finance: renderFinance, laporan: renderLaporan, pengaturan: renderPengaturan,
   website: renderWebsite, pertanyaan: renderPertanyaan,
-  keluhan: renderKeluhan, 'cs-kinerja': renderCsKinerja, 'crm-kinerja': renderSalesKinerja, surat: renderSurat, harga: renderHarga, notif: renderNotif, kontak: renderKontak,
+  keluhan: renderKeluhan, 'cs-kinerja': renderCsKinerja, 'crm-kinerja': renderSalesKinerja, surat: renderSurat, harga: renderHarga, notif: renderNotif, kontak: renderKontak, kuota: renderKuota,
   crm: renderCrm, 'crm-perusahaan': renderCrmPerusahaan, 'crm-leads': renderCrmLeads, 'crm-aktivitas': renderCrmAktivitas,
   inspeksi: renderInspeksiPage
 };
@@ -842,7 +842,6 @@ function renderRingkasan() {
       ${chartCard}${insight}
     </div>
     <div class="stack">
-      ${kuotaCardHTML()}
       <div class="card list-card">
         <div class="card-title-row"><div><h3><i class="bi bi-bell" style="color:var(--red)"></i> Peringatan jatuh tempo</h3><p class="muted">Ingatkan pelanggan lewat WhatsApp atau email.</p></div>${due.length ? `<span class="badge b-red plain">${due.length}</span>` : ''}</div>
         ${dueList.length ? dueList.map(i => invoiceMini(i)).join('') : emptyHTML('bi-check2-circle', 'Tidak ada tagihan mendesak', 'Semua invoice termin masih dalam tenggat.')}
@@ -857,7 +856,7 @@ function renderRingkasan() {
   </div>`;
   el.querySelectorAll('[data-order]').forEach(tr => tr.onclick = () => openOrderDrawer(tr.dataset.order));
   bindInvoiceMini(el);
-  if (isSA()) { drawDashChart(); muatKuota(); }
+  if (isSA()) drawDashChart();
 }
 function kpi(label, val, icon, icCls, foot, valCls, cardCls) {
   return `<div class="kpi ${cardCls || ''}"><div class="kpi-top"><span class="kpi-label">${esc(label)}</span><span class="kpi-ic ${icCls}"><i class="bi ${icon}"></i></span></div><div class="kpi-val ${valCls || ''}">${val}</div><div class="kpi-foot">${foot || ''}</div></div>`;
@@ -6759,10 +6758,21 @@ function kqBaris(ic, judul, angka, persen, ket, tone) {
   return `<div class="kq-r"><div class="kq-t"><span><span class="kq-ic ${tone || kqWarna(p)}"><i class="bi ${ic}"></i></span>${judul}</span><b class="mono">${angka}</b></div>
     <div class="kq-bar"><i class="${kqWarna(p)}" style="width:${Math.max(p, p ? 2 : 0)}%"></i></div><small>${ket}</small></div>`;
 }
+function renderKuota() {
+  const el = $('#page-kuota');
+  el.innerHTML = `<div class="page-head"><div class="ph-icon"><i class="bi bi-speedometer2"></i></div><div class="grow"><h1>Pemakaian Kuota &amp; Arsip</h1><p class="muted">Batas harian Google Apps Script, kuota WhatsApp, ukuran database, dan arsip data lama.</p></div>
+    <button class="btn btn-secondary" id="kqReload"><i class="bi bi-arrow-clockwise"></i> Perbarui</button></div>
+    <div class="grid-2 kq-page">${kuotaCardHTML()}<div class="stack"><div class="card" id="kqRiwCard"><h3 class="kq-h3"><i class="bi bi-bar-chart"></i> Riwayat 7 hari</h3><p class="muted">Memuat…</p></div>
+      <div class="card" id="kqArsipCard"><div class="card-title-row"><h3 class="kq-h3"><i class="bi bi-archive"></i> Arsip data lama</h3><button class="btn btn-secondary btn-sm" id="kqArsip2"><i class="bi bi-archive"></i> Arsipkan…</button></div>
+        <p class="muted" style="margin:4px 0 10px">Manual oleh Super Admin. File arsip tersimpan di Google Drive folder <b>KAGUMI → Arsip</b>.</p><div id="kqArsipList"></div></div></div></div>`;
+  $('#kqReload').onclick = () => renderKuota();
+  $('#kqArsip2').onclick = () => openArsipWizard();
+  muatKuota();
+}
 function kuotaCardHTML() { return isSA() ? '<div class="card kq-card" id="kuotaCard"><div class="kq-h"><h3><i class="bi bi-speedometer2"></i> Pemakaian kuota hari ini</h3></div><p class="muted">Memuat…</p></div>' : ''; }
 function muatKuota() {
   if (!isSA() || !$('#kuotaCard')) return;
-  api('getKuota', S.token).then(r => { S.kq = r.data; drawKuota(); }).catch(e => { const c = $('#kuotaCard'); if (c) c.innerHTML = `<h3><i class="bi bi-speedometer2"></i> Pemakaian kuota</h3><p class="muted">${esc(e.message || 'Gagal memuat')}</p>`; });
+  api('getKuota', S.token).then(r => { S.kq = r.data; drawKuota(); drawKuotaSamping(); }).catch(e => { const c = $('#kuotaCard'); if (c) c.innerHTML = `<h3><i class="bi bi-speedometer2"></i> Pemakaian kuota</h3><p class="muted">${esc(e.message || 'Gagal memuat')}</p>`; });
 }
 function drawKuota() {
   const c = $('#kuotaCard'), k = S.kq; if (!c || !k) return;
@@ -6788,10 +6798,7 @@ function drawKuota() {
     ${kqBaris('bi-people', 'Permintaan aplikasi & website', fmtN(k.permintaan.total), pp, `Puncak ${fmtN(k.permintaan.puncak)} bersamaan (batas ±${k.permintaan.batasBersamaan}) · ${fmtN(k.permintaan.web)} dari website`)}
     ${kqBaris('bi-database', 'Ukuran database', `${fmtN(k.data.order)} order`, ps, `${(k.data.sel / 1e6).toFixed(2).replace('.', ',')} juta dari 10 juta sel Google Sheets · log ${fmtN(k.data.baris.Log_Aktivitas)} baris`)}
     ${sarana.length ? `<div class="alert alert-warning kq-saran"><i class="bi bi-lightbulb"></i><div>${sarana.map(esc).join('<br>')}</div></div>` : ''}
-    <div class="kq-ft"><button class="link-btn" id="kqRiw"><i class="bi bi-bar-chart"></i> Riwayat 7 hari</button><button class="btn btn-secondary btn-sm" id="kqArsip"><i class="bi bi-archive"></i> Arsip data lama</button></div>
-    <div id="kqRiwBox" hidden></div>`;
-  $('#kqRiw').onclick = () => { const b = $('#kqRiwBox'); b.hidden = !b.hidden; if (!b.hidden) b.innerHTML = kqRiwayatHTML(); };
-  $('#kqArsip').onclick = () => openArsipWizard();
+    <div class="kq-ft"><span class="muted" style="font-size:12px">Hijau &lt;75% · kuning ≥75% · merah ≥90%</span></div>`;
   $('#kqAkun').onclick = () => {
     openModal({ title: 'Jenis akun Google', sub: 'Menentukan batas kuota harian', icon: 'bi-google', body: `<p class="muted" style="margin-top:0">Lihat dari alamat pemilik Apps Script: <b>@gmail.com</b> = Gmail biasa, domain sendiri (mis. @kagumi.me) yang dikelola Google Workspace = Workspace.</p>
       <div class="radio-cards">${[['', 'Deteksi otomatis', 'Dari sisa kuota email'], ['Workspace', 'Google Workspace', 'Email 1.500 · pemicu 6 jam/hari'], ['Gmail', 'Gmail biasa', 'Email 100 · pemicu 90 menit/hari']].map(([v, l, h]) => `<label class="radio-card"><input type="radio" name="akun" value="${v}" ${(k.akunManual ? k.akun : '') === v ? 'checked' : ''}><span><b>${l}</b><small>${h}</small></span></label>`).join('')}</div>`,
@@ -6873,10 +6880,15 @@ function openArsipWizard() {
         openModal({ title: 'Arsip selesai', sub: r.data.nama, icon: 'bi-check2-circle', body: `<p>${esc(r.message)}</p><p class="muted">File arsip tersimpan di Google Drive folder <b>KAGUMI → Arsip</b>. Cadangan sebelum arsip: <b>${esc(r.data.cadangan)}</b> (folder Cadangan).</p>
           <a class="btn btn-primary" href="${esc(r.data.url)}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right"></i> Buka file arsip</a>`, foot: '<button class="btn btn-secondary" data-close>Tutup</button>' });
       } else ok(r.message);
-      refreshData(false).then(() => { if (S.page === 'ringkasan') renderRingkasan(); });
+      refreshData(false).then(() => { if (S.page === 'kuota') renderKuota(); });
     }).catch(e2 => { fail(e2); btnBusy(b, false); $('#azBack').disabled = false; });
   };
   draw();
+}
+function drawKuotaSamping() {
+  const r = $('#kqRiwCard'), a = $('#kqArsipList');
+  if (r) r.innerHTML = `<h3 class="kq-h3"><i class="bi bi-bar-chart"></i> Riwayat 7 hari</h3>${kqRiwayatHTML()}`;
+  if (a) a.innerHTML = daftarArsipHTML() || emptyHTML('bi-archive', 'Belum pernah arsip', 'Arsipkan bila ukuran database mulai besar (kotak di kiri memberi tanda).');
 }
 function daftarArsipHTML() {
   const a = (S.kq && S.kq.arsip) || [];
