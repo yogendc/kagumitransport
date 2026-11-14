@@ -10,7 +10,7 @@
    ============================================================ */
 
 // ── Konstanta ──────────────────────────────────────────────
-const APP_VERSI = '4.4'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
+const APP_VERSI = '4.5'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
 const LS = { token: 'kgm_token', theme: 'kgm_theme', cache: 'kgm_cache_v1', cols: 'kgm_rekap_cols', draft: 'kgm_draft_', master: 'kgm_master_open', login: 'kgm_login_ctx' };
 const STATUS = ['Dijadwalkan', 'Dikirim', 'Diterima', 'Dibatalkan'];
 const STATUS_CLS = { Dijadwalkan: 'b-indigo', Dikirim: 'b-amber', Diterima: 'b-green', Dibatalkan: 'b-red', Draf: 'b-slate' };
@@ -2727,14 +2727,14 @@ const MASTERS = {
   },
   ekspedisi: {
     title: 'Ekspedisi Rekanan', sub: 'Mitra ekspedisi untuk meneruskan paket. Hanya untuk tim internal, tidak tercetak di dokumen pelanggan.', icon: 'bi-buildings', add: 'Tambah ekspedisi', list: 'ekspedisi',
-    canEdit: () => isSA(), canDel: () => isSA(), label: r => r.Nama,
+    canEdit: () => isSA(), canDel: () => isSA(), view: () => isSA(), label: r => r.Nama,
     search: r => [r.Nama, r.Kode, r.PIC, r.NoWA, r.Alamat, r.Catatan, tarifParse(r.Tarif).map(t => t.kota).join(' ')].join(' '),
     chips: [['', 'Semua'], ['towing', 'Towing', r => ekspPunya(r, 'Towing')], ['paket', 'Paket', r => ekspPunya(r, 'Paket')], ['aktif', 'Pernah dipakai', r => S.d.orders.some(o => o.EkspedisiID === r.ID)]],
     cols: [
       ['ID', r => `<span class="chip chip-soft mono">${esc(r.Kode)}</span>`, 'card-title'],
-      ['Ekspedisi', r => `<span class="t-strong">${esc(r.Nama)}</span><span class="t-sub">${ekspLayananBadge(r)}</span><span class="t-sub">${r.PIC ? '<i class="bi bi-person"></i> PIC ' + esc(r.PIC) + ' · ' : ''}${esc(firstPart(r.Alamat) || '—')}</span>`],
+      ['Ekspedisi', r => `<span class="t-strong">${esc(r.Nama)}</span><span class="t-sub">${ekspLayananBadge(r)}</span><span class="t-sub">${r.PIC ? '<i class="bi bi-person"></i> PIC ' + esc(r.PIC) : ''}${isSA() ? (r.PIC ? ' · ' : '') + esc(firstPart(r.Alamat) || '—') : (r.PIC ? '' : '—')}</span>`],
       ['WhatsApp', r => r.NoWA ? `<a class="mono" href="https://wa.me/${waNumber(r.NoWA)}" target="_blank" rel="noopener">${esc(r.NoWA)}</a>` : '—'],
-      [isSA() ? 'Tarif' : 'Kota tujuan', r => { const t = tarifParse(r.Tarif).filter(x => x.kota); return t.length ? `<b class="mono">${t.length}</b><span class="t-sub">${esc(t.slice(0, 3).map(x => x.kota + (x.hari ? ' (' + x.hari + ' hr)' : '')).join(', '))}${t.length > 3 ? ', …' : ''}</span>` : '<span class="muted">—</span>'; }],
+      ['Tarif', r => { const t = tarifParse(r.Tarif).filter(x => x.kota); return t.length ? `<b class="mono">${t.length} kota</b><span class="t-sub">${esc(t.slice(0, 3).map(x => x.kota + (x.hari ? ' (' + x.hari + ' hr)' : '')).join(', '))}${t.length > 3 ? ', …' : ''}</span>` : '<span class="muted">—</span>'; }, '', 'sa'],
       ['Order', r => `<b class="mono">${S.d.orders.filter(o => o.EkspedisiID === r.ID && o.StatusDok === 'Terkonfirmasi').length}</b><span class="t-sub">order diteruskan</span>`]
     ],
     sections: [
@@ -2743,9 +2743,9 @@ const MASTERS = {
         { k: 'Layanan', l: 'Layanan rekanan', t: 'layanan', req: true, full: true },
         { k: 'PIC', l: 'Nama PIC', ph: 'Contoh: Pak Hendra' },
         { k: 'NoWA', l: 'No. WhatsApp', t: 'tel', req: true, ph: '08xxxxxxxxxx' },
-        { k: 'Alamat', l: 'Alamat (opsional)', t: 'textarea', full: true },
-        { k: 'Catatan', l: 'Catatan internal', t: 'textarea', full: true }] },
-      { t: 'Tarif & estimasi per kota tujuan', f: [{ k: 'Tarif', t: 'tarif', min: true, full: true }] }
+        { k: 'Alamat', l: 'Alamat (opsional)', t: 'textarea', full: true, sa: true },
+        { k: 'Catatan', l: 'Catatan internal', t: 'textarea', full: true, sa: true }] },
+      { t: 'Tarif & estimasi per kota tujuan', sa: true, f: [{ k: 'Tarif', t: 'tarif', min: true, full: true }] }
     ]
   },
   rekening: {
@@ -2799,8 +2799,11 @@ function renderMaster(type) {
   el.querySelectorAll('[data-chip]').forEach(b => b.onclick = () => { st.chip = b.dataset.chip; st.page = 1; renderMaster(type); });
   renderMasterTable(type);
 }
+/** Kolom & bagian form yang ditandai 'sa' hanya tampil untuk Super Admin. */
+const masterCols = cfg => cfg.cols.filter(c => c[3] !== 'sa' || isSA());
+const masterSections = cfg => cfg.sections.filter(s => !s.sa || isSA()).map(s => Object.assign({}, s, { f: s.f.filter(f => !f.sa || isSA()) }));
 function renderMasterTable(type) {
-  const cfg = MASTERS[type], st = S.ui.master[type], el = $('#page-' + type), size = 20;
+  const cfg = MASTERS[type], cols = masterCols(cfg), st = S.ui.master[type], el = $('#page-' + type), size = 20;
   const q = st.q.trim().toLowerCase();
   const chip = cfg.chips.find(c => c[0] === st.chip);
   let list = S.d[cfg.list].filter(r => (!q || cfg.search(r).toLowerCase().includes(q)) && (!chip || !chip[2] || chip[2](r)));
@@ -2808,16 +2811,17 @@ function renderMasterTable(type) {
   const pages = Math.max(1, Math.ceil(list.length / size)); if (st.page > pages) st.page = pages;
   const rows = list.slice((st.page - 1) * size, st.page * size);
   const wrap = el.querySelector('[data-mtable]');
-  wrap.innerHTML = rows.length ? `<div class="table-wrap"><table class="table cards"><thead><tr>${cfg.cols.map(c => `<th>${esc(c[0])}</th>`).join('')}<th class="t-actions">Aksi</th></tr></thead><tbody>
-    ${rows.map(r => `<tr class="${r._pending ? 'pending' : ''} ${(type === 'kendaraan' && vehicleAlerts(r).some(a => a.lvl === 'exp')) || (type === 'pengemudi' && driverAlert(r) && driverAlert(r).lvl === 'exp') ? 'row-danger' : ''}" data-id="${esc(r.ID)}">${cfg.cols.map(c => `<td class="${c[2] || ''}" data-label="${esc(c[0])}">${c[1](r)}</td>`).join('')}
+  wrap.innerHTML = rows.length ? `<div class="table-wrap"><table class="table cards"><thead><tr>${cols.map(c => `<th>${esc(c[0])}</th>`).join('')}<th class="t-actions">Aksi</th></tr></thead><tbody>
+    ${rows.map(r => `<tr class="${r._pending ? 'pending' : ''} ${(type === 'kendaraan' && vehicleAlerts(r).some(a => a.lvl === 'exp')) || (type === 'pengemudi' && driverAlert(r) && driverAlert(r).lvl === 'exp') ? 'row-danger' : ''}" data-id="${esc(r.ID)}">${cols.map(c => `<td class="${c[2] || ''}" data-label="${esc(c[0])}">${c[1](r)}</td>`).join('')}
       <td class="t-actions">${r._pending ? '<span class="spin" style="display:inline-block;width:16px;height:16px;border:2px solid var(--primary);border-right-color:transparent;border-radius:50%;animation:rot .7s linear infinite"></span>' :
-        `<button class="icon-btn" data-medit="${esc(r.ID)}" title="${cfg.canEdit(r) ? 'Ubah' : 'Lihat'}"><i class="bi ${cfg.canEdit(r) ? 'bi-pencil' : 'bi-eye'}"></i></button>${cfg.canDel(r) ? `<button class="icon-btn" data-mdel="${esc(r.ID)}" title="Hapus"><i class="bi bi-trash"></i></button>` : ''}`}</td></tr>`).join('')}
+        `${cfg.view && cfg.view(r) ? `<button class="icon-btn" data-mview="${esc(r.ID)}" title="Lihat detail"><i class="bi bi-eye"></i></button>` : ''}<button class="icon-btn" data-medit="${esc(r.ID)}" title="${cfg.canEdit(r) ? 'Ubah' : 'Lihat'}"><i class="bi ${cfg.canEdit(r) ? 'bi-pencil' : 'bi-eye'}"></i></button>${cfg.canDel(r) ? `<button class="icon-btn" data-mdel="${esc(r.ID)}" title="Hapus"><i class="bi bi-trash"></i></button>` : ''}`}</td></tr>`).join('')}
   </tbody></table></div><div class="table-foot"><span>Menampilkan ${(st.page - 1) * size + 1}–${(st.page - 1) * size + rows.length} dari ${list.length} data</span>${pagerHTML(list.length, st.page, size, 'pg')}</div>`
     : emptyHTML(S.d[cfg.list].length ? 'bi-search' : cfg.icon, S.d[cfg.list].length ? 'Pencarian tidak ditemukan' : 'Belum ada data', S.d[cfg.list].length ? 'Tidak ada data yang cocok. Coba kata kunci lain.' : 'Tambahkan data pertama agar bisa dipilih di form order.',
       `<br><button class="btn btn-primary" data-madd2><i class="bi bi-plus-lg"></i> ${esc(cfg.add)}</button>`);
   wrap.onclick = e => {
     const pg = e.target.closest('[data-pg]'); if (pg) { st.page = Number(pg.dataset.pg); renderMasterTable(type); return; }
     if (e.target.closest('[data-madd2]')) { openMasterModal(type, null); return; }
+    const vw = e.target.closest('[data-mview]'); if (vw) { openMasterModal(type, byId(cfg.list, vw.dataset.mview), { view: true }); return; }
     const ed = e.target.closest('[data-medit]'); if (ed) { openMasterModal(type, byId(cfg.list, ed.dataset.medit)); return; }
     const dl = e.target.closest('[data-mdel]'); if (dl) { deleteMaster(type, dl.dataset.mdel); return; }
     const rv = e.target.closest('[data-reveal]'); if (rv) { revealKTP(rv.dataset.reveal, rv); return; }
@@ -2834,7 +2838,9 @@ function revealKTP(id, btn) {
 function openMasterModal(type, rec, opt) {
   opt = opt || {};
   const cfg = MASTERS[type];
-  const canEdit = !rec || cfg.canEdit(rec);
+  const view = !!(opt.view && rec);
+  const canEdit = !view && (!rec || cfg.canEdit(rec));
+  const secs = masterSections(cfg);
   const d = Object.assign({ Aktif: 'true', TipeEntitas: 'Perusahaan', JenisSIM: 'B2 Umum', Kepemilikan: 'Milik sendiri' }, rec ? {} : (opt.preset || {}), rec || {});
   if (type === 'kendaraan' && d.Kepemilikan !== 'Sewa') d.Kepemilikan = 'Milik sendiri';
   const pools = Array.from(new Set(S.d.kendaraan.map(k => k.Pool).concat(S.d.pengemudi.map(x => x.Pool)).filter(Boolean)));
@@ -2844,7 +2850,7 @@ function openMasterModal(type, rec, opt) {
     const v = d[f.k] === undefined || d[f.k] === null ? '' : String(d[f.k]);
     const ro = !canEdit || (type === 'pengemudi' && f.k === 'NoKTP' && rec && !isSA());
     const cls = `input${f.mono ? ' mono' : ''}${f.upper ? ' upper' : ''}`;
-    const attrs = `name="${f.k}" ${ro ? 'readonly disabled' : ''} ${f.ph ? `placeholder="${esc(f.ph)}"` : ''}`;
+    const attrs = `name="${f.k}" ${ro ? 'readonly disabled' : ''} ${f.ph && !ro ? `placeholder="${esc(f.ph)}"` : ''}`;
     let ctrl = '';
     if (f.t === 'ids') {
       return `<div class="field full"><div class="readonly" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><i class="bi bi-info-circle muted"></i><span class="muted" style="font-size:12.5px">ID otomatis:</span>
@@ -2888,17 +2894,18 @@ function openMasterModal(type, rec, opt) {
       <div class="label-row"><span class="label ${f.req ? 'req' : ''}">${esc(f.l)}</span>${expChip}${f.t === 'npwp' ? '<span class="badge plain" data-npwp></span>' : ''}</div>
       ${ctrl}${f.help ? `<small class="muted">${esc(f.help)}</small>` : ''}<div class="err-msg" data-err="${f.k}" hidden></div></div>`;
   };
-  const body = `<form id="masterForm" novalidate>${cfg.sections.map(s => `<div class="sec-title">${esc(s.t)}</div>${s.note ? `<div class="alert alert-warning"><i class="bi bi-info-circle"></i><div>${esc(s.note)}</div></div>` : ''}<div class="row-2 mf-grid">${s.f.map(fieldHTML).join('')}</div>`).join('')}</form>`;
+  const body = `<form id="masterForm" novalidate>${secs.map(s => `<div class="sec-title">${esc(s.t)}</div>${s.note ? `<div class="alert alert-warning"><i class="bi bi-info-circle"></i><div>${esc(s.note)}</div></div>` : ''}<div class="row-2 mf-grid">${s.f.map(fieldHTML).join('')}</div>`).join('')}</form>`;
   openModal({
     title: (rec ? (canEdit ? 'Ubah ' : 'Detail ') : 'Tambah ') + cfg.title.replace('Data Master ', '').replace('Master ', '').toLowerCase(),
     sub: rec ? cfg.label(rec) : 'Data baru langsung bisa dipilih di form order.', icon: cfg.icon, size: 'lg', body,
-    foot: `<span class="mf-note"><i class="bi bi-shield-check"></i> Tersimpan ke Google Sheets</span><button class="btn btn-secondary" data-close>${canEdit ? 'Batal' : 'Tutup'}</button>${canEdit ? `<button class="btn btn-primary" id="mfSave"><i class="bi bi-check2"></i> Simpan</button>` : ''}`
+    foot: `<span class="mf-note"><i class="bi bi-shield-check"></i> Tersimpan ke Google Sheets</span><button class="btn btn-secondary" data-close>${canEdit ? 'Batal' : 'Tutup'}</button>${canEdit ? `<button class="btn btn-primary" id="mfSave"><i class="bi bi-check2"></i> Simpan</button>` : ''}${view && cfg.canEdit(rec) ? `<button class="btn btn-primary" id="mfToEdit"><i class="bi bi-pencil"></i> Ubah</button>` : ''}`
   });
+  const toEdit = $('#mfToEdit'); if (toEdit) toEdit.onclick = () => { closeModal(); setTimeout(() => openMasterModal(type, rec, Object.assign({}, opt, { view: false })), 0); };
   $$('.mf-grid .field.full').forEach(f => f.style.gridColumn = '1 / -1');
   const form = $('#masterForm');
   const live = () => {
     const vals = formValues(form);
-    cfg.sections.forEach(s => s.f.forEach(f => { if (f.show) { const box = form.querySelector(`[data-f="${f.k}"]`); if (box) box.hidden = !f.show(vals); } }));
+    secs.forEach(s => s.f.forEach(f => { if (f.show) { const box = form.querySelector(`[data-f="${f.k}"]`); if (box) box.hidden = !f.show(vals); } }));
     form.querySelectorAll('[data-exp]').forEach(b => {
       const x = expInfo(vals[b.dataset.exp]);
       b.className = 'badge plain ' + (x.lvl === 'exp' ? 'b-red' : x.lvl === 'warn' ? 'b-amber' : x.lvl === 'ok' ? 'b-green' : '');
@@ -2965,7 +2972,7 @@ function formValues(form) {
 }
 function validateMasterLocal(type, v, rec) {
   const cfg = MASTERS[type], errs = {};
-  cfg.sections.forEach(s => s.f.forEach(f => { if (f.req && (!f.show || f.show(v)) && !String(v[f.k] || '').trim() && !(type === 'pengemudi' && f.k === 'NoKTP' && rec && !isSA())) errs[f.k] = f.l + ' wajib diisi.'; }));
+  masterSections(cfg).forEach(s => s.f.forEach(f => { if (f.req && (!f.show || f.show(v)) && !String(v[f.k] || '').trim() && !(type === 'pengemudi' && f.k === 'NoKTP' && rec && !isSA())) errs[f.k] = f.l + ' wajib diisi.'; }));
   const others = S.d[cfg.list].filter(r => !rec || r.ID !== rec.ID);
   if (v.Email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.Email)) errs.Email = 'Format email tidak valid.';
   if (v.NPWP) { const n = digits(v.NPWP); if (n.length !== 15 && n.length !== 16) errs.NPWP = 'NPWP harus 15 atau 16 digit.'; else if (type === 'pelanggan' && others.some(r => digits(r.NPWP) === n)) errs.NPWP = 'NPWP sudah terdaftar untuk pelanggan lain.'; }
