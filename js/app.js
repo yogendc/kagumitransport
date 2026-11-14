@@ -77,7 +77,8 @@ function sbSecInit() {
   if (S.page) sbSecBuka(S.page);
 }
 function sbSecBuka(page) {
-  const a = document.querySelector('.sb-link[data-page="' + page + '"]'), sec = a && a.closest('.sb-sec');
+  const semua = $$('.sb-link[data-page="' + page + '"]');
+  const a = semua.find(x => getComputedStyle(x).display !== 'none') || semua[0], sec = a && a.closest('.sb-sec');
   if (sec && !sec.classList.contains('open')) sbSecSet(sec.dataset.sec, true);
 }
 /** Titik merah di judul grup yang dilipat bila ada lencana di dalamnya. */
@@ -501,6 +502,7 @@ function applyRole() {
   const me = S.me || {};
   $('#sbUserName').textContent = me.nama || me.email || '';
   $('#sbUserRole').textContent = isSA() ? 'Super Admin' : isSales() ? 'Sales' : isCS() ? 'Customer Service' : 'Admin';
+  document.body.classList.toggle('is-sa', isSA());
   document.body.classList.toggle('is-sales', isSales());
   document.body.classList.toggle('is-cs', isCS());
   $('#sbAvatar').textContent = initials(me.nama);

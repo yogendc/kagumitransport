@@ -1058,4 +1058,5 @@ body.adzan-on{overflow:hidden}
 .kq-page{align-items:start}.kq-page>*{min-width:0}
 .kq-h3{margin:0;font-size:15.5px;display:flex;gap:8px;align-items:center}
 #kqArsipList .li{display:flex;justify-content:space-between;align-items:center;gap:10px}
+body.is-sa .sb-ops-ringkasan,body:not(.is-sa) .sb-sa-ringkasan{display:none!important}
 :root{--kgm-css-end:1}
