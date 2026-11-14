@@ -10,7 +10,7 @@
    ============================================================ */
 
 // ── Konstanta ──────────────────────────────────────────────
-const APP_VERSI = '3.12'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
+const APP_VERSI = '4.1'; // diisi otomatis saat build; harus sama dengan API_VERSI di Kode.gs
 const LS = { token: 'kgm_token', theme: 'kgm_theme', cache: 'kgm_cache_v1', cols: 'kgm_rekap_cols', draft: 'kgm_draft_', master: 'kgm_master_open', login: 'kgm_login_ctx' };
 const STATUS = ['Dijadwalkan', 'Dikirim', 'Diterima', 'Dibatalkan'];
 const STATUS_CLS = { Dijadwalkan: 'b-indigo', Dikirim: 'b-amber', Diterima: 'b-green', Dibatalkan: 'b-red', Draf: 'b-slate' };
@@ -54,7 +54,7 @@ const S = {
   thumbs: {},
   charts: {}
 };
-const SA_PAGES = ['finance', 'laporan', 'pengaturan', 'website'];
+const SA_PAGES = ['finance', 'laporan', 'pengaturan', 'website', 'notif', 'kontak'];
 const isSales = () => !!(S.me && S.me.role === 'SALES');
 const CRM_PAGES = ['crm', 'crm-kinerja', 'crm-perusahaan', 'crm-leads', 'crm-aktivitas'];
 const isCS = () => !!(S.me && S.me.role === 'CS');
@@ -517,7 +517,7 @@ const RENDER = {
   pengemudi: () => renderMaster('pengemudi'), penerima: () => renderMaster('penerima'), ekspedisi: () => renderMaster('ekspedisi'),
   finance: renderFinance, laporan: renderLaporan, pengaturan: renderPengaturan,
   website: renderWebsite, pertanyaan: renderPertanyaan,
-  keluhan: renderKeluhan, 'cs-kinerja': renderCsKinerja, 'crm-kinerja': renderSalesKinerja, surat: renderSurat, harga: renderHarga,
+  keluhan: renderKeluhan, 'cs-kinerja': renderCsKinerja, 'crm-kinerja': renderSalesKinerja, surat: renderSurat, harga: renderHarga, notif: renderNotif, kontak: renderKontak,
   crm: renderCrm, 'crm-perusahaan': renderCrmPerusahaan, 'crm-leads': renderCrmLeads, 'crm-aktivitas': renderCrmAktivitas,
   inspeksi: renderInspeksiPage
 };
@@ -842,6 +842,7 @@ function renderRingkasan() {
       ${chartCard}${insight}
     </div>
     <div class="stack">
+      ${kuotaCardHTML()}
       <div class="card list-card">
         <div class="card-title-row"><div><h3><i class="bi bi-bell" style="color:var(--red)"></i> Peringatan jatuh tempo</h3><p class="muted">Ingatkan pelanggan lewat WhatsApp atau email.</p></div>${due.length ? `<span class="badge b-red plain">${due.length}</span>` : ''}</div>
         ${dueList.length ? dueList.map(i => invoiceMini(i)).join('') : emptyHTML('bi-check2-circle', 'Tidak ada tagihan mendesak', 'Semua invoice termin masih dalam tenggat.')}
@@ -856,7 +857,7 @@ function renderRingkasan() {
   </div>`;
   el.querySelectorAll('[data-order]').forEach(tr => tr.onclick = () => openOrderDrawer(tr.dataset.order));
   bindInvoiceMini(el);
-  if (isSA()) drawDashChart();
+  if (isSA()) { drawDashChart(); muatKuota(); }
 }
 function kpi(label, val, icon, icCls, foot, valCls, cardCls) {
   return `<div class="kpi ${cardCls || ''}"><div class="kpi-top"><span class="kpi-label">${esc(label)}</span><span class="kpi-ic ${icCls}"><i class="bi ${icon}"></i></span></div><div class="kpi-val ${valCls || ''}">${val}</div><div class="kpi-foot">${foot || ''}</div></div>`;
@@ -6451,6 +6452,435 @@ function doaSelesaiKerja() {
     <p class="doa-latin">Alhamdulillah, alhamdulillahirabbil 'alamin.</p>
     <blockquote class="adzan-quote">Semoga pekerjaan hari ini diridhoi dan diberkahi Allah SWT.</blockquote>
     <div class="adzan-src">Anda telah keluar dengan aman</div>` });
+}
+
+// ════════════════════════════════════════════════════════════
+// 4.0 — Notifikasi WhatsApp (Fonnte) & Email, CRM Kontak, Blast WA (Super Admin)
+// Token Fonnte tidak pernah dikirim ke browser; yang tampil hanya versi tersamar.
+// ════════════════════════════════════════════════════════════
+const NOTIF_STATUS_BADGE = { Antri: 'b-amber', Terkirim: 'b-green', Gagal: 'b-red', Batal: 'b-slate' };
+const NOTIF_TABS = [['atur', 'bi-sliders', 'Pengaturan'], ['template', 'bi-chat-left-text', 'Kejadian & template'], ['antrean', 'bi-inboxes', 'Antrean & log']];
+function nfSwitch(id, on, judul, sub, dis) {
+  return `<div class="readonly nf-sw"><span><b>${judul}</b><br><small class="muted">${sub}</small></span><label class="switch"><input type="checkbox" id="${id}" ${on ? 'checked' : ''} ${dis ? 'disabled' : ''}><span></span></label></div>`;
+}
+function renderNotif() {
+  const el = $('#page-notif');
+  S.ui.nf = S.ui.nf || { tab: 'atur' };
+  el.innerHTML = `<div class="page-head"><div class="ph-icon"><i class="bi bi-whatsapp"></i></div><div class="grow"><h1>Notifikasi WA &amp; Email</h1><p class="muted">Pesan otomatis ke pelanggan & penerima saat order dikonfirmasi, status berubah, invoice terbit, jatuh tempo, dan lunas. Dikirim lewat antrean setiap 1 menit, jadi layar tetap cepat.</p></div></div>
+    <div id="nfBody"><p class="muted">Memuat…</p></div>`;
+  api('getNotifPanel', S.token).then(r => { S.nf = r.data; drawNotif(); }).catch(e => { fail(e); $('#nfBody').innerHTML = emptyHTML('bi-exclamation-triangle', 'Gagal memuat', e.message || ''); });
+}
+function drawNotif() {
+  const p = S.nf, t = S.ui.nf.tab, b = $('#nfBody');
+  if (!b || !p) return;
+  const siap = p.adaToken && p.waAktif;
+  b.innerHTML = `<div class="nf-status">
+      <div class="nf-st ${p.adaToken ? (p.waAktif ? 'ok' : 'off') : 'warn'}"><i class="bi bi-whatsapp"></i><div><b>WhatsApp</b><small>${!p.adaToken ? 'Token belum diisi' : p.waAktif ? 'Aktif' : 'Dimatikan'}</small></div></div>
+      <div class="nf-st ${p.emailAktif ? 'ok' : 'off'}"><i class="bi bi-envelope"></i><div><b>Email</b><small>${p.emailAktif ? 'Aktif' + (p.kuotaEmail !== null ? ' · sisa kuota ' + p.kuotaEmail : '') : 'Dimatikan'}</small></div></div>
+      <div class="nf-st ${p.pemicu ? 'ok' : 'warn'}"><i class="bi bi-clock-history"></i><div><b>Pemicu antrean</b><small>${p.pemicu ? 'Berjalan tiap 1 menit' : 'Belum aktif'}</small></div></div>
+      <div class="nf-st ${p.antrian.hitung.Gagal ? 'warn' : 'ok'}"><i class="bi bi-inboxes"></i><div><b>${p.antrian.hitung.Antri || 0} antre · ${p.antrian.hitung.Gagal || 0} gagal</b><small>${p.terakhir ? 'Terakhir diproses ' + esc(tglJam(p.terakhir)) : 'Belum pernah diproses'}</small></div></div>
+    </div>
+    ${!p.pemicu ? `<div class="alert alert-warning" style="margin-bottom:14px"><i class="bi bi-exclamation-triangle"></i><div>Pemicu antrean belum aktif, jadi pesan tidak akan terkirim otomatis. <button class="link-btn" id="nfTrig">Aktifkan pemicu sekarang</button></div></div>` : ''}
+    <div class="tabs">${NOTIF_TABS.map(([k, i, l]) => `<button class="tab ${t === k ? 'active' : ''}" data-nft="${k}"><i class="bi ${i}"></i> ${l}</button>`).join('')}</div>
+    <div id="nfTab"></div>`;
+  b.querySelectorAll('[data-nft]').forEach(x => x.onclick = () => { S.ui.nf.tab = x.dataset.nft; drawNotif(); });
+  if ($('#nfTrig')) $('#nfTrig').onclick = () => api('installTriggersFromApp', S.token).then(r => { ok(r.message); renderNotif(); }).catch(fail);
+  ({ atur: nfAtur, template: nfTemplate, antrean: nfAntrean })[t]();
+}
+function nfSimpan(obj, btn) {
+  if (btn) btnBusy(btn, true, 'Menyimpan…');
+  return api('saveNotifSetting', S.token, obj).then(r => { S.nf = r.data; ok(r.message); drawNotif(); }).catch(fail).finally(() => btn && btnBusy(btn, false));
+}
+function nfAtur() {
+  const p = S.nf;
+  $('#nfTab').innerHTML = `<div class="grid-2 nf-grid">
+    <div class="card"><div class="card-title-row"><h3><i class="bi bi-key"></i> Token Fonnte</h3>${p.adaToken ? '<span class="badge b-green plain">Tersimpan</span>' : '<span class="badge b-amber plain">Belum diisi</span>'}</div>
+      <p class="muted" style="margin-top:4px">Token disimpan di <b>Script Properties</b> server dan tidak pernah dikirim ke browser.</p>
+      ${p.adaToken ? `<div class="readonly mono" style="margin-bottom:10px">${esc(p.token)}</div>${p.perangkat ? `<p class="muted" style="margin:0 0 10px"><i class="bi bi-phone"></i> ${esc(p.perangkat)}</p>` : ''}` : ''}
+      <label class="field"><span class="label">${p.adaToken ? 'Ganti token' : 'Tempel token dari fonnte.com → Device'}</span><input class="input mono" id="nfTok" type="password" autocomplete="off" placeholder="Token perangkat Fonnte"></label>
+      <div class="chips-row"><button class="btn btn-primary" id="nfTokSave"><i class="bi bi-check2"></i> Simpan token</button>
+        ${p.adaToken ? '<button class="btn btn-secondary" id="nfCek"><i class="bi bi-plug"></i> Cek perangkat</button><button class="btn btn-ghost danger" id="nfTokDel"><i class="bi bi-trash"></i> Hapus</button>' : ''}</div>
+      ${!p.adaToken ? `<details class="nf-help"><summary><i class="bi bi-question-circle"></i> Cara mendapatkan token Fonnte</summary><ol>
+        <li>Daftar di <b>fonnte.com</b> (gratis untuk uji coba), lalu masuk.</li><li>Menu <b>Device</b> → <b>Add device</b>: isi nama (mis. KAGUMI) dan nomor WhatsApp kantor.</li>
+        <li>Klik <b>Connect</b> lalu pindai QR dari WhatsApp di HP kantor (Perangkat tertaut → Tautkan perangkat).</li><li>Kembali ke Device, salin <b>Token</b>, tempel di atas.</li>
+        <li>Pilih paket Fonnte sesuai jumlah pesan per bulan.</li></ol></details>` : ''}
+    </div>
+    <div class="card"><h3><i class="bi bi-toggles"></i> Saklar utama</h3>
+      ${nfSwitch('nfWa', p.waAktif, 'Kirim WhatsApp otomatis', p.adaToken ? 'Matikan untuk menghentikan semua WA otomatis.' : 'Isi token Fonnte dulu.', !p.adaToken)}
+      ${nfSwitch('nfEm', p.emailAktif, 'Kirim email otomatis', 'Lewat akun Google pemilik Apps Script (kuota harian Gmail).')}
+      <label class="field" style="margin-top:12px"><span class="label">Link halaman Cek Resi (website)</span><input class="input" id="nfLink" value="${esc(p.webLacakUrl)}" placeholder="https://kagumi-web.vercel.app/lacak.html"><small class="muted">Dipakai di pesan sebagai {link}, nomor resi ditambahkan otomatis. Ganti bila domain website berubah.</small></label>
+      <button class="btn btn-secondary btn-sm" id="nfLinkSave"><i class="bi bi-check2"></i> Simpan link</button>
+    </div>
+    <div class="card"><h3><i class="bi bi-send"></i> Uji kirim WhatsApp</h3>
+      <p class="muted" style="margin-top:4px">Dikirim langsung (tanpa antrean) untuk memastikan perangkat Fonnte tersambung.</p>
+      <label class="field"><span class="label">No. WhatsApp tujuan</span><input class="input" id="nfUjiNo" inputmode="tel" placeholder="08xxxxxxxxxx"></label>
+      <label class="field"><span class="label">Pesan (opsional)</span><textarea class="input" id="nfUjiMsg" rows="2" placeholder="Kosongkan untuk pesan uji standar"></textarea></label>
+      <button class="btn btn-secondary" id="nfUji" ${p.adaToken ? '' : 'disabled'}><i class="bi bi-whatsapp"></i> Kirim pesan uji</button>
+    </div>
+    <div class="card"><h3><i class="bi bi-shield-check"></i> Aturan aman</h3><ul class="nf-rules">
+      <li>Pesan otomatis hanya ke nomor & email yang ada di Data Pelanggan / Penerima / order.</li>
+      <li>Nomor otomatis diubah ke format 62… saat dikirim; nomor tidak valid dilewati.</li>
+      <li>Gagal kirim dicoba ulang otomatis hingga 3 kali.</li>
+      <li>Blast promosi ada di menu <b>Kontak &amp; Blast</b>, ber-batch dan berjeda acak, kontak opt-out tidak dikirimi.</li></ul></div>
+  </div>`;
+  $('#nfTokSave').onclick = e => { const v = $('#nfTok').value.trim(); if (!v) return toast('warning', 'Tempel token Fonnte dulu'); btnBusy(e.currentTarget, true, 'Memeriksa…'); api('setFonnteToken', S.token, v).then(r => { S.nf = r.data; ok(r.message); drawNotif(); }).catch(fail).finally(() => btnBusy(e.currentTarget, false)); };
+  if ($('#nfTokDel')) $('#nfTokDel').onclick = () => confirmDialog({ title: 'Hapus token Fonnte?', html: 'Semua WhatsApp otomatis berhenti sampai token diisi lagi.', icon: 'bi-trash', ok: 'Hapus', variant: 'danger' }).then(y => y && api('setFonnteToken', S.token, '').then(r => { S.nf = r.data; ok(r.message); drawNotif(); }).catch(fail));
+  if ($('#nfCek')) $('#nfCek').onclick = e => { btnBusy(e.currentTarget, true, 'Memeriksa…'); api('cekFonnte', S.token).then(r => { S.nf.perangkat = r.data.perangkat; ok(r.message); drawNotif(); }).catch(fail).finally(() => btnBusy(e.currentTarget, false)); };
+  $('#nfWa').onchange = e => nfSimpan({ waAktif: e.target.checked });
+  $('#nfEm').onchange = e => nfSimpan({ emailAktif: e.target.checked });
+  $('#nfLinkSave').onclick = e => nfSimpan({ webLacakUrl: $('#nfLink').value.trim() }, e.currentTarget);
+  $('#nfUji').onclick = e => { const b = e.currentTarget; btnBusy(b, true, 'Mengirim…'); api('ujiKirimWA', S.token, $('#nfUjiNo').value, $('#nfUjiMsg').value).then(r => ok(r.message)).catch(fail).finally(() => btnBusy(b, false)); };
+}
+function nfTemplate() {
+  const p = S.nf, keys = Object.keys(p.matriks);
+  $('#nfTab').innerHTML = `<div class="card"><p class="muted" style="margin-top:0">Centang kanal untuk tiap kejadian. Teks bisa diubah; placeholder yang tersedia: ${p.vars.map(v => `<code>{${v}}</code>`).join(' ')}. Tulis <code>*teks*</code> untuk huruf tebal di WhatsApp.</p>
+    <div class="nf-ev-list">${keys.map(k => { const m = p.matriks[k]; return `<div class="nf-ev" data-ev="${k}">
+      <div class="nf-ev-h"><div><b>${esc(m.label)}</b><small class="muted">Ke: ${esc(m.ke)}${m.ubah ? ' · <span class="badge b-indigo plain">teks diubah</span>' : ''}</small></div>
+        <div class="nf-ev-ch"><label class="lyn-chip"><input type="checkbox" data-k="wa" ${m.wa ? 'checked' : ''}><span><i class="bi bi-whatsapp"></i> WA</span></label><label class="lyn-chip"><input type="checkbox" data-k="email" ${m.email ? 'checked' : ''}><span><i class="bi bi-envelope"></i> Email</span></label>
+        <button type="button" class="btn btn-ghost btn-sm" data-ev-open><i class="bi bi-pencil"></i> Teks</button></div></div>
+      <div class="nf-ev-b" hidden><label class="field"><span class="label">Subjek email</span><input class="input" data-k="subjek" value="${esc(m.subjek)}" maxlength="200"></label>
+        <label class="field"><span class="label">Isi pesan</span><textarea class="input" data-k="pesan" rows="7" maxlength="1500">${esc(m.pesan)}</textarea></label>
+        <div class="chips-row"><button type="button" class="btn btn-ghost btn-sm" data-ev-reset><i class="bi bi-arrow-counterclockwise"></i> Kembalikan teks bawaan</button><span class="muted nf-prev-l">Pratinjau di bawah memakai contoh data.</span></div>
+        <div class="nf-prev" data-prev></div></div></div>`; }).join('')}</div>
+    <div class="chips-row" style="justify-content:flex-end;margin-top:14px"><button class="btn btn-primary" id="nfTplSave"><i class="bi bi-check2"></i> Simpan kejadian &amp; template</button></div></div>`;
+  const contoh = { nama: 'PT Mega Surya', perusahaan: S.settings.companyName || 'KAGUMI Transport', telp: S.settings.companyPhone || '', layanan: 'Paket', jenisDok: 'Resi', noDok: 'PKT-261113-1',
+    link: (p.webLacakUrl || '') + '?resi=PKT-261113-1', pengirim: 'PT Mega Surya', noInvoice: 'INV-PKT-261113-1', jumlah: 'Rp 1.250.000', jatuhTempo: '27 Nov 2026', rekening: 'Pembayaran ke:\n• BCA 000-000-0001 a.n. ' + (S.settings.companyName || '') };
+  const prev = box => { const t = box.querySelector('[data-k=pesan]').value.replace(/\{(\w+)\}/g, (m, k) => contoh[k] !== undefined ? contoh[k] : m); box.querySelector('[data-prev]').innerHTML = esc(t).replace(/\*([^*\n]+)\*/g, '<b>$1</b>').replace(/\n/g, '<br>'); };
+  $$('.nf-ev').forEach(box => {
+    box.querySelector('[data-ev-open]').onclick = () => { const b = box.querySelector('.nf-ev-b'); b.hidden = !b.hidden; if (!b.hidden) prev(box); };
+    box.querySelector('[data-k=pesan]').addEventListener('input', debounce(() => prev(box), 150));
+    box.querySelector('[data-ev-reset]').onclick = () => { const d = p.bawaan[box.dataset.ev]; box.querySelector('[data-k=pesan]').value = d.pesan; box.querySelector('[data-k=subjek]').value = d.subjek; prev(box); };
+  });
+  $('#nfTplSave').onclick = e => {
+    const m = {};
+    $$('.nf-ev').forEach(box => { m[box.dataset.ev] = { wa: box.querySelector('[data-k=wa]').checked, email: box.querySelector('[data-k=email]').checked, subjek: box.querySelector('[data-k=subjek]').value, pesan: box.querySelector('[data-k=pesan]').value }; });
+    nfSimpan({ matriks: m }, e.currentTarget);
+  };
+}
+function nfAntrean() {
+  const p = S.nf, st = S.ui.nfq = S.ui.nfq || { s: '' }, rows = p.antrian.rows;
+  const h = p.antrian.hitung;
+  $('#nfTab').innerHTML = `<div class="card" style="margin-bottom:14px"><div class="toolbar">
+      <div class="chips-row grow">${[['', 'Semua', rows.length], ['Antri', 'Antre', h.Antri], ['Terkirim', 'Terkirim', h.Terkirim], ['Gagal', 'Gagal', h.Gagal], ['Batal', 'Batal', h.Batal]].map(([k, l, n]) => `<button class="fchip ${st.s === k ? 'active' : ''}" data-nfs="${k}">${l}<span class="cnt">${n || 0}</span></button>`).join('')}</div>
+      <button class="btn btn-secondary btn-sm" id="nfRun"><i class="bi bi-play-circle"></i> Proses sekarang</button>
+      ${h.Gagal ? '<button class="btn btn-secondary btn-sm" id="nfRetry"><i class="bi bi-arrow-repeat"></i> Ulang yang gagal</button>' : ''}
+      <button class="btn btn-ghost btn-sm" id="nfReload"><i class="bi bi-arrow-clockwise"></i></button></div>
+      <small class="muted">Menampilkan 300 antrean terbaru.</small></div>
+    <div class="table-card" id="nfQ"></div>`;
+  const draw = () => {
+    const ls = rows.filter(r => !st.s || r.Status === st.s);
+    $('#nfQ').innerHTML = ls.length ? `<div class="table-wrap"><table class="table cards"><thead><tr><th>Waktu</th><th>Kanal</th><th>Tujuan</th><th>Kejadian</th><th>Status</th><th>Keterangan</th></tr></thead><tbody>${ls.map(r => `<tr>
+      <td data-label="Waktu" class="mono">${esc(tglJam(r.DibuatPada))}</td><td data-label="Kanal">${r.Kanal === 'WA' ? '<i class="bi bi-whatsapp t-green"></i> WA' : '<i class="bi bi-envelope"></i> Email'}</td>
+      <td class="card-title" data-label="Tujuan"><b>${esc(r.NamaPenerima || '—')}</b><span class="t-sub mono">${esc(r.Tujuan)}</span></td>
+      <td data-label="Kejadian">${r.Event === 'BLAST' ? '<span class="badge b-indigo plain">Blast</span> ' + esc(r.Subjek || '') : esc(((S.nf.matriks[r.Event] || {}).label) || r.Event)}</td>
+      <td data-label="Status"><span class="badge ${NOTIF_STATUS_BADGE[r.Status] || 'b-slate'}">${esc(r.Status)}</span>${Number(r.Percobaan) > 1 ? `<span class="t-sub">${esc(r.Percobaan)}× coba</span>` : ''}</td>
+      <td data-label="Keterangan"><span class="t-sub" title="${esc(r.Pesan)}">${esc(r.Respon || (r.Status === 'Antri' ? 'Menunggu pemicu' : ''))}</span>${r.DikirimPada ? `<span class="t-sub">${esc(tglJam(r.DikirimPada))}</span>` : ''}</td></tr>`).join('')}</tbody></table></div>`
+      : `<div style="padding:20px">${emptyHTML('bi-inboxes', 'Belum ada antrean', 'Pesan muncul di sini setelah order dikonfirmasi, status berubah, atau invoice terbit — saat saklar WA/email aktif.')}</div>`;
+  };
+  $$('[data-nfs]').forEach(b => b.onclick = () => { st.s = b.dataset.nfs; nfAntrean(); });
+  $('#nfRun').onclick = e => { btnBusy(e.currentTarget, true, 'Memproses…'); api('prosesAntrianSekarang', S.token).then(r => { S.nf = r.data; ok(r.message); drawNotif(); }).catch(fail); };
+  if ($('#nfRetry')) $('#nfRetry').onclick = e => { btnBusy(e.currentTarget, true); api('ulangAntrianGagal', S.token).then(r => { S.nf = r.data; ok(r.message); drawNotif(); }).catch(fail); };
+  $('#nfReload').onclick = () => renderNotif();
+  draw();
+}
+
+// ── Kontak & Blast ──
+const KTK_TABS = [['kontak', 'bi-person-lines-fill', 'Kontak'], ['blast', 'bi-megaphone', 'Blast WA']];
+const KTK_WA_BADGE = { Terdaftar: 'b-green', 'Tidak Terdaftar': 'b-red' };
+function renderKontak() {
+  const el = $('#page-kontak');
+  S.ui.kt = S.ui.kt || { tab: 'kontak', q: '', seg: '', wa: '', tag: '' };
+  el.innerHTML = `<div class="page-head"><div class="ph-icon"><i class="bi bi-person-lines-fill"></i></div><div class="grow"><h1>Kontak &amp; Blast WA</h1><p class="muted">Kontak otomatis tersinkron dari <b>Data Pelanggan</b> dan <b>Perusahaan CRM</b> (prospek). Beri tag, catat interaksi, tandai opt-out, lalu kirim blast WhatsApp ber-batch.</p></div>
+    <button class="btn btn-secondary" id="ktAdd"><i class="bi bi-person-plus"></i> Kontak manual</button></div>
+    <div id="ktBody"><p class="muted">Menyinkronkan kontak…</p></div>`;
+  $('#ktAdd').onclick = () => openKontakForm(null);
+  muatKontak(true);
+}
+function muatKontak(info) {
+  return api('getKontak', S.token).then(r => { S.kt = r.data; if (info && (r.data.sync.baru || r.data.sync.diperbarui)) toast('info', r.message); drawKontak(); }).catch(e => { fail(e); const b = $('#ktBody'); if (b) b.innerHTML = emptyHTML('bi-exclamation-triangle', 'Gagal memuat', e.message || ''); });
+}
+function drawKontak() {
+  const b = $('#ktBody'); if (!b || !S.kt) return;
+  const t = S.ui.kt.tab, k = S.kt.kontak, jalan = S.kt.blast.find(x => x.Status === 'Berjalan');
+  b.innerHTML = `<div class="kpis" style="margin-bottom:14px">
+      ${kpi('Total kontak', k.length, 'bi-people', 'ic-indigo', 'Pelanggan, prospek CRM & manual')}${kpi('WA terdaftar', k.filter(x => x.StatusWA === 'Terdaftar').length, 'bi-whatsapp', 'ic-green', 'Sudah dicek lewat Fonnte')}
+      ${kpi('Belum dicek', k.filter(x => x.NoWA && !x.StatusWA).length, 'bi-question-circle', 'ic-amber', 'Klik Cek nomor WA')}${kpi('Opt-out', k.filter(x => x.OptOut === 'YA').length, 'bi-slash-circle', 'ic-red', 'Tidak dikirimi blast')}</div>
+    ${!S.kt.adaToken ? '<div class="alert alert-warning" style="margin-bottom:14px"><i class="bi bi-exclamation-triangle"></i><div>Token Fonnte belum diisi. Cek nomor & blast butuh token — isi di menu <b>Notifikasi WA</b>.</div></div>' : ''}
+    ${jalan ? `<div class="alert alert-info" style="margin-bottom:14px"><i class="bi bi-megaphone"></i><div>Blast <b>${esc(jalan.Judul)}</b> sedang berjalan: ${esc(jalan.Terkirim)}/${esc(jalan.Total)} terkirim.</div></div>` : ''}
+    <div class="tabs">${KTK_TABS.map(([x, i, l]) => `<button class="tab ${t === x ? 'active' : ''}" data-ktt="${x}"><i class="bi ${i}"></i> ${l}</button>`).join('')}</div><div id="ktTab"></div>`;
+  b.querySelectorAll('[data-ktt]').forEach(x => x.onclick = () => { S.ui.kt.tab = x.dataset.ktt; drawKontak(); });
+  (t === 'blast' ? ktBlast : ktDaftar)();
+}
+function ktSegmen() { return [...new Set(S.kt.kontak.map(k => k.Segmen).filter(Boolean))].sort(); }
+function ktTags() { return [...new Set(S.kt.kontak.flatMap(k => String(k.Tag || '').split(',').map(t => t.trim()).filter(Boolean)))].sort(); }
+function ktFilter(st) {
+  const q = (st.q || '').trim().toLowerCase();
+  return S.kt.kontak.filter(k => (!st.seg || k.Segmen === st.seg) && (!st.tag || String(k.Tag || '').split(',').map(t => t.trim()).includes(st.tag))
+    && (!st.wa || (st.wa === 'belum' ? !k.StatusWA && k.NoWA : st.wa === 'optout' ? k.OptOut === 'YA' : st.wa === 'tanpa' ? !k.NoWA : k.StatusWA === st.wa))
+    && (!q || [k.Nama, k.NoWA, k.Email, k.Tag, k.Info, k.Catatan].join(' ').toLowerCase().includes(q)));
+}
+function ktDaftar() {
+  const st = S.ui.kt;
+  $('#ktTab').innerHTML = `<div class="card" style="margin-bottom:14px"><div class="toolbar"><div class="search grow"><i class="bi bi-search"></i><input class="input" id="ktQ" placeholder="Cari nama, nomor, email, tag…" value="${esc(st.q)}"></div>
+      <select class="input" id="ktSeg" style="max-width:200px">${crmOpts(ktSegmen(), st.seg, 'Semua segmen')}</select>
+      <select class="input" id="ktTag" style="max-width:160px">${crmOpts(ktTags(), st.tag, 'Semua tag')}</select>
+      <select class="input" id="ktWa" style="max-width:180px"><option value="">Semua status WA</option>${[['Terdaftar', 'WA terdaftar'], ['Tidak Terdaftar', 'Tidak terdaftar'], ['belum', 'Belum dicek'], ['tanpa', 'Tanpa nomor'], ['optout', 'Opt-out']].map(([v, l]) => `<option value="${v}" ${st.wa === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <button class="btn btn-secondary" id="ktCek" ${S.kt.adaToken ? '' : 'disabled'}><i class="bi bi-patch-check"></i> Cek nomor WA</button></div></div>
+    <div class="table-card" id="ktList"></div>`;
+  const draw = () => {
+    const ls = ktFilter(st).sort((a, b) => String(a.Nama).localeCompare(String(b.Nama)));
+    $('#ktList').innerHTML = ls.length ? `<div class="table-wrap"><table class="table cards"><thead><tr><th>Kontak</th><th>WhatsApp</th><th>Segmen &amp; tag</th><th>Riwayat</th><th class="t-actions">Aksi</th></tr></thead><tbody>${ls.map(k => `<tr class="${k.OptOut === 'YA' ? 'row-muted' : ''}">
+      <td class="card-title" data-label="Kontak"><b>${esc(k.Nama)}</b><span class="t-sub">${esc(k.Email || '')}${k.Info ? (k.Email ? ' · ' : '') + esc(k.Info) : ''}</span></td>
+      <td data-label="WhatsApp"><div><span class="mono">${esc(k.NoWA || '—')}</span>${k.NoWA ? `<span class="t-sub">${k.StatusWA ? `<span class="badge ${KTK_WA_BADGE[k.StatusWA] || 'b-slate'} plain">${esc(k.StatusWA)}</span>` : '<span class="muted">belum dicek</span>'}${k.OptOut === 'YA' ? ' <span class="badge b-red">Opt-out</span>' : ''}</span>` : (k.OptOut === 'YA' ? '<span class="badge b-red">Opt-out</span>' : '')}</div></td>
+      <td data-label="Segmen"><div>${esc(k.Segmen)}<span class="t-sub">${String(k.Tag || '').split(',').filter(t => t.trim()).map(t => `<span class="chip chip-soft kt-tag">#${esc(t.trim())}</span>`).join(' ')}</span></div></td>
+      <td data-label="Riwayat"><div><b class="mono">${esc(k.JumlahPesan || 0)}</b> pesan<span class="t-sub">${k.TerakhirDihubungi ? 'terakhir ' + esc(tglJam(k.TerakhirDihubungi)) : 'belum pernah'}</span></div></td>
+      <td class="t-actions"><button class="icon-btn" data-kt="${esc(k.KontakID)}" title="Detail"><i class="bi bi-chevron-right"></i></button></td></tr>`).join('')}</tbody></table></div>`
+      : `<div style="padding:20px">${emptyHTML('bi-person-lines-fill', 'Tidak ada kontak', 'Kontak berasal dari Data Pelanggan & Perusahaan CRM, atau tambahkan kontak manual.')}</div>`;
+  };
+  $('#ktQ').addEventListener('input', debounce(e => { st.q = e.target.value; draw(); }, 120));
+  $('#ktSeg').onchange = e => { st.seg = e.target.value; draw(); };
+  $('#ktTag').onchange = e => { st.tag = e.target.value; draw(); };
+  $('#ktWa').onchange = e => { st.wa = e.target.value; draw(); };
+  $('#ktList').onclick = e => { const x = e.target.closest('[data-kt]') || e.target.closest('tr') && e.target.closest('tr').querySelector('[data-kt]'); if (x) openKontakDetail(x.dataset.kt); };
+  $('#ktCek').onclick = e => {
+    const ids = ktFilter(st).filter(k => k.NoWA).map(k => k.KontakID);
+    const pakai = st.q || st.seg || st.tag || st.wa ? ids : null;
+    btnBusy(e.currentTarget, true, 'Memeriksa…');
+    api('cekNomorWA', S.token, pakai).then(r => { (r.data.kontak || []).forEach(k => ktUpsert(k)); ok(r.message); drawKontak(); }).catch(fail).finally(() => btnBusy(e.currentTarget, false));
+  };
+  draw();
+}
+function ktUpsert(k) { const i = S.kt.kontak.findIndex(x => x.KontakID === k.KontakID); if (i >= 0) S.kt.kontak[i] = k; else S.kt.kontak.push(k); }
+function openKontakDetail(id) {
+  const k = S.kt.kontak.find(x => x.KontakID === id); if (!k) return;
+  const manual = k.Sumber === 'Manual';
+  openModal({ title: k.Nama, sub: `${k.Segmen} · sumber ${k.Sumber}`, icon: 'bi-person-lines-fill', size: 'lg',
+    body: `<div class="grid-2"><div>
+        <dl class="dl">${[['WhatsApp', k.NoWA ? `<span class="mono">${esc(k.NoWA)}</span> ${k.StatusWA ? `<span class="badge ${KTK_WA_BADGE[k.StatusWA] || 'b-slate'} plain">${esc(k.StatusWA)}</span>` : '<span class="muted">belum dicek</span>'}` : '—'], ['Email', esc(k.Email || '—')], ['Info', esc(k.Info || '—')], ['Pesan terkirim', esc(k.JumlahPesan || 0)], ['Terakhir dihubungi', esc(k.TerakhirDihubungi ? tglJam(k.TerakhirDihubungi) : '—')]].map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('')}</dl>
+        ${k.NoWA ? `<a class="btn btn-secondary btn-sm" href="https://wa.me/${waNumber(k.NoWA)}" target="_blank" rel="noopener"><i class="bi bi-whatsapp"></i> Buka chat</a>` : ''}
+        <form id="ktForm" style="margin-top:14px">
+          ${manual ? `<label class="field"><span class="label">Nama</span><input class="input" name="Nama" value="${esc(k.Nama)}"></label><div class="row-2"><label class="field"><span class="label">No. WhatsApp</span><input class="input" name="NoWA" value="${esc(k.NoWA || '')}"></label><label class="field"><span class="label">Email</span><input class="input" name="Email" value="${esc(k.Email || '')}"></label></div><label class="field"><span class="label">Segmen</span><input class="input" name="Segmen" value="${esc(k.Segmen || '')}" list="ktSegList"><datalist id="ktSegList">${ktSegmen().map(s => `<option>${esc(s)}</option>`).join('')}</datalist></label>` : `<p class="muted" style="margin:0 0 10px"><i class="bi bi-info-circle"></i> Nama, nomor & email mengikuti ${k.Sumber === 'Pelanggan' ? 'Data Pelanggan' : 'Perusahaan CRM'}. Ubah di sana.</p>`}
+          <label class="field"><span class="label">Tag <small class="muted">(pisahkan dengan koma)</small></span><input class="input" name="Tag" value="${esc(k.Tag || '')}" placeholder="mis. vip, jakarta, alat-berat" list="ktTagList"><datalist id="ktTagList">${ktTags().map(s => `<option>${esc(s)}</option>`).join('')}</datalist></label>
+          <label class="field"><span class="label">Catatan</span><textarea class="input" name="Catatan" rows="2">${esc(k.Catatan || '')}</textarea></label>
+          ${nfSwitch('ktOpt', k.OptOut === 'YA', 'Opt-out (jangan kirimi blast)', 'Notifikasi order & tagihan tetap terkirim.')}
+        </form></div>
+      <div><h4 style="margin-top:0"><i class="bi bi-clock-history"></i> Riwayat interaksi</h4>
+        <div class="row-2"><select class="input" id="iaKanal">${['Telepon', 'WA', 'Email', 'Kunjungan', 'Lainnya'].map(x => `<option>${x}</option>`).join('')}</select><select class="input" id="iaArah"><option>Keluar</option><option>Masuk</option></select></div>
+        <div class="chips-row" style="margin:8px 0 12px"><input class="input grow" id="iaTeks" placeholder="Ringkasan, mis. tanya tarif Medan"><button type="button" class="btn btn-secondary" id="iaAdd"><i class="bi bi-plus-lg"></i></button></div>
+        <div id="iaList" class="ia-list"><p class="muted">Memuat…</p></div></div></div>`,
+    foot: `${manual ? '<button class="btn btn-ghost danger" id="ktDel"><i class="bi bi-trash"></i> Hapus</button>' : ''}<span class="grow"></span><button class="btn btn-secondary" data-close>Tutup</button><button class="btn btn-primary" id="ktSave"><i class="bi bi-check2"></i> Simpan</button>` });
+  const muatIA = () => api('getInteraksi', S.token, id).then(r => {
+    $('#iaList').innerHTML = r.data.length ? r.data.map(i => `<div class="ia-i"><span class="badge ${i.Arah === 'Masuk' ? 'b-indigo' : 'b-slate'} plain">${esc(i.Kanal)} · ${esc(i.Arah)}</span><p>${esc(i.Ringkasan)}</p><small class="muted">${esc(tglJam(i.Tanggal))} · ${esc(i.Oleh)}</small></div>`).join('') : '<p class="muted">Belum ada interaksi.</p>';
+  }).catch(fail);
+  muatIA();
+  $('#iaAdd').onclick = e => { const t = $('#iaTeks').value.trim(); if (!t) return toast('info', 'Isi ringkasan interaksi'); btnBusy(e.currentTarget, true); api('saveInteraksi', S.token, { KontakID: id, Kanal: $('#iaKanal').value, Arah: $('#iaArah').value, Ringkasan: t }).then(() => { $('#iaTeks').value = ''; k.TerakhirDihubungi = sekarangLokal(); muatIA(); }).catch(fail).finally(() => btnBusy(e.currentTarget, false)); };
+  $('#ktSave').onclick = e => {
+    const v = formValues($('#ktForm')); v.KontakID = id; v.OptOut = $('#ktOpt').checked ? 'YA' : '';
+    btnBusy(e.currentTarget, true, 'Menyimpan…');
+    api('saveKontak', S.token, v).then(r => { ktUpsert(r.data); ok(r.message); closeModal(); drawKontak(); }).catch(fail).finally(() => btnBusy(e.currentTarget, false));
+  };
+  if ($('#ktDel')) $('#ktDel').onclick = () => confirmDialog({ title: 'Hapus kontak?', html: `<b>${esc(k.Nama)}</b> dan riwayat blast-nya tidak lagi tampil.`, icon: 'bi-trash', ok: 'Hapus', variant: 'danger' })
+    .then(y => y && api('deleteKontak', S.token, id).then(r => { S.kt.kontak = S.kt.kontak.filter(x => x.KontakID !== id); ok(r.message); closeModal(); drawKontak(); }).catch(fail));
+}
+function sekarangLokal() { const d = new Date(); return today() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+function openKontakForm() {
+  openModal({ title: 'Kontak manual', sub: 'Untuk kontak di luar Data Pelanggan & CRM', icon: 'bi-person-plus',
+    body: `<form id="ktNew"><label class="field"><span class="label req">Nama</span><input class="input" name="Nama" maxlength="120"></label>
+      <div class="row-2"><label class="field"><span class="label">No. WhatsApp</span><input class="input" name="NoWA" inputmode="tel" placeholder="08xxxxxxxxxx"></label><label class="field"><span class="label">Email</span><input class="input" name="Email" type="email"></label></div>
+      <label class="field"><span class="label">Segmen</span><input class="input" name="Segmen" value="Lainnya" list="ktSegList2"><datalist id="ktSegList2">${(S.kt ? ktSegmen() : []).map(s => `<option>${esc(s)}</option>`).join('')}</datalist></label>
+      <label class="field"><span class="label">Tag</span><input class="input" name="Tag" placeholder="pisahkan dengan koma"></label></form>`,
+    foot: `<button class="btn btn-secondary" data-close>Batal</button><button class="btn btn-primary" id="ktNewSave"><i class="bi bi-check2"></i> Simpan</button>` });
+  $('#ktNewSave').onclick = e => { btnBusy(e.currentTarget, true, 'Menyimpan…'); api('saveKontak', S.token, formValues($('#ktNew'))).then(r => { if (S.kt) ktUpsert(r.data); ok(r.message); closeModal(); drawKontak(); }).catch(fail).finally(() => btnBusy(e.currentTarget, false)); };
+}
+function ktBlast() {
+  const bl = S.kt.blast, f = S.ui.ktb = S.ui.ktb || { Segmen: [], Tag: '', HanyaTerdaftar: false, UkuranBatch: 20, JedaDetik: '3-8', Berhenti: true, Judul: '', Pesan: 'Halo {nama},\n\n' };
+  const jalan = bl.find(x => x.Status === 'Berjalan');
+  $('#ktTab').innerHTML = `<div class="grid-2 nf-grid">
+    <div class="card"><h3><i class="bi bi-megaphone"></i> Blast baru</h3>
+      <label class="field"><span class="label req">Judul (internal)</span><input class="input" id="bJudul" maxlength="120" value="${esc(f.Judul)}" placeholder="mis. Promo kirim mobil Desember"></label>
+      <label class="field"><span class="label req">Pesan</span><textarea class="input" id="bPesan" rows="7" maxlength="1500">${esc(f.Pesan)}</textarea><small class="muted"><code>{nama}</code> diganti nama kontak. <code>*teks*</code> = tebal. <span id="bLen"></span></small></label>
+      <span class="label">Sasaran segmen <small class="muted">(kosong = semua)</small></span>
+      <div class="lyn-grp" style="margin:6px 0 10px">${ktSegmen().map(s => `<label class="lyn-chip"><input type="checkbox" data-bseg="${esc(s)}" ${f.Segmen.includes(s) ? 'checked' : ''}><span>${esc(s)}</span></label>`).join('') || '<span class="muted">Belum ada kontak.</span>'}</div>
+      <div class="row-2"><label class="field"><span class="label">Tag</span><select class="input" id="bTag">${crmOpts(ktTags(), f.Tag, 'Semua tag')}</select></label>
+        <label class="field"><span class="label">Kecepatan</span><select class="input" id="bBatch">${[[10, '10 pesan/menit (paling aman)'], [20, '20 pesan/menit'], [50, '50 pesan/menit']].map(([v, l]) => `<option value="${v}" ${Number(f.UkuranBatch) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
+      <label class="field"><span class="label">Jeda acak antarpesan</span><select class="input" id="bJeda">${[['3-8', '3–8 detik'], ['5-15', '5–15 detik'], ['10-30', '10–30 detik (nomor baru)']].map(([v, l]) => `<option value="${v}" ${f.JedaDetik === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label class="check-row"><input type="checkbox" id="bTerdaftar" ${f.HanyaTerdaftar ? 'checked' : ''}> <span>Hanya nomor yang sudah dicek <b>terdaftar WA</b></span></label>
+      <label class="check-row"><input type="checkbox" id="bStop" ${f.Berhenti ? 'checked' : ''}> <span>Tambahkan "Balas STOP bila tidak ingin menerima info"</span></label>
+      <div class="nf-target" id="bTarget"><i class="bi bi-people"></i> Menghitung sasaran…</div>
+      <div class="chips-row" style="justify-content:flex-end"><button class="btn btn-primary" id="bMulai" ${jalan || !S.kt.adaToken ? 'disabled' : ''}><i class="bi bi-send"></i> Mulai blast</button></div>
+      ${jalan ? '<small class="muted">Tunggu blast yang berjalan selesai atau hentikan dulu.</small>' : ''}
+    </div>
+    <div class="card"><div class="card-title-row"><h3><i class="bi bi-clock-history"></i> Riwayat blast</h3><button class="btn btn-ghost btn-sm" id="bReload"><i class="bi bi-arrow-clockwise"></i> Perbarui</button></div>
+      ${bl.length ? `<div class="bl-list">${bl.map(x => { const pr = Number(x.Total) ? Math.round((Number(x.Terkirim) + Number(x.Gagal)) / Number(x.Total) * 100) : 0; return `<div class="bl-i">
+        <div class="bl-h"><b>${esc(x.Judul)}</b><span class="badge ${x.Status === 'Berjalan' ? 'b-indigo' : x.Status === 'Selesai' ? 'b-green' : 'b-slate'}">${esc(x.Status)}</span></div>
+        <div class="pbar"><span style="width:${pr}%"></span></div>
+        <small class="muted">${esc(x.Terkirim)} terkirim · ${esc(x.Gagal)} gagal/batal · dari ${esc(x.Total)} · ${esc(x.UkuranBatch)}/menit · ${esc(tglJam(x.Tanggal))} · ${esc(x.DibuatOleh)}</small>
+        ${x.Status === 'Berjalan' ? `<div><button class="btn btn-ghost btn-sm danger" data-bstop="${esc(x.BlastID)}"><i class="bi bi-stop-circle"></i> Hentikan</button></div>` : ''}</div>`; }).join('')}</div>` : emptyHTML('bi-megaphone', 'Belum ada blast', 'Blast dikirim bertahap per menit agar nomor WhatsApp aman.')}
+    </div></div>`;
+  const ambil = () => {
+    Object.assign(f, { Judul: $('#bJudul').value, Pesan: $('#bPesan').value, Segmen: $$('[data-bseg]').filter(c => c.checked).map(c => c.dataset.bseg),
+      Tag: $('#bTag').value, UkuranBatch: Number($('#bBatch').value), JedaDetik: $('#bJeda').value, HanyaTerdaftar: $('#bTerdaftar').checked, Berhenti: $('#bStop').checked });
+    return f;
+  };
+  let tgt = 0;
+  const hitung = debounce(() => {
+    ambil();
+    api('previewBlast', S.token, f).then(r => {
+      tgt = r.data.total;
+      const box = $('#bTarget'); if (!box) return;
+      box.innerHTML = `<i class="bi bi-people"></i> <b>${r.data.total}</b> kontak sasaran${r.data.total ? ` · perkiraan ${Math.ceil(r.data.total / f.UkuranBatch)} menit` : ''}<small class="muted">Sudah tanpa opt-out (${r.data.optOut}), nomor tidak valid/tidak terdaftar & duplikat.${r.data.contoh.length ? ' Contoh: ' + r.data.contoh.map(c => esc(c.Nama)).join(', ') : ''}</small>`;
+    }).catch(() => {});
+  }, 250);
+  $('#ktTab').addEventListener('change', e => { if (e.target.closest('.nf-grid .card:first-child')) hitung(); });
+  $('#bPesan').addEventListener('input', () => { $('#bLen').textContent = $('#bPesan').value.length + '/1500 karakter'; f.Pesan = $('#bPesan').value; });
+  $('#bJudul').addEventListener('input', () => { f.Judul = $('#bJudul').value; });
+  $('#bLen').textContent = f.Pesan.length + '/1500 karakter';
+  hitung();
+  $('#bReload').onclick = () => muatKontak(false);
+  $$('[data-bstop]').forEach(b => b.onclick = () => confirmDialog({ title: 'Hentikan blast?', html: 'Pesan yang belum terkirim dibatalkan.', icon: 'bi-stop-circle', ok: 'Hentikan', variant: 'danger' })
+    .then(y => y && api('hentikanBlast', S.token, b.dataset.bstop).then(r => { ok(r.message); muatKontak(false); }).catch(fail)));
+  $('#bMulai').onclick = e => {
+    ambil();
+    if (!f.Judul.trim()) return toast('warning', 'Isi judul blast');
+    if (f.Pesan.trim().length < 10) return toast('warning', 'Isi pesan blast');
+    if (!tgt) return toast('warning', 'Tidak ada kontak sasaran');
+    confirmDialog({ title: 'Mulai blast WhatsApp?', html: `Pesan dikirim ke <b>${tgt}</b> kontak, <b>${f.UkuranBatch}</b> pesan per menit dengan jeda acak ${esc(f.JedaDetik)} detik.<div class="nf-prev" style="margin-top:10px">${esc(f.Pesan.replace(/\{nama\}/g, 'Bapak/Ibu')).replace(/\*([^*\n]+)\*/g, '<b>$1</b>').replace(/\n/g, '<br>')}</div>`, icon: 'bi-megaphone', ok: 'Ya, kirim' })
+      .then(y => { if (!y) return; btnBusy(e.currentTarget, true, 'Menyiapkan…'); api('mulaiBlast', S.token, f).then(r => { ok(r.message); f.Judul = ''; f.Pesan = 'Halo {nama},\n\n'; muatKontak(false); }).catch(fail).finally(() => btnBusy(e.currentTarget, false)); });
+  };
+}
+
+// ════════════════════════════════════════════════════════════
+// 4.1 — Pemakaian kuota harian (Ringkasan, Super Admin) & Arsip data lama
+// ════════════════════════════════════════════════════════════
+const fmtN = n => Number(n || 0).toLocaleString('id-ID');
+function kqWarna(p) { return p >= 90 ? 'rd' : p >= 75 ? 'a' : 'g'; }
+function kqBaris(ic, judul, angka, persen, ket, tone) {
+  const p = Math.max(0, Math.min(100, Math.round(persen || 0)));
+  return `<div class="kq-r"><div class="kq-t"><span><span class="kq-ic ${tone || kqWarna(p)}"><i class="bi ${ic}"></i></span>${judul}</span><b class="mono">${angka}</b></div>
+    <div class="kq-bar"><i class="${kqWarna(p)}" style="width:${Math.max(p, p ? 2 : 0)}%"></i></div><small>${ket}</small></div>`;
+}
+function kuotaCardHTML() { return isSA() ? '<div class="card kq-card" id="kuotaCard"><div class="kq-h"><h3><i class="bi bi-speedometer2"></i> Pemakaian kuota hari ini</h3></div><p class="muted">Memuat…</p></div>' : ''; }
+function muatKuota() {
+  if (!isSA() || !$('#kuotaCard')) return;
+  api('getKuota', S.token).then(r => { S.kq = r.data; drawKuota(); }).catch(e => { const c = $('#kuotaCard'); if (c) c.innerHTML = `<h3><i class="bi bi-speedometer2"></i> Pemakaian kuota</h3><p class="muted">${esc(e.message || 'Gagal memuat')}</p>`; });
+}
+function drawKuota() {
+  const c = $('#kuotaCard'), k = S.kq; if (!c || !k) return;
+  const pe = k.email.terpakai === null ? 0 : k.email.terpakai / k.email.batas * 100;
+  const pt = k.pemicu.menit / k.pemicu.batas * 100;
+  const pf = k.fetch.jumlah / k.fetch.batas * 100;
+  const pp = k.permintaan.puncak / k.permintaan.batasBersamaan * 100;
+  const wa = k.wa, waTotal = wa && wa.sisa !== null && wa.sisa !== undefined ? wa.terkirimBulanIni + wa.sisa : 0;
+  const pw = waTotal ? wa.terkirimBulanIni / waTotal * 100 : 0;
+  const ps = k.data.sel / k.data.batasSel * 100;
+  const sarana = [];
+  if (pe >= 75) sarana.push('Kuota email menipis: matikan email untuk kejadian yang kurang penting di Notifikasi WA.');
+  if (pt >= 75) sarana.push('Waktu pemicu tinggi: kurangi blast besar atau cek antrean yang gagal berulang.');
+  if (k.data.order >= 8000 || ps >= 60) sarana.push('Data sudah besar: pertimbangkan arsip data lama.');
+  const perlu = [pe, pt, pf, pp, pw, ps].filter(x => x >= 75).length;
+  c.innerHTML = `<div class="kq-h"><h3><i class="bi bi-speedometer2"></i> Pemakaian kuota hari ini</h3>${perlu ? `<span class="badge b-amber">${perlu} perlu perhatian</span>` : '<span class="badge b-green">Aman</span>'}</div>
+    <p class="kq-sub">Akun Google: <button class="link-btn" id="kqAkun">${esc(k.akun)}${k.akunManual ? '' : ' (otomatis)'}</button> · per 24 jam · ${esc(k.diperbarui.slice(11, 16))} WIB</p>
+    ${kqBaris('bi-envelope', 'Email terkirim', k.email.terpakai === null ? '—' : `${fmtN(k.email.terpakai)} / ${fmtN(k.email.batas)}`, pe, k.email.sisa === null ? 'Tidak terbaca' : `Sisa ${fmtN(k.email.sisa)} email (angka resmi Google)`)}
+    ${kqBaris('bi-clock-history', 'Waktu pemicu', `${String(k.pemicu.menit).replace('.', ',')} / ${fmtN(k.pemicu.batas)} menit`, pt, 'Perkiraan · antrean notifikasi, cek harian & cadangan')}
+    ${wa ? (wa.galat ? kqBaris('bi-whatsapp', 'WhatsApp (Fonnte)', '—', 0, 'Fonnte: ' + esc(wa.galat)) : kqBaris('bi-whatsapp', 'WhatsApp terkirim bulan ini', waTotal ? `${fmtN(wa.terkirimBulanIni)} / ${fmtN(waTotal)}` : fmtN(wa.terkirimBulanIni), pw, `${wa.sisa !== null && wa.sisa !== undefined ? 'Sisa kuota Fonnte ' + fmtN(wa.sisa) : 'Kuota Fonnte tidak terbaca'}${wa.aktifSampai ? ' · paket s/d ' + esc(wa.aktifSampai) : ''}`))
+      : kqBaris('bi-whatsapp', 'WhatsApp (Fonnte)', '—', 0, 'Token Fonnte belum diisi', 'g')}
+    ${kqBaris('bi-globe2', 'Panggilan ke luar (UrlFetch)', `${fmtN(k.fetch.jumlah)} / ${fmtN(k.fetch.batas)}`, pf, 'Perkiraan · kirim WA & cek nomor')}
+    ${kqBaris('bi-people', 'Permintaan aplikasi & website', fmtN(k.permintaan.total), pp, `Puncak ${fmtN(k.permintaan.puncak)} bersamaan (batas ±${k.permintaan.batasBersamaan}) · ${fmtN(k.permintaan.web)} dari website`)}
+    ${kqBaris('bi-database', 'Ukuran database', `${fmtN(k.data.order)} order`, ps, `${(k.data.sel / 1e6).toFixed(2).replace('.', ',')} juta dari 10 juta sel Google Sheets · log ${fmtN(k.data.baris.Log_Aktivitas)} baris`)}
+    ${sarana.length ? `<div class="alert alert-warning kq-saran"><i class="bi bi-lightbulb"></i><div>${sarana.map(esc).join('<br>')}</div></div>` : ''}
+    <div class="kq-ft"><button class="link-btn" id="kqRiw"><i class="bi bi-bar-chart"></i> Riwayat 7 hari</button><button class="btn btn-secondary btn-sm" id="kqArsip"><i class="bi bi-archive"></i> Arsip data lama</button></div>
+    <div id="kqRiwBox" hidden></div>`;
+  $('#kqRiw').onclick = () => { const b = $('#kqRiwBox'); b.hidden = !b.hidden; if (!b.hidden) b.innerHTML = kqRiwayatHTML(); };
+  $('#kqArsip').onclick = () => openArsipWizard();
+  $('#kqAkun').onclick = () => {
+    openModal({ title: 'Jenis akun Google', sub: 'Menentukan batas kuota harian', icon: 'bi-google', body: `<p class="muted" style="margin-top:0">Lihat dari alamat pemilik Apps Script: <b>@gmail.com</b> = Gmail biasa, domain sendiri (mis. @kagumi.me) yang dikelola Google Workspace = Workspace.</p>
+      <div class="radio-cards">${[['', 'Deteksi otomatis', 'Dari sisa kuota email'], ['Workspace', 'Google Workspace', 'Email 1.500 · pemicu 6 jam/hari'], ['Gmail', 'Gmail biasa', 'Email 100 · pemicu 90 menit/hari']].map(([v, l, h]) => `<label class="radio-card"><input type="radio" name="akun" value="${v}" ${(k.akunManual ? k.akun : '') === v ? 'checked' : ''}><span><b>${l}</b><small>${h}</small></span></label>`).join('')}</div>`,
+      foot: '<button class="btn btn-secondary" data-close>Batal</button><button class="btn btn-primary" id="akunOk"><i class="bi bi-check2"></i> Simpan</button>' });
+    $('#akunOk').onclick = e => { const v = ($('[name=akun]:checked') || {}).value || ''; btnBusy(e.currentTarget, true); api('setJenisAkun', S.token, v).then(r => { ok(r.message); closeModal(); muatKuota(); }).catch(fail).finally(() => btnBusy(e.currentTarget, false)); };
+  };
+}
+function kqRiwayatHTML() {
+  const r = S.kq.riwayat;
+  if (!r.length) return '<p class="muted" style="margin:10px 0 0">Riwayat mulai terkumpul hari ini.</p>';
+  const maks = Math.max(1, ...r.map(x => x.req));
+  return `<div class="kq-riw">${r.map(x => `<div class="kq-riw-r"><span>${esc(tglPendek(x.tanggal))}</span><div class="kq-bar"><i class="g" style="width:${Math.round(x.req / maks * 100)}%"></i></div><b class="mono">${fmtN(x.req)}</b><small>web ${fmtN(x.web)} · puncak ${fmtN(x.puncak)} · pemicu ${Math.round(x.trigms / 60000)} m</small></div>`).join('')}</div>
+    <small class="muted">Jumlah permintaan per hari (perkiraan).</small>`;
+}
+
+// ── Wizard arsip: 3 pertanyaan ──
+function openArsipWizard() {
+  if (!isSA()) return;
+  const thnLalu = new Date().getFullYear() - 1;
+  const st = { step: 1, sampai: `${thnLalu}-12-31`, jenis: ['order', 'log', 'notif'], pv: null };
+  const batasMaks = addDays(today(), -91);
+  if (st.sampai > batasMaks) st.sampai = batasMaks;
+  const draw = () => {
+    const langkah = `<div class="az-steps">${['Sampai kapan?', 'Data apa?', 'Konfirmasi'].map((l, i) => `<span class="${st.step === i + 1 ? 'on' : st.step > i + 1 ? 'done' : ''}"><b>${i + 1}</b>${l}</span>`).join('')}</div>`;
+    let body = '';
+    if (st.step === 1) body = `<h4>1. Arsipkan data sampai tanggal berapa?</h4>
+      <p class="muted">Data dengan tanggal <b>sampai dan termasuk</b> tanggal ini dipindahkan. Minimal 3 bulan sebelum hari ini.</p>
+      <div class="chips-row" style="margin-bottom:10px">${[thnLalu - 1, thnLalu].map(y => `<button type="button" class="fchip ${st.sampai === y + '-12-31' ? 'active' : ''}" data-th="${y}-12-31">Sampai akhir ${y}</button>`).join('')}<button type="button" class="fchip ${st.sampai === addDays(today(), -365) ? 'active' : ''}" data-th="${addDays(today(), -365)}">Lebih dari 1 tahun lalu</button></div>
+      <label class="field"><span class="label">Atau pilih tanggal</span><input class="input" type="date" id="azTgl" value="${esc(st.sampai)}" max="${esc(batasMaks)}"></label>`;
+    if (st.step === 2) body = `<h4>2. Data apa saja yang diarsipkan?</h4>
+      <div class="radio-cards az-jenis">${Object.entries({ order: ['Order selesai/batal + invoice lunas + inspeksinya', 'Order masih berjalan, draft, dan invoice belum lunas TIDAK ikut diarsipkan.'], log: ['Log aktivitas', 'Riwayat siapa mengubah apa.'], notif: ['Antrean notifikasi WA/email yang sudah selesai', 'Yang masih antre tidak ikut.'] }).map(([k, [l, h]]) => `<label class="radio-card"><input type="checkbox" data-az="${k}" ${st.jenis.includes(k) ? 'checked' : ''}><span><b>${l}</b><small>${h}</small></span></label>`).join('')}</div>
+      <p class="muted" style="margin-top:10px"><i class="bi bi-info-circle"></i> Data Finance, pelanggan, kendaraan, dan master lain <b>tidak</b> diarsipkan, jadi laporan keuangan tetap lengkap.</p>`;
+    if (st.step === 3) {
+      const j = st.pv.jumlah, nama = { Order_Sewa: 'Order sewa', Order_Kirim: 'Order kirim mobil', Order_Paket: 'Order paket', Invoice: 'Invoice', Inspeksi: 'Inspeksi', Log_Aktivitas: 'Log aktivitas', AntrianNotif: 'Antrean notifikasi' };
+      const total = Object.values(j).reduce((a, b) => a + b, 0), kode = 'ARSIP-' + st.sampai;
+      body = `<h4>3. Yakin memindahkan data ini?</h4>
+        <div class="az-ring">${Object.keys(j).map(t => `<div><span>${nama[t] || t}</span><b class="mono">${fmtN(j[t])}</b></div>`).join('')}<div class="tot"><span>Total baris</span><b class="mono">${fmtN(total)}</b></div></div>
+        ${st.pv.tertahan.aktif || st.pv.tertahan.belumLunas ? `<p class="muted"><i class="bi bi-shield-check"></i> Tetap di database: ${fmtN(st.pv.tertahan.aktif)} order belum selesai/draft, ${fmtN(st.pv.tertahan.belumLunas)} order dengan invoice belum lunas.</p>` : ''}
+        <ul class="az-dampak"><li>Cadangan penuh dibuat otomatis dulu di folder <b>Cadangan</b>.</li><li>Data dipindah ke file Google Sheets baru di folder Drive <b>KAGUMI → Arsip</b>.</li><li>Order terarsip tidak tampil lagi di Rekap, Invoice, dan <b>Cek Resi website</b>.</li><li>Proses 10–60 detik; lakukan di luar jam kerja.</li></ul>
+        ${total ? `<label class="check-row"><input type="checkbox" id="azPaham"> <span>Saya paham dan sudah memeriksa jumlah di atas.</span></label>
+        <label class="field" style="margin-top:10px"><span class="label">Ketik <code>${esc(kode)}</code> untuk melanjutkan</span><input class="input mono" id="azKode" autocomplete="off" placeholder="${esc(kode)}"></label>` : '<div class="alert alert-info"><i class="bi bi-info-circle"></i><div>Tidak ada data yang memenuhi syarat untuk tanggal & jenis ini.</div></div>'}`;
+    }
+    $('#azBody').innerHTML = langkah + body;
+    $('#azBack').hidden = st.step === 1;
+    const nxt = $('#azNext');
+    nxt.innerHTML = st.step === 3 ? '<i class="bi bi-archive"></i> Arsipkan sekarang' : 'Lanjut <i class="bi bi-arrow-right"></i>';
+    nxt.className = 'btn ' + (st.step === 3 ? 'btn-danger' : 'btn-primary');
+    nxt.disabled = st.step === 3;
+    if (st.step === 1) {
+      $$('[data-th]').forEach(b => b.onclick = () => { st.sampai = b.dataset.th > batasMaks ? batasMaks : b.dataset.th; draw(); });
+      $('#azTgl').onchange = e => { st.sampai = e.target.value; };
+    }
+    if (st.step === 2) $$('[data-az]').forEach(c => c.onchange = () => { st.jenis = $$('[data-az]').filter(x => x.checked).map(x => x.dataset.az); });
+    if (st.step === 3 && $('#azKode')) {
+      const cek = () => { nxt.disabled = !($('#azPaham').checked && $('#azKode').value.trim().toUpperCase() === 'ARSIP-' + st.sampai); };
+      $('#azPaham').onchange = cek; $('#azKode').oninput = cek;
+    }
+  };
+  openModal({ title: 'Arsip data lama', sub: 'Khusus Super Admin · 3 pertanyaan', icon: 'bi-archive', size: 'lg', body: '<div id="azBody"></div>',
+    foot: '<button class="btn btn-secondary" id="azBack" hidden><i class="bi bi-arrow-left"></i> Kembali</button><span class="grow"></span><button class="btn btn-secondary" data-close>Batal</button><button class="btn btn-primary" id="azNext"></button>' });
+  $('#azBack').onclick = () => { st.step--; draw(); };
+  $('#azNext').onclick = e => {
+    const b = e.currentTarget;
+    if (st.step === 1) {
+      if (!st.sampai) return toast('warning', 'Pilih tanggal batas');
+      if (st.sampai > batasMaks) return toast('warning', 'Terlalu baru', 'Batas arsip minimal 3 bulan sebelum hari ini.');
+      st.step = 2; return draw();
+    }
+    if (st.step === 2) {
+      if (!st.jenis.length) return toast('warning', 'Pilih minimal satu jenis data');
+      btnBusy(b, true, 'Menghitung…');
+      return api('pratinjauArsip', S.token, { sampai: st.sampai, jenis: st.jenis }).then(r => { btnBusy(b, false); st.pv = r.data; st.step = 3; draw(); }).catch(e2 => { btnBusy(b, false); fail(e2); });
+    }
+    btnBusy(b, true, 'Mengarsipkan…');
+    $('#azBack').disabled = true;
+    api('jalankanArsip', S.token, { sampai: st.sampai, jenis: st.jenis, konfirmasi: $('#azKode').value, paham: $('#azPaham').checked }).then(r => {
+      closeModal();
+      if (r.data && r.data.url) {
+        openModal({ title: 'Arsip selesai', sub: r.data.nama, icon: 'bi-check2-circle', body: `<p>${esc(r.message)}</p><p class="muted">File arsip tersimpan di Google Drive folder <b>KAGUMI → Arsip</b>. Cadangan sebelum arsip: <b>${esc(r.data.cadangan)}</b> (folder Cadangan).</p>
+          <a class="btn btn-primary" href="${esc(r.data.url)}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right"></i> Buka file arsip</a>`, foot: '<button class="btn btn-secondary" data-close>Tutup</button>' });
+      } else ok(r.message);
+      refreshData(false).then(() => { if (S.page === 'ringkasan') renderRingkasan(); });
+    }).catch(e2 => { fail(e2); btnBusy(b, false); $('#azBack').disabled = false; });
+  };
+  draw();
+}
+function daftarArsipHTML() {
+  const a = (S.kq && S.kq.arsip) || [];
+  return a.length ? a.map(x => `<div class="li"><div><b>s.d ${esc(tgl(x.sampai))}</b><small class="muted"> · ${esc(tglJam(x.tanggal))} · ${esc(x.oleh)}</small></div><a class="btn btn-secondary btn-sm" href="${esc(x.url)}" target="_blank" rel="noopener">Buka</a></div>`).join('') : '';
 }
 // Penanda: js/app.js termuat sampai akhir
 window.__KGM_JS_END = true;
