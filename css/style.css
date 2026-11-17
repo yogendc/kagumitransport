@@ -1064,4 +1064,27 @@ body.is-sa .sb-ops-ringkasan,body:not(.is-sa) .sb-sa-ringkasan{display:none!impo
 .logo-up.mt{margin-top:14px}
 .kop-prev{margin-top:14px}.kop-sheet{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;color:#0F172A}
 .brand-logo img,.logo-prev img{object-fit:contain}
+
+/* 4.6 — Sales tanpa Surat, usulan perubahan perusahaan, bukti foto aktivitas */
+body.is-sales .no-sales{display:none!important}
+.usul-box{border:1px solid var(--amber,#d97706);background:color-mix(in srgb,var(--amber,#d97706) 8%,transparent);border-radius:12px;padding:12px 14px;margin:0 0 14px}
+.usul-box h4{margin:0 0 6px;font-size:14px;display:flex;gap:6px;align-items:center}
+.usul-box.ditolak{border-color:var(--red,#dc2626);background:color-mix(in srgb,var(--red,#dc2626) 7%,transparent)}
+.usul-tbl{width:100%;border-collapse:collapse;font-size:13px;margin:6px 0 10px}
+.usul-tbl th,.usul-tbl td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top;overflow-wrap:anywhere}
+.usul-tbl td.lama{color:var(--muted);text-decoration:line-through}
+.usul-tbl td.baru{font-weight:600}
+.usul-act{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.bukti-pick{display:flex;gap:12px;align-items:center;border:1.5px dashed var(--border);border-radius:12px;padding:10px;background:var(--surface)}
+.bukti-pick.err{border-color:var(--red,#dc2626)}
+.bukti-pick img{width:72px;height:72px;object-fit:cover;border-radius:8px;flex:none;background:var(--surface-2)}
+.bukti-pick .bp-ph{width:72px;height:72px;border-radius:8px;display:grid;place-items:center;background:var(--surface-2);color:var(--muted);font-size:26px;flex:none}
+.bukti-pick .grow{min-width:0}
+.bukti-pick small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.bukti-btn{display:inline-flex;align-items:center;gap:6px;margin-top:6px;padding:4px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);font-size:12.5px;cursor:pointer;color:var(--text)}
+.bukti-btn img{width:44px;height:44px;object-fit:cover;border-radius:6px}
+.lightbox{position:fixed;inset:0;z-index:4000;background:rgba(0,0,0,.82);display:grid;place-items:center;padding:16px}
+.lightbox img{max-width:100%;max-height:calc(100vh - 80px);border-radius:8px;background:#fff}
+.lightbox .lb-x{position:absolute;top:12px;right:12px;width:40px;height:40px;border-radius:50%;border:0;background:#fff;font-size:20px;cursor:pointer}
+.lightbox .lb-cap{position:absolute;bottom:12px;left:16px;right:16px;color:#fff;text-align:center;font-size:13px}
 :root{--kgm-css-end:1}
