@@ -4183,7 +4183,7 @@ function setAkun() {
     <div class="card-title-row" style="padding:18px 20px 0"><div><h3>Daftar pengguna</h3><p class="muted">${users.filter(u => u.Status === 'Aktif').length} aktif dari ${users.length} akun</p></div><button class="btn btn-primary" id="uAdd"><i class="bi bi-person-plus"></i> Tambah pengguna</button></div>
     <div class="table-wrap"><table class="table cards"><thead><tr><th>Pengguna</th><th>Peran</th><th>Divisi</th><th>WhatsApp</th><th>Terakhir masuk</th><th>Status</th><th class="t-actions">Aksi</th></tr></thead><tbody>
     ${users.map(u => `<tr class="${u.Status !== 'Aktif' ? 'row-muted' : ''}"><td class="card-title" data-label="Pengguna"><div class="who"><span class="avatar soft">${esc(initials(u.Nama))}</span><div><span class="t-strong">${esc(u.Nama)}${u.Email === S.me.email ? ' <span class="chip chip-soft">Anda</span>' : ''}</span><span class="t-sub">${esc(u.Email)}</span></div></div></td>
-      <td data-label="Peran"><span class="badge ${u.Peran === 'SUPER_ADMIN' ? 'b-green' : u.Peran === 'SALES' || u.Peran === 'CS' ? 'b-amber' : 'b-indigo'}">${u.Peran === 'SUPER_ADMIN' ? 'Super Admin' : u.Peran === 'SALES' ? 'Sales' : u.Peran === 'CS' ? 'Customer Service' : 'Admin'}</span></td><td data-label="Divisi">${esc(u.Divisi || '—')}</td>
+      <td data-label="Peran"><span class="badge ${u.Peran === 'SUPER_ADMIN' ? 'b-green' : u.Peran === 'SALES' || u.Peran === 'CS' ? 'b-amber' : 'b-indigo'}">${u.Peran === 'SUPER_ADMIN' ? 'Super Admin' : u.Peran === 'SALES' ? 'Sales' : u.Peran === 'CS' ? 'Customer Service' : 'Admin'}</span></td><td data-label="Divisi">${esc(u.Divisi || '—')}${u.KodeCetak && (u.Peran === 'ADMIN' || u.Peran === 'SUPER_ADMIN') ? `<span class="t-sub">Kode cetak <b class="mono">${esc(u.KodeCetak)}</b></span>` : ''}</td>
       <td data-label="WhatsApp" class="mono">${esc(u.NoHP || '—')}</td><td data-label="Terakhir masuk" class="muted">${u.TerakhirLogin ? tglJam(u.TerakhirLogin) : 'Belum pernah'}</td>
       <td data-label="Status"><span class="badge ${u.Status === 'Aktif' ? 'b-green' : 'b-slate'}">${esc(u.Status)}</span></td>
       <td class="t-actions"><button class="icon-btn" data-ue="${esc(u.ID)}" title="Ubah"><i class="bi bi-pencil"></i></button><button class="icon-btn" data-ur="${esc(u.ID)}" title="Reset kata sandi"><i class="bi bi-key"></i></button>${u.Email !== S.me.email ? `<button class="icon-btn" data-ut="${esc(u.ID)}" title="${u.Status === 'Aktif' ? 'Nonaktifkan' : 'Aktifkan'}"><i class="bi ${u.Status === 'Aktif' ? 'bi-slash-circle' : 'bi-check-circle'}"></i></button><button class="icon-btn" data-ud="${esc(u.ID)}" title="Hapus"><i class="bi bi-trash"></i></button>` : ''}</td></tr>`).join('')}
@@ -4220,11 +4220,15 @@ function openUserModal(u) {
       <label class="field"><span class="label req">Peran</span><select class="input" name="Peran"><option value="ADMIN" ${d.Peran === 'ADMIN' ? 'selected' : ''}>Admin</option><option value="SUPER_ADMIN" ${d.Peran === 'SUPER_ADMIN' ? 'selected' : ''}>Super Admin</option><option value="SALES" ${d.Peran === 'SALES' ? 'selected' : ''}>Sales (hanya menu CRM)</option><option value="CS" ${d.Peran === 'CS' ? 'selected' : ''}>Customer Service (keluhan & pertanyaan)</option></select></label>
       <label class="field"><span class="label">Divisi / tanggung jawab</span><input class="input" name="Divisi" value="${esc(d.Divisi || '')}" placeholder="Operasional sewa"></label>
       <label class="field"><span class="label">No. WhatsApp</span><input class="input" name="NoHP" inputmode="tel" value="${esc(d.NoHP || '')}"></label>
+      <label class="field" id="uKodeF"><span class="label">Kode cetak (penerbit SJ)</span><input class="input mono" name="KodeCetak" inputmode="numeric" maxlength="2" value="${esc(d.KodeCetak || '')}" placeholder="otomatis"><small class="muted">2 angka di nomor surat jalan, mis. KGM-P0001 2 <b>01</b> 11 26. Kosongkan = otomatis.</small></label>
       <label class="field"><span class="label">Status</span><select class="input" name="Status" ${u && u.Email === S.me.email ? 'disabled' : ''}><option ${d.Status === 'Aktif' ? 'selected' : ''}>Aktif</option><option ${d.Status === 'Nonaktif' ? 'selected' : ''}>Nonaktif</option></select></label>
     </form>`,
     foot: '<button class="btn btn-secondary" data-close>Batal</button><button class="btn btn-primary" id="uSave"><i class="bi bi-check2"></i> Simpan pengguna</button>' });
+  const kodeF = () => { const p = $('#uForm [name=Peran]').value; $('#uKodeF').hidden = !(p === 'ADMIN' || p === 'SUPER_ADMIN'); };
+  $('#uForm [name=Peran]').addEventListener('change', kodeF); kodeF();
   $('#uSave').onclick = () => {
     const v = formValues($('#uForm')); if (u) v.ID = u.ID;
+    if (v.KodeCetak && !/^\d{1,2}$/.test(v.KodeCetak)) { toast('warning', 'Kode cetak harus angka 01–99'); return; }
     if (!v.Nama || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.Email)) { toast('warning', 'Lengkapi data', 'Nama dan email valid wajib diisi.'); return; }
     if (u && u.Email === S.me.email) v.Status = 'Aktif';
     const b = $('#uSave'); btnBusy(b, true, 'Menyimpan…');
@@ -4492,7 +4496,7 @@ function docSuratJalan(o, nominal, forPdf) {
   const st = S.settings, acc = st.kopAccent === 'mono' ? '#0F172A' : st.themeColor;
   const head = `${kopHTML(st, nominal)}
     <table style="margin:8px 0 7px"><tr><td><div class="title">SURAT JALAN ${o.Layanan === 'sewa' ? 'SEWA KENDARAAN' : 'PENGIRIMAN KENDARAAN'}</div><div class="muted">${o.Layanan === 'sewa' ? 'Sewa kendaraan dengan pengemudi' : esc(o.JenisLayanan || '')}${nominal ? ' · Lembar dengan nominal' : ''}</div></td>
-    <td style="text-align:right;width:44%"><div class="box" style="display:inline-block;text-align:left;min-width:220px;border-color:${acc}"><table><tr><td><div class="lbl">No. surat jalan</div><div style="font:700 15px Arial;color:${acc}">${esc(o.NoSJ)}</div></td><td style="padding-left:14px"><div class="lbl">Tanggal</div><div class="val">${tgl(o.Tanggal, true)}</div></td></tr></table></div></td></tr></table>`;
+    <td style="text-align:right;width:44%">${noDokBox(o, 'No. surat jalan', acc)}</td></tr></table>`;
   let main = '';
   if (o.Layanan === 'sewa') {
     main = `<table style="margin-bottom:7px"><tr>
@@ -4551,7 +4555,7 @@ function docResiPaket(o, nominal, forPdf) {
   const b = barangOf(o), t = { koli: num(o.TotalKoli), kg: Number(o.TotalBerat) || 0, m3: Number(o.TotalVolume) || 0 };
   const head = `${kopHTML(st, nominal)}
     <table style="margin:8px 0 7px"><tr><td><div class="title">RESI PENGIRIMAN PAKET</div><div class="muted">Jalur ${esc(o.Jalur || 'Darat')} · Ongkos ditanggung ${o.Pembayar === 'penerima' ? 'penerima' : 'pengirim'}${nominal ? ' · Lembar dengan nominal' : ''}</div></td>
-    <td style="text-align:right;width:44%"><div class="box" style="display:inline-block;text-align:left;min-width:220px;border-color:${acc}"><table><tr><td><div class="lbl">No. resi</div><div style="font:700 15px Arial;color:${acc}">${esc(o.NoSJ)}</div></td><td style="padding-left:14px"><div class="lbl">Tanggal</div><div class="val">${tgl(o.Tanggal, true)}</div></td></tr></table></div></td></tr></table>`;
+    <td style="text-align:right;width:44%">${noDokBox(o, 'No. resi', acc)}</td></tr></table>`;
   const parties = `<table style="margin-bottom:7px"><tr>
       <td style="width:50%;padding-right:6px;vertical-align:top"><div class="box"><div class="lbl">▲ Pengirim</div><div class="val">${esc(o.PengirimNama)}</div><div>${esc(o.PengirimAlamat)}</div><div class="muted">Telp. ${esc(o.PengirimHP)}</div></div></td>
       <td style="vertical-align:top"><div class="box"><div class="lbl">▼ Penerima${o.KotaTujuan ? ' · ' + esc(String(o.KotaTujuan).toUpperCase()) : ''}</div><div class="val">${esc(o.PenerimaNama)}</div><div>${esc(o.PenerimaAlamat)}</div><div class="muted">Telp. ${esc(o.PenerimaHP)}</div></div></td></tr></table>`;
@@ -4586,7 +4590,7 @@ function docTandaTerima(o, forPdf) {
   const insp = o.InspeksiID ? byId('inspeksi', o.InspeksiID) : null;
   const body = `<div class="sheet a5">${kopHTML(st, false)}
     <table style="margin:8px 0"><tr><td><div class="title">TANDA TERIMA PENGIRIMAN KENDARAAN</div><div class="muted">Bukti serah terima unit mobil</div></td>
-    <td style="text-align:right"><div class="box" style="display:inline-block;text-align:left;border-color:${acc}"><table><tr><td><div class="lbl">No. surat jalan</div><div style="font:700 15px Arial;color:${acc}">${esc(o.NoSJ)}</div></td><td style="padding-left:14px"><div class="lbl">Tanggal</div><div class="val">${tgl(o.Tanggal, true)}</div></td></tr></table></div></td></tr></table>
+    <td style="text-align:right">${noDokBox(o, 'No. surat jalan', acc)}</td></tr></table>
     <table style="margin-bottom:7px"><tr><td style="width:25%;padding-right:6px"><div class="box"><div class="lbl">Jenis layanan</div><div class="val">${esc(o.JenisLayanan)}</div></div></td>
       <td style="width:30%;padding-right:6px"><div class="box"><div class="lbl">Nama penerima</div><div class="val">${esc(o.PenerimaNama)}</div></div></td>
       <td><div class="box"><div class="lbl">Alamat serah terima</div><div>${esc(o.PenerimaAlamat)} <span class="muted">(${esc(o.PenerimaHP)})</span></div></div></td></tr></table>
@@ -5049,14 +5053,14 @@ function muatFotoPorto() {
   });
 }
 function renderPortoAdmin(body) {
-  const list = (S.d.portofolio || []).slice().sort((a, b) => String(b.Tanggal).localeCompare(String(a.Tanggal)));
+  const list = (S.d.portofolio || []).slice().sort((a, b) => String(b.Tanggal || b.DibuatPada).localeCompare(String(a.Tanggal || a.DibuatPada)));
   body.innerHTML = `<div class="card">
     <div class="card-title-row"><div><h3>Portofolio</h3><p class="muted" style="margin:2px 0 0">Foto pekerjaan yang sudah dikerjakan: pengiriman, proyek trucking, unit mobil/alat berat. Tampil di halaman <b>Portofolio</b> website (terbaru di depan, maks. 60).</p></div><button class="btn btn-primary" id="pfAdd"><i class="bi bi-plus-lg"></i> Tambah portofolio</button></div>
     <p class="muted" style="font-size:12.5px;margin:6px 0 14px"><i class="bi bi-folder2"></i> Foto tersimpan di Google Drive: <b>KAGUMI → Website → Portofolio</b>. Dikompres otomatis (±200–400 KB per foto).</p>
     ${list.length ? `<div class="porto-adm">${list.map(p => `<div class="porto-it ${String(p.Tampil) === 'false' ? 'off' : ''}">
         <div class="porto-img" data-pprev="${esc(p.ID)}"><i class="bi bi-image muted"></i></div>
         <div class="porto-tx"><span class="badge b-slate plain">${esc(p.Kategori || 'Lainnya')}</span>${String(p.Tampil) === 'false' ? ' <span class="badge b-amber plain">Disembunyikan</span>' : ''}
-          <b>${esc(p.Judul)}</b><small>${tgl(p.Tanggal)}${p.Lokasi ? ' · ' + esc(p.Lokasi) : ''}</small></div>
+          <b>${esc(p.Judul)}</b><small>${[p.Tanggal ? tgl(p.Tanggal) : '', esc(p.Lokasi || '')].filter(Boolean).join(' · ') || '&nbsp;'}</small></div>
         <div class="porto-act"><button class="icon-btn" data-pfe="${esc(p.ID)}" title="Ubah"><i class="bi bi-pencil"></i></button><button class="icon-btn" data-pfd="${esc(p.ID)}" title="Hapus"><i class="bi bi-trash"></i></button></div></div>`).join('')}</div>`
       : emptyHTML('bi-images', 'Belum ada portofolio', 'Halaman Portofolio di website menampilkan pesan "segera hadir" sampai ada foto yang ditampilkan.')}</div>`;
   $('#pfAdd').onclick = () => openPortoModal(null);
@@ -5072,7 +5076,7 @@ function renderPortoAdmin(body) {
   muatFotoPorto();
 }
 function openPortoModal(p) {
-  const d = Object.assign({ Tanggal: today(), Tampil: 'true', Kategori: PORTO_KAT[0] }, p || {});
+  const d = Object.assign({ Tanggal: '', Tampil: 'true', Kategori: PORTO_KAT[0] }, p || {});
   let foto = null;
   openModal({ title: p ? 'Ubah portofolio' : 'Tambah portofolio', sub: 'Tampil di halaman Portofolio website', icon: 'bi-images', size: 'lg',
     body: `<form id="pfForm" novalidate>
@@ -5081,7 +5085,7 @@ function openPortoModal(p) {
           <div class="chips-row" style="margin-top:6px"><button type="button" class="btn btn-secondary btn-sm" id="pfPilih"><i class="bi bi-upload"></i> ${p ? 'Ganti foto' : 'Pilih foto'}</button></div></div></div></div>
       <label class="field"><span class="label req">Judul</span><input class="input" name="Judul" maxlength="120" value="${esc(d.Judul || '')}" placeholder="mis. Kirim 12 unit Avanza Jakarta – Makassar"></label>
       <div class="row-2"><label class="field"><span class="label">Kategori</span><select class="input" name="Kategori">${PORTO_KAT.map(k => `<option ${d.Kategori === k ? 'selected' : ''}>${k}</option>`).join('')}</select></label>
-        <label class="field"><span class="label">Tanggal pekerjaan</span><input class="input" type="date" name="Tanggal" value="${esc(String(d.Tanggal).slice(0, 10))}"></label></div>
+        <label class="field"><span class="label">Tanggal pekerjaan (opsional)</span><input class="input" type="date" name="Tanggal" value="${esc(String(d.Tanggal || '').slice(0, 10))}"></label></div>
       <div class="row-2"><label class="field"><span class="label">Rute / lokasi</span><input class="input" name="Lokasi" maxlength="120" value="${esc(d.Lokasi || '')}" placeholder="mis. Jakarta → Makassar"></label>
         <label class="field"><span class="label">Tampilkan di website</span><select class="input" name="Tampil"><option value="true" ${String(d.Tampil) !== 'false' ? 'selected' : ''}>Ya, tampilkan</option><option value="false" ${String(d.Tampil) === 'false' ? 'selected' : ''}>Sembunyikan dulu</option></select></label></div>
       <label class="field"><span class="label">Keterangan singkat</span><textarea class="input" name="Deskripsi" rows="3" maxlength="600" placeholder="Opsional. Jangan cantumkan nama pelanggan tanpa izin.">${esc(d.Deskripsi || '')}</textarea></label>
@@ -5723,7 +5727,7 @@ function openKeluhanForm(k) {
   openModal({ title: edit ? 'Ubah keluhan ' + k.NoKeluhan : 'Catat keluhan', sub: edit ? (k.NamaPelanggan || k.NamaPelapor) : 'Nomor keluhan dibuat otomatis saat disimpan', icon: 'bi-chat-square-text', size: 'lg',
     body: `<form id="klhForm" novalidate><div class="grid-2">
       ${edit ? '' : f('Sumber', 'Sumber keluhan', `<select class="input" name="Sumber">${KLH_SUMBER.filter(s => s !== 'Website').map(s => `<option ${s === d.Sumber ? 'selected' : ''}>${s}</option>`).join('')}</select>`)}
-      ${edit ? '' : f('NoResi', 'No. resi / surat jalan', `<div class="row-inline"><input class="input mono grow" name="NoResi" id="klhResi" autocapitalize="characters" placeholder="Opsional, mis. PKT-261112-1" value="${esc(d.NoResi || '')}"><button type="button" class="btn btn-secondary" id="klhCek"><i class="bi bi-search"></i> Cek</button></div>`)}
+      ${edit ? '' : f('NoResi', 'No. resi / surat jalan', `<div class="row-inline"><input class="input mono grow" name="NoResi" id="klhResi" autocapitalize="characters" placeholder="Opsional, mis. KGM-P00012011126" value="${esc(d.NoResi || '')}"><button type="button" class="btn btn-secondary" id="klhCek"><i class="bi bi-search"></i> Cek</button></div>`)}
       <div class="full" id="klhOrd"></div>
       ${f('NamaPelapor', 'Nama pelapor', `<input class="input" name="NamaPelapor" maxlength="80" value="${esc(d.NamaPelapor || '')}">`, { req: true })}
       ${f('HPPelapor', 'No. HP / WA pelapor', `<input class="input mono" name="HPPelapor" inputmode="tel" maxlength="25" value="${esc(d.HPPelapor || '')}">`, { req: true })}
@@ -6767,8 +6771,8 @@ function nfTemplate() {
         <div class="chips-row"><button type="button" class="btn btn-ghost btn-sm" data-ev-reset><i class="bi bi-arrow-counterclockwise"></i> Kembalikan teks bawaan</button><span class="muted nf-prev-l">Pratinjau di bawah memakai contoh data.</span></div>
         <div class="nf-prev" data-prev></div></div></div>`; }).join('')}</div>
     <div class="chips-row" style="justify-content:flex-end;margin-top:14px"><button class="btn btn-primary" id="nfTplSave"><i class="bi bi-check2"></i> Simpan kejadian &amp; template</button></div></div>`;
-  const contoh = { nama: 'PT Mega Surya', perusahaan: S.settings.companyName || 'KAGUMI Transport', telp: S.settings.companyPhone || '', layanan: 'Paket', jenisDok: 'Resi', noDok: 'PKT-261113-1',
-    link: (p.webLacakUrl || '') + '?resi=PKT-261113-1', pengirim: 'PT Mega Surya', noInvoice: 'INV-PKT-261113-1', jumlah: 'Rp 1.250.000', jatuhTempo: '27 Nov 2026', rekening: 'Pembayaran ke:\n• BCA 000-000-0001 a.n. ' + (S.settings.companyName || '') };
+  const contoh = { nama: 'PT Mega Surya', perusahaan: S.settings.companyName || 'KAGUMI Transport', telp: S.settings.companyPhone || '', layanan: 'Paket', jenisDok: 'Resi', noDok: 'KGM-P00012011126',
+    link: (p.webLacakUrl || '') + '?resi=KGM-P00012011126', pengirim: 'PT Mega Surya', noInvoice: 'INV-KGM-P00012011126', jumlah: 'Rp 1.250.000', jatuhTempo: '27 Nov 2026', rekening: 'Pembayaran ke:\n• BCA 000-000-0001 a.n. ' + (S.settings.companyName || '') };
   const prev = box => { const t = box.querySelector('[data-k=pesan]').value.replace(/\{(\w+)\}/g, (m, k) => contoh[k] !== undefined ? contoh[k] : m); box.querySelector('[data-prev]').innerHTML = esc(t).replace(/\*([^*\n]+)\*/g, '<b>$1</b>').replace(/\n/g, '<br>'); };
   $$('.nf-ev').forEach(box => {
     box.querySelector('[data-ev-open]').onclick = () => { const b = box.querySelector('.nf-ev-b'); b.hidden = !b.hidden; if (!b.hidden) prev(box); };
@@ -7142,6 +7146,41 @@ function drawKuotaSamping() {
 function daftarArsipHTML() {
   const a = (S.kq && S.kq.arsip) || [];
   return a.length ? a.map(x => `<div class="li"><div><b>s.d ${esc(tgl(x.sampai))}</b><small class="muted"> · ${esc(tglJam(x.tanggal))} · ${esc(x.oleh)}</small></div><a class="btn btn-secondary btn-sm" href="${esc(x.url)}" target="_blank" rel="noopener">Buka</a></div>`).join('') : '';
+}
+
+// ── Barcode Code128 (set B) untuk nomor surat jalan / resi — tanpa pustaka luar ──
+const KgmBar = (function () {
+  const P = ['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213','221312','231212','112232','122132','122231','113222','123122','123221','223211','221132','221231','213212','223112','312131','311222','321122','321221','312212','322112','322211','212123','212321','232121','111323','131123','131321','112313','132113','132311','211313','231113','231311','112133','112331','132131','113123','113321','133121','313121','211331','231131','213113','213311','213131','311123','311321','331121','312113','312311','332111','314111','221411','431111','111224','111422','121124','121421','141122','141221','112214','112412','122114','122411','142112','142211','241211','221114','413111','241112','134111','111242','121142','121241','114212','124112','124211','411212','421112','421211','212141','214121','412121','111143','111341','131141','114113','114311','411113','411311','113141','114131','311141','411131','211412','211214','211232','2331112'];
+  function modul(teks) {
+    const kode = [104]; // Start B
+    for (const ch of String(teks)) { const c = ch.charCodeAt(0); if (c < 32 || c > 126) throw new Error('Karakter tidak didukung'); kode.push(c - 32); }
+    let sum = 104; for (let i = 1; i < kode.length; i++) sum += kode[i] * i;
+    kode.push(sum % 103, 106);
+    return kode.map(k => P[k]).join('');
+  }
+  /** PNG data URL (canvas) agar ikut tercetak & masuk PDF. */
+  function dataUrl(teks, tinggi, skala) {
+    const pola = modul(teks), sk = skala || 2, q = 10; // quiet zone 10 modul
+    const lebar = (pola.split('').reduce((a, b) => a + Number(b), 0) + q * 2) * sk;
+    const c = document.createElement('canvas'); c.width = lebar; c.height = tinggi || 60;
+    const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.fillStyle = '#000';
+    let x = q * sk;
+    pola.split('').forEach((w, i) => { const n = Number(w) * sk; if (i % 2 === 0) g.fillRect(x, 0, n, c.height); x += n; });
+    return c.toDataURL('image/png');
+  }
+  return { dataUrl, modul };
+})();
+/** Kotak nomor dokumen + barcode, dipakai di Surat Jalan, Resi Paket, dan Tanda Terima. */
+function noDokBox(o, label, acc) {
+  let bar = ''; try { bar = KgmBar.dataUrl(o.NoSJ, 70, 2); } catch (e) { bar = ''; }
+  return `<div class="box" style="display:inline-block;text-align:left;min-width:240px;border-color:${acc}"><table><tr><td><div class="lbl">${esc(label)}</div><div style="font:700 14px Arial;color:${acc};letter-spacing:.3px">${esc(o.NoSJ)}</div></td><td style="padding-left:14px"><div class="lbl">Tanggal</div><div class="val">${tgl(o.Tanggal, true)}</div></td></tr></table>
+    ${bar ? `<img src="${bar}" alt="Barcode ${esc(o.NoSJ)}" style="display:block;width:100%;max-width:250px;height:34px;margin-top:4px;image-rendering:pixelated">` : ''}</div>`;
+}
+/** Rincian arti nomor format baru (untuk tooltip/penjelasan). */
+function artiNoDok(no) {
+  const m = String(no || '').match(/^KGM-([PSK])(\d{4})(\d+)(\d{2})(\d{2})(\d{2})$/);
+  if (!m) return '';
+  return { P: 'Paket', S: 'Sewa', K: 'Kirim mobil' }[m[1]] + ' · urut ' + m[2] + ' · ' + m[3] + (m[1] === 'P' ? ' koli' : ' SJ') + ' · penerbit ' + m[4] + ' · ' + m[5] + '/20' + m[6];
 }
 // Penanda: js/app.js termuat sampai akhir
 window.__KGM_JS_END = true;
