@@ -37,7 +37,7 @@ const CDN = {
 // ── State aplikasi (memori) ────────────────────────────────
 const S = {
   token: null, me: null, settings: {}, booted: false, lastSync: 0,
-  d: { pelanggan: [], penerima: [], ekspedisi: [], kendaraan: [], pengemudi: [], rekening: [], orders: [], invoices: [], inspeksi: [], finance: [], users: [], pertanyaan: [], berita: [], crmCompany: [], crmLeads: [], crmActivity: [], crmUsers: [], keluhan: [], keluhanLog: [], orderRingkas: [], csUsers: [], surat: [], harga: [], kontakSurat: [], targetSales: [] },
+  d: { pelanggan: [], penerima: [], ekspedisi: [], kendaraan: [], pengemudi: [], rekening: [], orders: [], invoices: [], inspeksi: [], finance: [], users: [], pertanyaan: [], berita: [], portofolio: [], crmCompany: [], crmLeads: [], crmActivity: [], crmUsers: [], keluhan: [], keluhanLog: [], orderRingkas: [], csUsers: [], surat: [], harga: [], kontakSurat: [], targetSales: [] },
   web: null,
   page: 'ringkasan',
   ui: {
@@ -171,7 +171,7 @@ function setSync(state) {
   dot.className = 'sync-dot' + (state === 'busy' ? ' busy' : state === 'off' ? ' off' : '');
   dot.title = state === 'busy' ? 'Menyinkronkan…' : state === 'off' ? 'Koneksi bermasalah' : 'Data tersinkron';
 }
-const API_TIMEOUT = { markPrinted: 120000, exportPdf: 120000, runBackupNow: 300000, uploadFotoInspeksi: 120000, saveCrmActivity: 120000, getBuktiCrm: 60000, sendInvoiceEmail: 90000, testEmail: 90000 };
+const API_TIMEOUT = { markPrinted: 120000, exportPdf: 120000, runBackupNow: 300000, uploadFotoInspeksi: 120000, saveCrmActivity: 120000, getBuktiCrm: 60000, getKuota: 150000, savePortofolio: 120000, sendInvoiceEmail: 90000, testEmail: 90000 };
 // Semua panggilan memakai POST text/plain → tidak memicu preflight CORS di Apps Script.
 function apiUrl() { return String((window.KAGUMI_CONFIG && window.KAGUMI_CONFIG.GAS_URL) || '').trim(); }
 function apiUrlValid() { return /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(apiUrl()) || /^(https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?)?\/[\w\/-]*exec$/.test(apiUrl()); }
@@ -448,7 +448,7 @@ function hydrate(d, fromCache) {
   S.me = d.me || S.me;
   S.settings = Object.assign({}, d.settings || {});
   ['pelanggan', 'penerima', 'ekspedisi', 'kendaraan', 'pengemudi', 'rekening', 'orders', 'invoices', 'inspeksi', 'pertanyaan', 'crmCompany', 'crmLeads', 'crmActivity', 'crmUsers', 'keluhan', 'keluhanLog', 'orderRingkas', 'csUsers', 'surat', 'harga', 'kontakSurat', 'targetSales'].forEach(k => { if (d[k]) S.d[k] = d[k]; else if (!fromCache) S.d[k] = []; });
-  if (!fromCache) { S.d.finance = d.finance || []; S.d.users = d.users || []; S.d.berita = d.berita || []; S.web = d.webKonten || null; S.lastSync = Date.now(); }
+  if (!fromCache) { S.d.finance = d.finance || []; S.d.users = d.users || []; S.d.berita = d.berita || []; S.d.portofolio = d.portofolio || []; S.web = d.webKonten || null; S.lastSync = Date.now(); }
   applyBranding(S.settings);
 }
 function saveCache() {
@@ -4777,7 +4777,7 @@ function ptySelesai(r) {
 
 // ── Kelola Website (Super Admin) ──
 const WEB_TABS = [['beranda', 'bi-house', 'Beranda'], ['tentang', 'bi-building', 'Tentang kami'], ['layanan', 'bi-truck', 'Produk & layanan'],
-  ['kontak', 'bi-telephone', 'Hubungi kami'], ['berita', 'bi-megaphone', 'Informasi terbaru']];
+  ['kontak', 'bi-telephone', 'Hubungi kami'], ['berita', 'bi-megaphone', 'Informasi terbaru'], ['portofolio', 'bi-images', 'Portofolio']];
 function renderWebsite() {
   const el = $('#page-website'), ui = S.ui.web;
   if (!S.web) {
@@ -4794,7 +4794,7 @@ function renderWebsite() {
   </div>
   <div class="tabs">${WEB_TABS.map(([k, i, l]) => `<button class="tab ${t === k ? 'active' : ''}" data-wt="${k}"><i class="bi ${i}"></i> ${l}</button>`).join('')}</div>
   <div id="webBody"></div>
-  ${t !== 'berita' ? `<div class="web-save card"><span class="muted" id="webDirty">${ui.dirty ? 'Ada perubahan yang belum disimpan.' : 'Semua perubahan sudah tersimpan.'}</span>
+  ${t !== 'berita' && t !== 'portofolio' ? `<div class="web-save card"><span class="muted" id="webDirty">${ui.dirty ? 'Ada perubahan yang belum disimpan.' : 'Semua perubahan sudah tersimpan.'}</span>
     <div class="chips-row"><button class="btn btn-ghost" id="webReset" ${ui.dirty ? '' : 'disabled'}>Batalkan perubahan</button><button class="btn btn-primary" id="webSave"><i class="bi bi-check2"></i> Simpan isi website</button></div></div>` : ''}`;
   el.querySelectorAll('[data-wt]').forEach(b => b.onclick = () => { ui.tab = b.dataset.wt; renderWebsite(); });
   const body = $('#webBody');
@@ -4854,7 +4854,8 @@ function renderWebsite() {
       <div class="alert alert-info"><i class="bi bi-envelope"></i><div>Formulir pertanyaan disimpan di menu <b>Pertanyaan Masuk</b> dan dikirim ke <b>${esc(st.companyEmail || 'email Super Admin')}</b>.</div></div>
     </div></div>`;
     const kb = $('#webToKop'); if (kb) kb.addEventListener('click', () => { S.ui.set.tab = 'kop'; });
-  } else renderBeritaAdmin(body);
+  } else if (t === 'portofolio') renderPortoAdmin(body);
+  else renderBeritaAdmin(body);
 
   const dirty = () => { ui.dirty = true; const m = $('#webDirty'); if (m) m.textContent = 'Ada perubahan yang belum disimpan.'; const r = $('#webReset'); if (r) r.disabled = false; };
   body.addEventListener('input', e => {
@@ -5030,6 +5031,86 @@ function openBeritaModal(b) {
   };
 }
 
+
+// ── Portofolio website (galeri pekerjaan) ──
+const PORTO_KAT = ['Pengiriman Barang', 'Transportasi & Trucking', 'Pengiriman Mobil & Alat Berat', 'Lainnya'];
+S.portoFoto = S.portoFoto || {};
+function muatFotoPorto() {
+  document.querySelectorAll('[data-pprev]').forEach(el => {
+    const p = byId('portofolio', el.dataset.pprev); if (!p || !p.FotoID) return;
+    const key = p.FotoID;
+    const tampil = src => { el.innerHTML = `<img alt="" loading="lazy" src="${esc(src)}">`; };
+    if (S.portoFoto[key]) return tampil(S.portoFoto[key]);
+    const lewatApi = () => api('getPortoFoto', p.ID).then(r => { S.portoFoto[key] = r.data; tampil(r.data); }).catch(() => { el.innerHTML = '<i class="bi bi-image muted"></i>'; });
+    if (String(p.FotoPublik) !== 'true' || String(p.Tampil) === 'false') return lewatApi();
+    const url = 'https://lh3.googleusercontent.com/d/' + p.FotoID + '=w600', img = new Image();
+    img.onload = () => { S.portoFoto[key] = url; tampil(url); };
+    img.onerror = lewatApi; img.src = url;
+  });
+}
+function renderPortoAdmin(body) {
+  const list = (S.d.portofolio || []).slice().sort((a, b) => String(b.Tanggal).localeCompare(String(a.Tanggal)));
+  body.innerHTML = `<div class="card">
+    <div class="card-title-row"><div><h3>Portofolio</h3><p class="muted" style="margin:2px 0 0">Foto pekerjaan yang sudah dikerjakan: pengiriman, proyek trucking, unit mobil/alat berat. Tampil di halaman <b>Portofolio</b> website (terbaru di depan, maks. 60).</p></div><button class="btn btn-primary" id="pfAdd"><i class="bi bi-plus-lg"></i> Tambah portofolio</button></div>
+    <p class="muted" style="font-size:12.5px;margin:6px 0 14px"><i class="bi bi-folder2"></i> Foto tersimpan di Google Drive: <b>KAGUMI → Website → Portofolio</b>. Dikompres otomatis (±200–400 KB per foto).</p>
+    ${list.length ? `<div class="porto-adm">${list.map(p => `<div class="porto-it ${String(p.Tampil) === 'false' ? 'off' : ''}">
+        <div class="porto-img" data-pprev="${esc(p.ID)}"><i class="bi bi-image muted"></i></div>
+        <div class="porto-tx"><span class="badge b-slate plain">${esc(p.Kategori || 'Lainnya')}</span>${String(p.Tampil) === 'false' ? ' <span class="badge b-amber plain">Disembunyikan</span>' : ''}
+          <b>${esc(p.Judul)}</b><small>${tgl(p.Tanggal)}${p.Lokasi ? ' · ' + esc(p.Lokasi) : ''}</small></div>
+        <div class="porto-act"><button class="icon-btn" data-pfe="${esc(p.ID)}" title="Ubah"><i class="bi bi-pencil"></i></button><button class="icon-btn" data-pfd="${esc(p.ID)}" title="Hapus"><i class="bi bi-trash"></i></button></div></div>`).join('')}</div>`
+      : emptyHTML('bi-images', 'Belum ada portofolio', 'Halaman Portofolio di website menampilkan pesan "segera hadir" sampai ada foto yang ditampilkan.')}</div>`;
+  $('#pfAdd').onclick = () => openPortoModal(null);
+  body.onclick = e => {
+    const b = e.target.closest('[data-pfe],[data-pfd]'); if (!b) return;
+    const rec = byId('portofolio', b.dataset.pfe || b.dataset.pfd);
+    if (b.dataset.pfe) return openPortoModal(rec);
+    confirmDialog({ title: 'Hapus portofolio?', text: rec.Judul + ' — fotonya ikut dihapus dari Drive.', variant: 'danger', icon: 'bi-trash', ok: 'Hapus' }).then(v => {
+      if (v !== true) return;
+      api('deletePortofolio', S.token, rec.ID).then(() => { removeFrom('portofolio', rec.ID); ok('Portofolio dihapus'); renderWebsite(); }).catch(fail);
+    });
+  };
+  muatFotoPorto();
+}
+function openPortoModal(p) {
+  const d = Object.assign({ Tanggal: today(), Tampil: 'true', Kategori: PORTO_KAT[0] }, p || {});
+  let foto = null;
+  openModal({ title: p ? 'Ubah portofolio' : 'Tambah portofolio', sub: 'Tampil di halaman Portofolio website', icon: 'bi-images', size: 'lg',
+    body: `<form id="pfForm" novalidate>
+      <div class="field"><span class="label ${p ? '' : 'req'}">Foto</span>
+        <div class="bukti-pick" id="pfPick">${p ? `<span class="porto-img sm" data-pprev="${esc(p.ID)}"><i class="bi bi-image muted"></i></span>` : '<span class="bp-ph"><i class="bi bi-image"></i></span>'}<div class="grow"><b id="pfTxt">${p ? 'Foto saat ini' : 'Belum ada foto'}</b><small>Foto landscape (melebar) paling bagus. Dikompres otomatis ke 1600 px.</small>
+          <div class="chips-row" style="margin-top:6px"><button type="button" class="btn btn-secondary btn-sm" id="pfPilih"><i class="bi bi-upload"></i> ${p ? 'Ganti foto' : 'Pilih foto'}</button></div></div></div></div>
+      <label class="field"><span class="label req">Judul</span><input class="input" name="Judul" maxlength="120" value="${esc(d.Judul || '')}" placeholder="mis. Kirim 12 unit Avanza Jakarta – Makassar"></label>
+      <div class="row-2"><label class="field"><span class="label">Kategori</span><select class="input" name="Kategori">${PORTO_KAT.map(k => `<option ${d.Kategori === k ? 'selected' : ''}>${k}</option>`).join('')}</select></label>
+        <label class="field"><span class="label">Tanggal pekerjaan</span><input class="input" type="date" name="Tanggal" value="${esc(String(d.Tanggal).slice(0, 10))}"></label></div>
+      <div class="row-2"><label class="field"><span class="label">Rute / lokasi</span><input class="input" name="Lokasi" maxlength="120" value="${esc(d.Lokasi || '')}" placeholder="mis. Jakarta → Makassar"></label>
+        <label class="field"><span class="label">Tampilkan di website</span><select class="input" name="Tampil"><option value="true" ${String(d.Tampil) !== 'false' ? 'selected' : ''}>Ya, tampilkan</option><option value="false" ${String(d.Tampil) === 'false' ? 'selected' : ''}>Sembunyikan dulu</option></select></label></div>
+      <label class="field"><span class="label">Keterangan singkat</span><textarea class="input" name="Deskripsi" rows="3" maxlength="600" placeholder="Opsional. Jangan cantumkan nama pelanggan tanpa izin.">${esc(d.Deskripsi || '')}</textarea></label>
+      <div class="alert alert-warning"><i class="bi bi-shield-exclamation"></i><div>Pastikan foto tidak menampilkan <b>plat nomor, wajah, atau dokumen</b> pelanggan tanpa izin. Foto portofolio bisa dilihat siapa saja.</div></div>
+    </form>`,
+    foot: '<button class="btn btn-secondary" data-close>Batal</button><button class="btn btn-primary" id="pfSave"><i class="bi bi-check2"></i> Simpan portofolio</button>' });
+  muatFotoPorto();
+  $('#pfPilih').onclick = () => {
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/jpeg,image/png,image/webp';
+    inp.onchange = () => {
+      const file = inp.files && inp.files[0]; if (!file) return;
+      compressImage(file, 1600, 0.8).then(data => {
+        foto = data;
+        $('#pfPick').querySelector('.bp-ph, .porto-img, img').outerHTML = `<img src="${data}" alt="">`;
+        $('#pfTxt').textContent = 'Foto baru siap · ' + Math.round((data.length - data.indexOf(',') - 1) * 0.75 / 1024) + ' KB';
+        $('#pfPick').classList.remove('err');
+      }).catch(err => fail(err, 'Foto tidak bisa dipakai'));
+    };
+    inp.click();
+  };
+  $('#pfSave').onclick = () => {
+    const v = formValues($('#pfForm')); if (p) v.ID = p.ID;
+    if (!v.Judul.trim()) return toast('warning', 'Isi judul portofolio');
+    if (!p && !foto) { $('#pfPick').classList.add('err'); return toast('warning', 'Pilih foto portofolio'); }
+    if (foto) v.Foto = foto;
+    const btn = $('#pfSave'); btnBusy(btn, true, foto ? 'Mengunggah…' : 'Menyimpan…');
+    api('savePortofolio', S.token, v).then(r => { if (foto) S.portoFoto[r.data.FotoID] = foto; upsert('portofolio', r.data); closeModal(); ok(r.message); renderWebsite(); }).catch(fail).finally(() => btnBusy(btn, false));
+  };
+}
 // ============================================================
 // CRM: Dashboard CRM · Database Perusahaan · Sales Leads · Riwayat Aktivitas
 // ============================================================
@@ -6906,7 +6987,7 @@ function renderKuota() {
   const el = $('#page-kuota');
   el.innerHTML = `<div class="page-head"><div class="ph-icon"><i class="bi bi-speedometer2"></i></div><div class="grow"><h1>Pemakaian Kuota &amp; Arsip</h1><p class="muted">Batas harian Google Apps Script, kuota WhatsApp, ukuran database, dan arsip data lama.</p></div>
     <button class="btn btn-secondary" id="kqReload"><i class="bi bi-arrow-clockwise"></i> Perbarui</button></div>
-    <div class="grid-2 kq-page">${kuotaCardHTML()}<div class="stack"><div class="card" id="kqRiwCard"><h3 class="kq-h3"><i class="bi bi-bar-chart"></i> Riwayat 7 hari</h3><p class="muted">Memuat…</p></div>
+    <div class="grid-2 kq-page">${kuotaCardHTML()}<div class="stack"><div class="card" id="kqDriveCard"><h3 class="kq-h3"><i class="bi bi-google"></i> Penyimpanan Google Drive</h3><p class="muted">Memuat…</p></div><div class="card" id="kqRiwCard"><h3 class="kq-h3"><i class="bi bi-bar-chart"></i> Riwayat 7 hari</h3><p class="muted">Memuat…</p></div>
       <div class="card" id="kqArsipCard"><div class="card-title-row"><h3 class="kq-h3"><i class="bi bi-archive"></i> Arsip data lama</h3><button class="btn btn-secondary btn-sm" id="kqArsip2"><i class="bi bi-archive"></i> Arsipkan…</button></div>
         <p class="muted" style="margin:4px 0 10px">Manual oleh Super Admin. File arsip tersimpan di Google Drive folder <b>KAGUMI → Arsip</b>.</p><div id="kqArsipList"></div></div></div></div>`;
   $('#kqReload').onclick = () => renderKuota();
@@ -6927,11 +7008,13 @@ function drawKuota() {
   const wa = k.wa, waTotal = wa && wa.sisa !== null && wa.sisa !== undefined ? wa.terkirimBulanIni + wa.sisa : 0;
   const pw = waTotal ? wa.terkirimBulanIni / waTotal * 100 : 0;
   const ps = k.data.sel / k.data.batasSel * 100;
+  const dv = k.drive, pd = dv && dv.batas ? dv.terpakai / dv.batas * 100 : 0;
   const sarana = [];
+  if (pd >= 75) sarana.push('Google Drive hampir penuh: kosongkan Sampah Drive/Gmail, hapus cadangan lama, atau tambah penyimpanan (Google One / Workspace).');
   if (pe >= 75) sarana.push('Kuota email menipis: matikan email untuk kejadian yang kurang penting di Notifikasi WA.');
   if (pt >= 75) sarana.push('Waktu pemicu tinggi: kurangi blast besar atau cek antrean yang gagal berulang.');
   if (k.data.order >= 8000 || ps >= 60) sarana.push('Data sudah besar: pertimbangkan arsip data lama.');
-  const perlu = [pe, pt, pf, pp, pw, ps].filter(x => x >= 75).length;
+  const perlu = [pe, pt, pf, pp, pw, ps, pd].filter(x => x >= 75).length;
   c.innerHTML = `<div class="kq-h"><h3><i class="bi bi-speedometer2"></i> Pemakaian kuota hari ini</h3>${perlu ? `<span class="badge b-amber">${perlu} perlu perhatian</span>` : '<span class="badge b-green">Aman</span>'}</div>
     <p class="kq-sub">Akun Google: <button class="link-btn" id="kqAkun">${esc(k.akun)}${k.akunManual ? '' : ' (otomatis)'}</button> · per 24 jam · ${esc(k.diperbarui.slice(11, 16))} WIB</p>
     ${kqBaris('bi-envelope', 'Email terkirim', k.email.terpakai === null ? '—' : `${fmtN(k.email.terpakai)} / ${fmtN(k.email.batas)}`, pe, k.email.sisa === null ? 'Tidak terbaca' : `Sisa ${fmtN(k.email.sisa)} email (angka resmi Google)`)}
@@ -6940,6 +7023,7 @@ function drawKuota() {
       : kqBaris('bi-whatsapp', 'WhatsApp (Fonnte)', '—', 0, 'Token Fonnte belum diisi', 'g')}
     ${kqBaris('bi-globe2', 'Panggilan ke luar (UrlFetch)', `${fmtN(k.fetch.jumlah)} / ${fmtN(k.fetch.batas)}`, pf, 'Perkiraan · kirim WA & cek nomor')}
     ${kqBaris('bi-people', 'Permintaan aplikasi & website', fmtN(k.permintaan.total), pp, `Puncak ${fmtN(k.permintaan.puncak)} bersamaan (batas ±${k.permintaan.batasBersamaan}) · ${fmtN(k.permintaan.web)} dari website`)}
+    ${dv ? kqBaris('bi-google', 'Penyimpanan Google Drive', dv.batas ? `${fmtGB(dv.terpakai)} / ${fmtGB(dv.batas)}` : fmtGB(dv.terpakai), pd, dv.bulanSisa !== null && dv.bulanSisa !== undefined ? `Bertambah ±${fmtGB(dv.perBulan)}/bulan · cukup ±${kqSisaWaktu(dv.bulanSisa)}` : 'Perkiraan pertumbuhan muncul setelah 3 hari data') : ''}
     ${kqBaris('bi-database', 'Ukuran database', `${fmtN(k.data.order)} order`, ps, `${(k.data.sel / 1e6).toFixed(2).replace('.', ',')} juta dari 10 juta sel Google Sheets · log ${fmtN(k.data.baris.Log_Aktivitas)} baris`)}
     ${sarana.length ? `<div class="alert alert-warning kq-saran"><i class="bi bi-lightbulb"></i><div>${sarana.map(esc).join('<br>')}</div></div>` : ''}
     <div class="kq-ft"><span class="muted" style="font-size:12px">Hijau &lt;75% · kuning ≥75% · merah ≥90%</span></div>`;
@@ -7029,8 +7113,29 @@ function openArsipWizard() {
   };
   draw();
 }
+const fmtGB = b => { b = Number(b || 0); return b >= 1073741824 ? (b / 1073741824).toFixed(b >= 10737418240 ? 0 : 1).replace('.', ',') + ' GB' : b >= 1048576 ? Math.round(b / 1048576) + ' MB' : Math.round(b / 1024) + ' KB'; };
+const kqSisaWaktu = bln => bln >= 24 ? Math.floor(bln / 12) + ' tahun lagi' : bln >= 1 ? Math.round(bln) + ' bulan lagi' : 'kurang dari 1 bulan';
+function kqDriveHTML() {
+  const d = S.kq.drive;
+  if (!d) return '<h3 class="kq-h3"><i class="bi bi-google"></i> Penyimpanan Google Drive</h3><p class="muted">Tidak terbaca. Jalankan ulang otorisasi Apps Script.</p>';
+  const p = d.batas ? d.terpakai / d.batas * 100 : 0, kg = d.kagumi, maks = kg && kg.folder.length ? Math.max(1, ...kg.folder.map(f => f.byte)) : 1;
+  const total = kg ? kg.folder.reduce((a, f) => a + f.byte, 0) : 0;
+  return `<div class="card-title-row"><h3 class="kq-h3"><i class="bi bi-google"></i> Penyimpanan Google Drive</h3><span class="badge ${p >= 90 ? 'b-red' : p >= 75 ? 'b-amber' : 'b-green'}">${p >= 90 ? 'Hampir penuh' : p >= 75 ? 'Perhatikan' : 'Aman'}</span></div>
+    ${kqBaris('bi-hdd', 'Terpakai akun Google', d.batas ? `${fmtGB(d.terpakai)} / ${fmtGB(d.batas)}` : fmtGB(d.terpakai), p, d.batas ? `Sisa ${fmtGB(d.batas - d.terpakai)} · dipakai bersama Gmail &amp; Google Foto akun pemilik` : 'Tanpa batas tetap (penyimpanan bersama Workspace)')}
+    <p class="kq-sub" style="margin:8px 0">${d.perBulan !== null && d.perBulan !== undefined ? `Bertambah ±<b>${fmtGB(d.perBulan)}</b> per bulan (dihitung sejak ${esc(tglPendek(d.sejak))})${d.bulanSisa !== null && d.bulanSisa !== undefined ? ` → perkiraan cukup <b>${kqSisaWaktu(d.bulanSisa)}</b>` : ''}.` : 'Perkiraan pertumbuhan per bulan muncul setelah data terkumpul minimal 3 hari.'}</p>
+    <h4 class="kq-h4" style="margin:12px 0 6px;font-size:13px">Isi folder KAGUMI${kg ? ` · ${fmtGB(total)}` : ''}</h4>
+    ${kg ? `<div class="kq-riw kq-folder">${kg.folder.filter(f => f.file).map(f => `<div class="kq-riw-r"><span>${esc(f.nama)}</span><div class="kq-bar"><i class="g" style="width:${Math.round(f.byte / maks * 100)}%"></i></div><b class="mono">${fmtGB(f.byte)}</b><small>${fmtN(f.file)}${f.terpotong ? '+' : ''} file</small></div>`).join('')}</div>
+      ${kg.folder.some(f => !f.file) ? `<small class="muted" style="display:block;margin:6px 0 2px">Masih kosong: ${kg.folder.filter(f => !f.file).map(f => esc(f.nama)).join(', ')}</small>` : ''}
+      <small class="muted">Dihitung ${esc(tglPendek(kg.waktu.slice(0, 10)))} ${esc(kg.waktu.slice(11, 16))} · otomatis tiap pagi.</small>` : '<p class="muted" style="margin:0">Belum dihitung. Otomatis tiap pagi, atau tekan tombol di bawah.</p>'}
+    <div style="margin-top:10px"><button class="btn btn-secondary btn-sm" id="kqDriveHitung"><i class="bi bi-calculator"></i> Hitung isi folder sekarang</button></div>`;
+}
 function drawKuotaSamping() {
-  const r = $('#kqRiwCard'), a = $('#kqArsipList');
+  const r = $('#kqRiwCard'), a = $('#kqArsipList'), dv = $('#kqDriveCard');
+  if (dv) {
+    dv.innerHTML = kqDriveHTML();
+    const b = $('#kqDriveHitung');
+    if (b) b.onclick = () => { btnBusy(b, true, 'Menghitung…'); api('getKuota', S.token, true).then(x => { S.kq = x.data; drawKuota(); drawKuotaSamping(); ok('Ukuran folder diperbarui'); }).catch(e => { fail(e); btnBusy(b, false); }); };
+  }
   if (r) r.innerHTML = `<h3 class="kq-h3"><i class="bi bi-bar-chart"></i> Riwayat 7 hari</h3>${kqRiwayatHTML()}`;
   if (a) a.innerHTML = daftarArsipHTML() || emptyHTML('bi-archive', 'Belum pernah arsip', 'Arsipkan bila ukuran database mulai besar (kotak di kiri memberi tanda).');
 }
