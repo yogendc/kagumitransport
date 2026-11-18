@@ -327,7 +327,7 @@ function applyBranding(st) {
   applyThemeColor(st.themeColor);
   ['#sbLogo', '#loginLogo', '#loginLogoSm'].forEach(s => { const el = $(s); if (el) el.innerHTML = logoHTML(st); });
   const name = st.appName || 'KAGUMI Transport';
-  [['#sbAppName', name], ['#loginAppName', name], ['#loginAppNameSm', name], ['#sbTagline', st.companyName || 'Transport']].forEach(([s, v]) => { const el = $(s); if (el) el.textContent = v; });
+  [['#sbAppName', name], ['#loginAppName', name], ['#loginAppNameSm', name], ['#sbTagline', st.taglineLogo || 'Cargo & Auto Logistics']].forEach(([s, v]) => { const el = $(s); if (el) el.textContent = v; });
   applyLoginTexts(st);
   document.title = name;
   setFavicon(st.logo);
@@ -380,7 +380,7 @@ function showLogin(msg) {
   $('#appView').hidden = true;
   $('#loginView').hidden = false;
   hideSplash();
-  $('#loginCopy').textContent = '© ' + new Date().getFullYear() + ' ' + (S.settings.companyName || 'KAGUMI Transport');
+  $('#loginCopy').textContent = '© ' + new Date().getFullYear() + ' ' + (S.settings.appName || S.settings.companyName || 'KAGUMI Cargo & Auto Logistics');
   if (msg) showLoginError(msg);
   try { const lc = JSON.parse(lsGet(LS.login, 'null')); if (lc) { S.settings = Object.assign({}, S.settings, lc); applyBranding(lc); } } catch (e) { lsDel(LS.login); }
   api('getLoginContext').then(r => {
@@ -389,7 +389,7 @@ function showLogin(msg) {
     cekVersiServer(c.apiVersi || '2.0');
     S.settings = Object.assign({}, S.settings, c);
     applyBranding(c);
-    $('#loginCopy').textContent = '© ' + new Date().getFullYear() + ' ' + (c.companyName || c.appName || 'KAGUMI Transport');
+    $('#loginCopy').textContent = '© ' + new Date().getFullYear() + ' ' + (c.appName || c.companyName || 'KAGUMI Cargo & Auto Logistics');
     $('#setupAlert').hidden = c.siap !== false;
     if (c.googleEmail) {
       $('#btnGoogle').hidden = false; $('#loginDivider').hidden = false;
@@ -1215,7 +1215,7 @@ function renderInvoiceTable() {
 }
 function waText(i) {
   const st = S.settings;
-  return String(st.waTemplate || '').replace(/\{pelanggan\}/g, i.NamaPelanggan || '').replace(/\{perusahaan\}/g, st.companyName || st.appName || '')
+  return String(st.waTemplate || '').replace(/\{pelanggan\}/g, i.NamaPelanggan || '').replace(/\{perusahaan\}/g, st.appName || st.companyName || '')
     .replace(/\{invoice\}/g, i.NoInvoice || '').replace(/\{nominal\}/g, rp(i.Tagihan)).replace(/\{jatuhTempo\}/g, tgl(i.JatuhTempo, true)).replace(/\{suratJalan\}/g, i.NoSJ || '');
 }
 function payAccounts() { return S.d.rekening.filter(r => String(r.Aktif) === 'true' && r.Kategori === 'Penerima Pembayaran'); }
@@ -4751,7 +4751,7 @@ function renderPertanyaan() {
 }
 function ptyCard(r) {
   const st = S.settings || {};
-  const wa = `https://wa.me/${waNumber(r.NoHP)}?text=${encodeURIComponent('Halo ' + r.Nama + ', terima kasih telah menghubungi ' + (st.companyName || st.appName || '') + '. ')}`;
+  const wa = `https://wa.me/${waNumber(r.NoHP)}?text=${encodeURIComponent('Halo ' + r.Nama + ', terima kasih telah menghubungi ' + (st.appName || st.companyName || '') + '. ')}`;
   return `<div class="card pty-card ${r.Status === 'Baru' ? 'is-new' : ''}">
     <div class="pty-top"><div><b class="t-strong">${esc(r.Nama)}</b>${r.Perusahaan ? ` <span class="muted">· ${esc(r.Perusahaan)}</span>` : ''}
       <div class="t-sub">${tglJam(r.Waktu)}${r.Layanan ? ' · ' + esc(r.Layanan) : ''}</div></div>
@@ -4897,7 +4897,7 @@ function logoWebCard() {
   const lg = S.web.logo || { data: '', nama: true }, st = S.settings || {};
   const src = lg.data || st.logo || '';
   return `<div class="card"><div class="card-h"><span class="num"><i class="bi bi-badge-tm"></i></span><div><h3>Logo website</h3><p>${lg.data ? 'Logo khusus website' : 'Saat ini memakai logo aplikasi (Pengaturan → Branding)'}</p></div></div>
-    <div class="web-logo-prev">${src ? `<img alt="" src="${esc(src)}">` : '<i class="bi bi-truck"></i>'}${lg.nama ? `<b>${esc(st.companyName || st.appName || '')}</b>` : ''}</div>
+    <div class="web-logo-prev">${src ? `<img alt="" src="${esc(src)}">` : '<i class="bi bi-truck"></i>'}${lg.nama ? `<b>${esc(st.appName || st.companyName || '')}</b>` : ''}</div>
     <div class="chips-row"><button type="button" class="btn btn-secondary btn-sm" data-wlogo="pick"><i class="bi bi-upload"></i> ${lg.data ? 'Ganti logo' : 'Unggah logo website'}</button>
       ${lg.data ? '<button type="button" class="btn btn-ghost btn-sm" data-wlogo="del"><i class="bi bi-trash"></i> Pakai logo aplikasi</button>' : ''}</div>
     <label class="check-row" style="display:flex;gap:8px;align-items:center;margin-top:12px"><input type="checkbox" data-wlogo="nama" ${lg.nama ? 'checked' : ''}><span>Tampilkan nama perusahaan di samping logo</span></label>
@@ -5770,7 +5770,7 @@ function openKeluhanDetail(id) {
   const logs = (S.d.keluhanLog || []).filter(l => l.KeluhanID === id).sort((a, b) => String(b.Waktu).localeCompare(String(a.Waktu)));
   const o = (S.d.orderRingkas || []).find(x => x.ID === k.OrderID);
   const st = S.settings || {};
-  const waTeks = `Halo ${k.NamaPelapor}, kami dari ${st.companyName || st.appName || ''} terkait keluhan no. ${k.NoKeluhan}${k.NoResi ? ' (resi ' + k.NoResi + ')' : ''}. `;
+  const waTeks = `Halo ${k.NamaPelapor}, kami dari ${st.appName || st.companyName || ''} terkait keluhan no. ${k.NoKeluhan}${k.NoResi ? ' (resi ' + k.NoResi + ')' : ''}. `;
   const terbuka = klhTerbuka(k);
   openModal({ title: k.NoKeluhan + ' · ' + k.Kategori, sub: (k.NamaPelanggan || k.NamaPelapor) + ' · masuk ' + tglJam(k.Tanggal) + ' via ' + k.Sumber, icon: 'bi-chat-square-text', size: 'lg',
     body: `<div class="klh-top">${klhBadge(k.Status)} <span class="badge ${KLH_PRIO_CLS[k.Prioritas]} plain">Prioritas ${esc(k.Prioritas)}</span> ${klhSla(k)} <span class="muted">Batas: ${tglJam(k.BatasWaktu)}</span></div>
@@ -6771,7 +6771,7 @@ function nfTemplate() {
         <div class="chips-row"><button type="button" class="btn btn-ghost btn-sm" data-ev-reset><i class="bi bi-arrow-counterclockwise"></i> Kembalikan teks bawaan</button><span class="muted nf-prev-l">Pratinjau di bawah memakai contoh data.</span></div>
         <div class="nf-prev" data-prev></div></div></div>`; }).join('')}</div>
     <div class="chips-row" style="justify-content:flex-end;margin-top:14px"><button class="btn btn-primary" id="nfTplSave"><i class="bi bi-check2"></i> Simpan kejadian &amp; template</button></div></div>`;
-  const contoh = { nama: 'PT Mega Surya', perusahaan: S.settings.companyName || 'KAGUMI Transport', telp: S.settings.companyPhone || '', layanan: 'Paket', jenisDok: 'Resi', noDok: 'KGM-P00012011126',
+  const contoh = { nama: 'PT Mega Surya', perusahaan: S.settings.appName || S.settings.companyName || 'KAGUMI', telp: S.settings.companyPhone || '', layanan: 'Paket', jenisDok: 'Resi', noDok: 'KGM-P00012011126',
     link: (p.webLacakUrl || '') + '?resi=KGM-P00012011126', pengirim: 'PT Mega Surya', noInvoice: 'INV-KGM-P00012011126', jumlah: 'Rp 1.250.000', jatuhTempo: '27 Nov 2026', rekening: 'Pembayaran ke:\n• BCA 000-000-0001 a.n. ' + (S.settings.companyName || '') };
   const prev = box => { const t = box.querySelector('[data-k=pesan]').value.replace(/\{(\w+)\}/g, (m, k) => contoh[k] !== undefined ? contoh[k] : m); box.querySelector('[data-prev]').innerHTML = esc(t).replace(/\*([^*\n]+)\*/g, '<b>$1</b>').replace(/\n/g, '<br>'); };
   $$('.nf-ev').forEach(box => {
