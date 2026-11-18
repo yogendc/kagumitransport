@@ -1100,4 +1100,5 @@ body.is-sales .no-sales{display:none!important}
 .porto-tx small{color:var(--muted);font-size:12px}
 .porto-act{display:flex;justify-content:flex-end;gap:4px;padding:4px 8px 8px;margin-top:auto}
 .kq-folder .kq-riw-r{grid-template-columns:minmax(90px,140px) 1fr auto}.kq-folder .kq-riw-r>span{overflow-wrap:anywhere}
+.porto-besar{margin:-4px 0 12px;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:#0d1a14}.porto-besar img{display:block;width:100%;max-height:300px;object-fit:contain}
 :root{--kgm-css-end:1}

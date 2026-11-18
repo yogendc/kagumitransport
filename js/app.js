@@ -4781,7 +4781,7 @@ function ptySelesai(r) {
 
 // ── Kelola Website (Super Admin) ──
 const WEB_TABS = [['beranda', 'bi-house', 'Beranda'], ['tentang', 'bi-building', 'Tentang kami'], ['layanan', 'bi-truck', 'Produk & layanan'],
-  ['kontak', 'bi-telephone', 'Hubungi kami'], ['berita', 'bi-megaphone', 'Informasi terbaru'], ['portofolio', 'bi-images', 'Portofolio']];
+  ['kontak', 'bi-telephone', 'Hubungi kami'], ['berita', 'bi-megaphone', 'Informasi terbaru'], ['portofolio', 'bi-images', 'Galeri']];
 function renderWebsite() {
   const el = $('#page-website'), ui = S.ui.web;
   if (!S.web) {
@@ -5036,7 +5036,7 @@ function openBeritaModal(b) {
 }
 
 
-// ── Portofolio website (galeri pekerjaan) ──
+// ── Galeri website (foto pekerjaan) ──
 const PORTO_KAT = ['Pengiriman Barang', 'Transportasi & Trucking', 'Pengiriman Mobil & Alat Berat', 'Lainnya'];
 S.portoFoto = S.portoFoto || {};
 function muatFotoPorto() {
@@ -5055,22 +5055,22 @@ function muatFotoPorto() {
 function renderPortoAdmin(body) {
   const list = (S.d.portofolio || []).slice().sort((a, b) => String(b.Tanggal || b.DibuatPada).localeCompare(String(a.Tanggal || a.DibuatPada)));
   body.innerHTML = `<div class="card">
-    <div class="card-title-row"><div><h3>Portofolio</h3><p class="muted" style="margin:2px 0 0">Foto pekerjaan yang sudah dikerjakan: pengiriman, proyek trucking, unit mobil/alat berat. Tampil di halaman <b>Portofolio</b> website (terbaru di depan, maks. 60).</p></div><button class="btn btn-primary" id="pfAdd"><i class="bi bi-plus-lg"></i> Tambah portofolio</button></div>
-    <p class="muted" style="font-size:12.5px;margin:6px 0 14px"><i class="bi bi-folder2"></i> Foto tersimpan di Google Drive: <b>KAGUMI → Website → Portofolio</b>. Dikompres otomatis (±200–400 KB per foto).</p>
+    <div class="card-title-row"><div><h3>Galeri</h3><p class="muted" style="margin:2px 0 0">Foto pekerjaan: pengiriman, proyek trucking, unit mobil/alat berat. Tampil di halaman <b>Galeri</b> website (terbaru di depan, maks. 60). Setiap foto otomatis diberi <b>watermark logo</b>.</p></div><button class="btn btn-primary" id="pfAdd"><i class="bi bi-plus-lg"></i> Tambah foto</button></div>
+    <p class="muted" style="font-size:12.5px;margin:6px 0 14px"><i class="bi bi-folder2"></i> Foto tersimpan di Google Drive: <b>KAGUMI → Website → Galeri</b>. Dikompres otomatis (±200–400 KB per foto).</p>
     ${list.length ? `<div class="porto-adm">${list.map(p => `<div class="porto-it ${String(p.Tampil) === 'false' ? 'off' : ''}">
         <div class="porto-img" data-pprev="${esc(p.ID)}"><i class="bi bi-image muted"></i></div>
         <div class="porto-tx"><span class="badge b-slate plain">${esc(p.Kategori || 'Lainnya')}</span>${String(p.Tampil) === 'false' ? ' <span class="badge b-amber plain">Disembunyikan</span>' : ''}
           <b>${esc(p.Judul)}</b><small>${[p.Tanggal ? tgl(p.Tanggal) : '', esc(p.Lokasi || '')].filter(Boolean).join(' · ') || '&nbsp;'}</small></div>
         <div class="porto-act"><button class="icon-btn" data-pfe="${esc(p.ID)}" title="Ubah"><i class="bi bi-pencil"></i></button><button class="icon-btn" data-pfd="${esc(p.ID)}" title="Hapus"><i class="bi bi-trash"></i></button></div></div>`).join('')}</div>`
-      : emptyHTML('bi-images', 'Belum ada portofolio', 'Halaman Portofolio di website menampilkan pesan "segera hadir" sampai ada foto yang ditampilkan.')}</div>`;
+      : emptyHTML('bi-images', 'Belum ada foto galeri', 'Halaman Galeri di website menampilkan pesan "segera hadir" sampai ada foto yang ditampilkan.')}</div>`;
   $('#pfAdd').onclick = () => openPortoModal(null);
   body.onclick = e => {
     const b = e.target.closest('[data-pfe],[data-pfd]'); if (!b) return;
     const rec = byId('portofolio', b.dataset.pfe || b.dataset.pfd);
     if (b.dataset.pfe) return openPortoModal(rec);
-    confirmDialog({ title: 'Hapus portofolio?', text: rec.Judul + ' — fotonya ikut dihapus dari Drive.', variant: 'danger', icon: 'bi-trash', ok: 'Hapus' }).then(v => {
+    confirmDialog({ title: 'Hapus foto galeri?', text: rec.Judul + ' — fotonya ikut dihapus dari Drive.', variant: 'danger', icon: 'bi-trash', ok: 'Hapus' }).then(v => {
       if (v !== true) return;
-      api('deletePortofolio', S.token, rec.ID).then(() => { removeFrom('portofolio', rec.ID); ok('Portofolio dihapus'); renderWebsite(); }).catch(fail);
+      api('deletePortofolio', S.token, rec.ID).then(() => { removeFrom('portofolio', rec.ID); ok('Foto galeri dihapus'); renderWebsite(); }).catch(fail);
     });
   };
   muatFotoPorto();
@@ -5078,29 +5078,32 @@ function renderPortoAdmin(body) {
 function openPortoModal(p) {
   const d = Object.assign({ Tanggal: '', Tampil: 'true', Kategori: PORTO_KAT[0] }, p || {});
   let foto = null;
-  openModal({ title: p ? 'Ubah portofolio' : 'Tambah portofolio', sub: 'Tampil di halaman Portofolio website', icon: 'bi-images', size: 'lg',
+  openModal({ title: p ? 'Ubah foto galeri' : 'Tambah foto galeri', sub: 'Tampil di halaman Galeri website', icon: 'bi-images', size: 'lg',
     body: `<form id="pfForm" novalidate>
       <div class="field"><span class="label ${p ? '' : 'req'}">Foto</span>
-        <div class="bukti-pick" id="pfPick">${p ? `<span class="porto-img sm" data-pprev="${esc(p.ID)}"><i class="bi bi-image muted"></i></span>` : '<span class="bp-ph"><i class="bi bi-image"></i></span>'}<div class="grow"><b id="pfTxt">${p ? 'Foto saat ini' : 'Belum ada foto'}</b><small>Foto landscape (melebar) paling bagus. Dikompres otomatis ke 1600 px.</small>
+        <div class="bukti-pick" id="pfPick">${p ? `<span class="porto-img sm" data-pprev="${esc(p.ID)}"><i class="bi bi-image muted"></i></span>` : '<span class="bp-ph"><i class="bi bi-image"></i></span>'}<div class="grow"><b id="pfTxt">${p ? 'Foto saat ini' : 'Belum ada foto'}</b><small>Foto landscape (melebar) paling bagus. Dikompres ke 1600 px &amp; diberi watermark logo otomatis.</small>
           <div class="chips-row" style="margin-top:6px"><button type="button" class="btn btn-secondary btn-sm" id="pfPilih"><i class="bi bi-upload"></i> ${p ? 'Ganti foto' : 'Pilih foto'}</button></div></div></div></div>
+      <div class="porto-besar" id="pfBesar" hidden></div>
       <label class="field"><span class="label req">Judul</span><input class="input" name="Judul" maxlength="120" value="${esc(d.Judul || '')}" placeholder="mis. Kirim 12 unit Avanza Jakarta – Makassar"></label>
       <div class="row-2"><label class="field"><span class="label">Kategori</span><select class="input" name="Kategori">${PORTO_KAT.map(k => `<option ${d.Kategori === k ? 'selected' : ''}>${k}</option>`).join('')}</select></label>
         <label class="field"><span class="label">Tanggal pekerjaan (opsional)</span><input class="input" type="date" name="Tanggal" value="${esc(String(d.Tanggal || '').slice(0, 10))}"></label></div>
       <div class="row-2"><label class="field"><span class="label">Rute / lokasi</span><input class="input" name="Lokasi" maxlength="120" value="${esc(d.Lokasi || '')}" placeholder="mis. Jakarta → Makassar"></label>
         <label class="field"><span class="label">Tampilkan di website</span><select class="input" name="Tampil"><option value="true" ${String(d.Tampil) !== 'false' ? 'selected' : ''}>Ya, tampilkan</option><option value="false" ${String(d.Tampil) === 'false' ? 'selected' : ''}>Sembunyikan dulu</option></select></label></div>
       <label class="field"><span class="label">Keterangan singkat</span><textarea class="input" name="Deskripsi" rows="3" maxlength="600" placeholder="Opsional. Jangan cantumkan nama pelanggan tanpa izin.">${esc(d.Deskripsi || '')}</textarea></label>
-      <div class="alert alert-warning"><i class="bi bi-shield-exclamation"></i><div>Pastikan foto tidak menampilkan <b>plat nomor, wajah, atau dokumen</b> pelanggan tanpa izin. Foto portofolio bisa dilihat siapa saja.</div></div>
+      <div class="alert alert-warning"><i class="bi bi-shield-exclamation"></i><div>Pastikan foto tidak menampilkan <b>plat nomor, wajah, atau dokumen</b> pelanggan tanpa izin. Foto galeri bisa dilihat siapa saja.</div></div>
     </form>`,
-    foot: '<button class="btn btn-secondary" data-close>Batal</button><button class="btn btn-primary" id="pfSave"><i class="bi bi-check2"></i> Simpan portofolio</button>' });
+    foot: '<button class="btn btn-secondary" data-close>Batal</button><button class="btn btn-primary" id="pfSave"><i class="bi bi-check2"></i> Simpan foto</button>' });
   muatFotoPorto();
   $('#pfPilih').onclick = () => {
     const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/jpeg,image/png,image/webp';
     inp.onchange = () => {
       const file = inp.files && inp.files[0]; if (!file) return;
-      compressImage(file, 1600, 0.8).then(data => {
+      $('#pfTxt').textContent = 'Memproses foto…';
+      compressImage(file, 1600, 0.92).then(tandaAir).then(data => {
         foto = data;
         $('#pfPick').querySelector('.bp-ph, .porto-img, img').outerHTML = `<img src="${data}" alt="">`;
-        $('#pfTxt').textContent = 'Foto baru siap · ' + Math.round((data.length - data.indexOf(',') - 1) * 0.75 / 1024) + ' KB';
+        $('#pfTxt').textContent = 'Foto baru siap · watermark terpasang · ' + Math.round((data.length - data.indexOf(',') - 1) * 0.75 / 1024) + ' KB';
+        $('#pfBesar').innerHTML = `<img src="${data}" alt="Pratinjau dengan watermark">`; $('#pfBesar').hidden = false;
         $('#pfPick').classList.remove('err');
       }).catch(err => fail(err, 'Foto tidak bisa dipakai'));
     };
@@ -5108,12 +5111,56 @@ function openPortoModal(p) {
   };
   $('#pfSave').onclick = () => {
     const v = formValues($('#pfForm')); if (p) v.ID = p.ID;
-    if (!v.Judul.trim()) return toast('warning', 'Isi judul portofolio');
-    if (!p && !foto) { $('#pfPick').classList.add('err'); return toast('warning', 'Pilih foto portofolio'); }
+    if (!v.Judul.trim()) return toast('warning', 'Isi judul foto');
+    if (!p && !foto) { $('#pfPick').classList.add('err'); return toast('warning', 'Pilih foto galeri'); }
     if (foto) v.Foto = foto;
     const btn = $('#pfSave'); btnBusy(btn, true, foto ? 'Mengunggah…' : 'Menyimpan…');
     api('savePortofolio', S.token, v).then(r => { if (foto) S.portoFoto[r.data.FotoID] = foto; upsert('portofolio', r.data); closeModal(); ok(r.message); renderWebsite(); }).catch(fail).finally(() => btnBusy(btn, false));
   };
+}
+
+/**
+ * Watermark galeri: logo (Logo besar / dokumen, atau logo kecil) di pojok kanan bawah + nama merek & alamat website,
+ * dengan bayangan lembut agar terbaca di foto terang maupun gelap. Ditanam langsung ke foto (tidak bisa dihapus dari website).
+ */
+function tandaAir(dataUrl) {
+  const st = S.settings || {};
+  const muat = src => new Promise(res => { if (!src) return res(null); const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
+  return Promise.all([muat(dataUrl), muat(st.logoDok || st.logo)]).then(([foto, logo]) => {
+    if (!foto) return dataUrl;
+    const c = document.createElement('canvas'); c.width = foto.width; c.height = foto.height;
+    const g = c.getContext('2d'); g.drawImage(foto, 0, 0);
+    const W = c.width, H = c.height, pad0 = Math.round(Math.min(W, H) * 0.035);
+    // Kartu galeri di website memotong foto ke rasio 4:3 → watermark digeser ke dalam area yang tetap terlihat
+    const potX = W / H > 4 / 3 ? (W - H * 4 / 3) / 2 : 0, potY = W / H < 4 / 3 ? (H - W * 3 / 4) / 2 : 0;
+    const padX = Math.round(pad0 + potX), padY = Math.round(pad0 + potY), pad = padY;
+    // bayangan gradasi di bawah agar watermark terbaca
+    const gr = g.createLinearGradient(0, H * 0.72 - potY, 0, H - potY); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,.38)');
+    g.fillStyle = gr; g.fillRect(0, H * 0.72 - potY, W, H * 0.28 + potY);
+    const teks = st.appName || 'KAGUMI Cargo & Auto Logistics';
+    const web = String(st.companyWebsite || '').replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+    const fs = Math.max(12, Math.round(W * 0.016));
+    g.textAlign = 'right'; g.textBaseline = 'bottom';
+    g.shadowColor = 'rgba(0,0,0,.55)'; g.shadowBlur = Math.round(fs * 0.5); g.shadowOffsetY = 1;
+    let y = H - pad;
+    if (web) { g.font = `600 ${Math.round(fs * 0.9)}px Arial, sans-serif`; g.fillStyle = 'rgba(255,255,255,.9)'; g.fillText(web, W - padX, y); y -= Math.round(fs * 1.25); }
+    // Logo sudah memuat nama merek → teks merek hanya dipakai bila logo belum diunggah
+    if (!logo) { g.font = `700 ${Math.round(fs * 1.25)}px Arial, sans-serif`; g.fillStyle = 'rgba(255,255,255,.95)'; g.fillText(teks, W - padX, y); }
+    y -= Math.round(fs * 0.35);
+    if (logo) {
+      const lebar = Math.min(W * 0.22, logo.width * 4), tinggi = lebar * logo.height / logo.width, maxT = H * 0.16;
+      const sk = Math.min(1, maxT / tinggi), lw = lebar * sk, lh = tinggi * sk;
+      // pelat putih tipis di belakang logo agar warna logo tetap jelas
+      g.shadowColor = 'rgba(0,0,0,.25)'; g.shadowBlur = Math.round(fs * 0.6); g.shadowOffsetY = 1;
+      const px = Math.round(fs * 0.45), x0 = W - padX - lw - px * 2, y0 = y - lh - px * 2; // y = batas bawah pelat logo
+      g.fillStyle = 'rgba(255,255,255,.82)';
+      const r = Math.round(fs * 0.5);
+      g.beginPath(); g.moveTo(x0 + r, y0); g.arcTo(x0 + lw + px * 2, y0, x0 + lw + px * 2, y0 + lh + px * 2, r); g.arcTo(x0 + lw + px * 2, y0 + lh + px * 2, x0, y0 + lh + px * 2, r);
+      g.arcTo(x0, y0 + lh + px * 2, x0, y0, r); g.arcTo(x0, y0, x0 + lw + px * 2, y0, r); g.closePath(); g.fill();
+      g.shadowColor = 'transparent'; g.globalAlpha = 0.95; g.drawImage(logo, x0 + px, y0 + px, lw, lh); g.globalAlpha = 1;
+    }
+    return c.toDataURL('image/jpeg', 0.8);
+  });
 }
 // ============================================================
 // CRM: Dashboard CRM · Database Perusahaan · Sales Leads · Riwayat Aktivitas
