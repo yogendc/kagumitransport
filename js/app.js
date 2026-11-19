@@ -5055,7 +5055,7 @@ function muatFotoPorto() {
 function renderPortoAdmin(body) {
   const list = (S.d.portofolio || []).slice().sort((a, b) => String(b.Tanggal || b.DibuatPada).localeCompare(String(a.Tanggal || a.DibuatPada)));
   body.innerHTML = `<div class="card">
-    <div class="card-title-row"><div><h3>Galeri</h3><p class="muted" style="margin:2px 0 0">Foto pekerjaan: pengiriman, proyek trucking, unit mobil/alat berat. Tampil di halaman <b>Galeri</b> website (terbaru di depan, maks. 60). Setiap foto otomatis diberi <b>watermark logo</b>.</p></div><button class="btn btn-primary" id="pfAdd"><i class="bi bi-plus-lg"></i> Tambah foto</button></div>
+    <div class="card-title-row"><div><h3>Galeri</h3><p class="muted" style="margin:2px 0 0">Foto pekerjaan: pengiriman, proyek trucking, unit mobil/alat berat. Tampil di halaman <b>Galeri</b> website (terbaru di depan, maks. 60). Setiap foto otomatis diberi <b>watermark alamat website</b>.</p></div><button class="btn btn-primary" id="pfAdd"><i class="bi bi-plus-lg"></i> Tambah foto</button></div>
     <p class="muted" style="font-size:12.5px;margin:6px 0 14px"><i class="bi bi-folder2"></i> Foto tersimpan di Google Drive: <b>KAGUMI → Website → Galeri</b>. Dikompres otomatis (±200–400 KB per foto).</p>
     ${list.length ? `<div class="porto-adm">${list.map(p => `<div class="porto-it ${String(p.Tampil) === 'false' ? 'off' : ''}">
         <div class="porto-img" data-pprev="${esc(p.ID)}"><i class="bi bi-image muted"></i></div>
@@ -5081,7 +5081,7 @@ function openPortoModal(p) {
   openModal({ title: p ? 'Ubah foto galeri' : 'Tambah foto galeri', sub: 'Tampil di halaman Galeri website', icon: 'bi-images', size: 'lg',
     body: `<form id="pfForm" novalidate>
       <div class="field"><span class="label ${p ? '' : 'req'}">Foto</span>
-        <div class="bukti-pick" id="pfPick">${p ? `<span class="porto-img sm" data-pprev="${esc(p.ID)}"><i class="bi bi-image muted"></i></span>` : '<span class="bp-ph"><i class="bi bi-image"></i></span>'}<div class="grow"><b id="pfTxt">${p ? 'Foto saat ini' : 'Belum ada foto'}</b><small>Foto landscape (melebar) paling bagus. Dikompres ke 1600 px &amp; diberi watermark logo otomatis.</small>
+        <div class="bukti-pick" id="pfPick">${p ? `<span class="porto-img sm" data-pprev="${esc(p.ID)}"><i class="bi bi-image muted"></i></span>` : '<span class="bp-ph"><i class="bi bi-image"></i></span>'}<div class="grow"><b id="pfTxt">${p ? 'Foto saat ini' : 'Belum ada foto'}</b><small>Foto landscape (melebar) paling bagus. Dikompres ke 1600 px &amp; diberi watermark alamat website otomatis.</small>
           <div class="chips-row" style="margin-top:6px"><button type="button" class="btn btn-secondary btn-sm" id="pfPilih"><i class="bi bi-upload"></i> ${p ? 'Ganti foto' : 'Pilih foto'}</button></div></div></div></div>
       <div class="porto-besar" id="pfBesar" hidden></div>
       <label class="field"><span class="label req">Judul</span><input class="input" name="Judul" maxlength="120" value="${esc(d.Judul || '')}" placeholder="mis. Kirim 12 unit Avanza Jakarta – Makassar"></label>
@@ -5120,45 +5120,27 @@ function openPortoModal(p) {
 }
 
 /**
- * Watermark galeri: logo (Logo besar / dokumen, atau logo kecil) di pojok kanan bawah + nama merek & alamat website,
- * dengan bayangan lembut agar terbaca di foto terang maupun gelap. Ditanam langsung ke foto (tidak bisa dihapus dari website).
+ * Watermark galeri: alamat website saja (tanpa logo) di pojok kanan bawah, putih dengan bayangan lembut
+ * agar terbaca di foto terang maupun gelap. Ditanam langsung ke foto (tetap ada walau foto diunduh).
+ * Alamat diambil dari Pengaturan → Kop dokumen → Alamat website; bila kosong dipakai nama merek.
  */
 function tandaAir(dataUrl) {
   const st = S.settings || {};
-  const muat = src => new Promise(res => { if (!src) return res(null); const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
-  return Promise.all([muat(dataUrl), muat(st.logoDok || st.logo)]).then(([foto, logo]) => {
+  return new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = dataUrl; }).then(foto => {
     if (!foto) return dataUrl;
     const c = document.createElement('canvas'); c.width = foto.width; c.height = foto.height;
     const g = c.getContext('2d'); g.drawImage(foto, 0, 0);
     const W = c.width, H = c.height, pad0 = Math.round(Math.min(W, H) * 0.035);
     // Kartu galeri di website memotong foto ke rasio 4:3 → watermark digeser ke dalam area yang tetap terlihat
     const potX = W / H > 4 / 3 ? (W - H * 4 / 3) / 2 : 0, potY = W / H < 4 / 3 ? (H - W * 3 / 4) / 2 : 0;
-    const padX = Math.round(pad0 + potX), padY = Math.round(pad0 + potY), pad = padY;
-    // bayangan gradasi di bawah agar watermark terbaca
-    const gr = g.createLinearGradient(0, H * 0.72 - potY, 0, H - potY); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,.38)');
-    g.fillStyle = gr; g.fillRect(0, H * 0.72 - potY, W, H * 0.28 + potY);
-    const teks = st.appName || 'KAGUMI Cargo & Auto Logistics';
-    const web = String(st.companyWebsite || '').replace(/^https?:\/\//i, '').replace(/\/+$/, '');
-    const fs = Math.max(12, Math.round(W * 0.016));
-    g.textAlign = 'right'; g.textBaseline = 'bottom';
-    g.shadowColor = 'rgba(0,0,0,.55)'; g.shadowBlur = Math.round(fs * 0.5); g.shadowOffsetY = 1;
-    let y = H - pad;
-    if (web) { g.font = `600 ${Math.round(fs * 0.9)}px Arial, sans-serif`; g.fillStyle = 'rgba(255,255,255,.9)'; g.fillText(web, W - padX, y); y -= Math.round(fs * 1.25); }
-    // Logo sudah memuat nama merek → teks merek hanya dipakai bila logo belum diunggah
-    if (!logo) { g.font = `700 ${Math.round(fs * 1.25)}px Arial, sans-serif`; g.fillStyle = 'rgba(255,255,255,.95)'; g.fillText(teks, W - padX, y); }
-    y -= Math.round(fs * 0.35);
-    if (logo) {
-      const lebar = Math.min(W * 0.22, logo.width * 4), tinggi = lebar * logo.height / logo.width, maxT = H * 0.16;
-      const sk = Math.min(1, maxT / tinggi), lw = lebar * sk, lh = tinggi * sk;
-      // pelat putih tipis di belakang logo agar warna logo tetap jelas
-      g.shadowColor = 'rgba(0,0,0,.25)'; g.shadowBlur = Math.round(fs * 0.6); g.shadowOffsetY = 1;
-      const px = Math.round(fs * 0.45), x0 = W - padX - lw - px * 2, y0 = y - lh - px * 2; // y = batas bawah pelat logo
-      g.fillStyle = 'rgba(255,255,255,.82)';
-      const r = Math.round(fs * 0.5);
-      g.beginPath(); g.moveTo(x0 + r, y0); g.arcTo(x0 + lw + px * 2, y0, x0 + lw + px * 2, y0 + lh + px * 2, r); g.arcTo(x0 + lw + px * 2, y0 + lh + px * 2, x0, y0 + lh + px * 2, r);
-      g.arcTo(x0, y0 + lh + px * 2, x0, y0, r); g.arcTo(x0, y0, x0 + lw + px * 2, y0, r); g.closePath(); g.fill();
-      g.shadowColor = 'transparent'; g.globalAlpha = 0.95; g.drawImage(logo, x0 + px, y0 + px, lw, lh); g.globalAlpha = 1;
-    }
+    const padX = Math.round(pad0 + potX), padY = Math.round(pad0 + potY);
+    const teks = String(st.companyWebsite || '').replace(/^https?:\/\//i, '').replace(/^www\./i, 'www.').replace(/\/+$/, '') || st.appName || 'KAGUMI Cargo & Auto Logistics';
+    const fs = Math.max(14, Math.round(W * 0.022));
+    const gr = g.createLinearGradient(0, H * 0.8 - potY, 0, H - potY); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,.32)');
+    g.fillStyle = gr; g.fillRect(0, H * 0.8 - potY, W, H * 0.2 + potY);
+    g.font = `700 ${fs}px Arial, sans-serif`; g.textAlign = 'right'; g.textBaseline = 'bottom';
+    g.shadowColor = 'rgba(0,0,0,.6)'; g.shadowBlur = Math.round(fs * 0.45); g.shadowOffsetY = 1;
+    g.fillStyle = 'rgba(255,255,255,.92)'; g.fillText(teks, W - padX, H - padY);
     return c.toDataURL('image/jpeg', 0.8);
   });
 }
