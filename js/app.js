@@ -4821,7 +4821,7 @@ function renderWebsite() {
     body.innerHTML = `<div class="set-grid"><div class="stack">
       ${card('bi-type-h1', 'Judul utama', 'Tulisan besar di bagian paling atas beranda.', fld('heroJudul', 'Judul', d.heroJudul, { max: 120 }) + fld('heroTeks', 'Keterangan di bawah judul', d.heroTeks, { rows: 3, max: 500 }))}
       ${card('bi-building', 'Profil singkat perusahaan', 'Satu paragraf pengenalan di beranda.', fld('profilSingkat', 'Profil singkat', d.profilSingkat, { rows: 5, max: 1200 }))}
-      ${card('bi-bullseye', 'Visi & misi', '', fld('visi', 'Visi', d.visi, { rows: 2, max: 500 }) + `<label class="field"><span class="label">Misi</span><textarea class="input" data-wl="misi" rows="5">${esc((d.misi || []).join('\n'))}</textarea>${perBaris}</label>`)}
+      ${card('bi-bullseye', 'Visi & misi', '', fld('visi', 'Visi', d.visi, { rows: 4, max: 500, help: 'Tekan <b>Enter</b> untuk pindah ke baris baru. Bila tidak ada Enter, setiap kalimat otomatis tampil di baris baru.' }) + `<label class="field"><span class="label">Misi</span><textarea class="input" data-wl="misi" rows="5">${esc((d.misi || []).join('\n'))}</textarea>${perBaris}</label>`)}
     </div><div class="stack">
       ${logoWebCard()}
       ${fotoCard('hero', 'Foto latar beranda', 'Tampil di belakang judul utama. Cocok: armada, gudang, atau kegiatan bongkar muat.')}
