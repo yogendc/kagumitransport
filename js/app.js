@@ -1347,7 +1347,7 @@ function bukaSOP(link) {
   api('linkSop', S.token).then(r => {
     if (tab && !tab.closed) tab.location.href = r.data.url; else window.location.href = r.data.url;
     closeSidebar();
-  }).catch(err => { if (tab) tab.close(); fail(err, 'Gagal membuka SOP'); })
+  }).catch(err => { if (tab) tab.close(); gagalTautan(err, 'SOP'); })
     .finally(() => { link.classList.remove('loading'); ic.className = icAsli; });
 }
 
@@ -1361,7 +1361,7 @@ function bukaAbsensi(link) {
   api('linkAbsensi', S.token).then(r => {
     if (tab && !tab.closed) tab.location.href = r.data.url; else window.location.href = r.data.url;
     closeSidebar();
-  }).catch(err => { if (tab) tab.close(); fail(err, 'Gagal membuka Absensi'); }).finally(() => link.classList.remove('loading'));
+  }).catch(err => { if (tab) tab.close(); gagalTautan(err, 'Absensi'); }).finally(() => link.classList.remove('loading'));
 }
 /** Halaman utama peran Supir: hanya absen & SOP. */
 function renderAbsen() {
@@ -1375,6 +1375,19 @@ function renderAbsen() {
       <button class="btn btn-secondary btn-block" data-buka-sop><i class="bi bi-book-half"></i> Baca SOP Perusahaan</button>
       <small class="muted">Absensi &amp; SOP terbuka di tab baru tanpa login ulang.</small>
     </div></div>`;
+}
+
+/** Penjelasan jelas bila SOP / Absensi gagal dibuka, beserta langkah perbaikannya. */
+function gagalTautan(err, nama) {
+  const m = String((err && err.message) || err || '');
+  const key = nama === 'SOP' ? 'SOP' : 'ABSENSI';
+  let html;
+  if (/Aksi tidak dikenal/i.test(m)) html = `Server Apps Script masih versi lama, belum mengenal menu ${esc(nama)}.<br><br><b>Perbaikan (Super Admin):</b> ganti isi Kode.gs dengan yang terbaru, lalu <b>Terapkan → Kelola penerapan → Edit → Versi baru → Terapkan</b>.`;
+  else if (/belum diatur/i.test(m)) html = isSA()
+    ? `Kunci penghubung ${esc(nama)} belum diisi.<br><br>Buka Apps Script (akun kagumi.me) → ⚙️ <b>Setelan proyek → Properti skrip</b>, lalu isi:<br>• <code>${key}_SESSION_SECRET</code> = rahasia dari proyek ${esc(nama)} (akun kagumi.hrf)<br>• <code>${key}_FRONTEND_URL</code> = alamat web ${esc(nama)} tanpa "/" di akhir<br><br>Tidak perlu membuat versi baru setelah mengisi properti.`
+    : `Penghubung ke ${esc(nama)} belum diatur. Hubungi Super Admin.`;
+  else html = esc(m || 'Koneksi gagal. Coba lagi.');
+  confirmDialog({ title: 'Gagal membuka ' + nama, html, icon: 'bi-exclamation-triangle', variant: 'warn', ok: 'Mengerti', cancel: 'Tutup' });
 }
 
 /* ── QR Code encoder (tanpa CDN) ──────────────────────────────
