@@ -58,10 +58,11 @@ const SA_PAGES = ['finance', 'laporan', 'pengaturan', 'website', 'notif', 'konta
 const isSales = () => !!(S.me && S.me.role === 'SALES');
 const CRM_PAGES = ['crm', 'crm-kinerja', 'crm-perusahaan', 'crm-leads', 'crm-aktivitas'];
 const isCS = () => !!(S.me && S.me.role === 'CS');
+const isSupir = () => !!(S.me && S.me.role === 'SUPIR');
 const CS_PAGES = ['keluhan', 'cs-kinerja', 'pertanyaan'];
 /** Halaman yang boleh dibuka peran terbatas (Sales / CS); null = semua (Admin & Super Admin). */
 const SURAT_PAGES = ['surat', 'harga'];
-const pagesTerbatas = () => (isSales() ? CRM_PAGES.concat(['harga']) : isCS() ? CS_PAGES.concat(SURAT_PAGES) : null);
+const pagesTerbatas = () => (isSupir() ? ['absen'] : isSales() ? CRM_PAGES.concat(['harga']) : isCS() ? CS_PAGES.concat(SURAT_PAGES) : null);
 // ── Sidebar: grup menu bisa dilipat (diingat per browser) ──
 function sbSecState() { try { return JSON.parse(lsGet('kgmSbSec', '{}')) || {}; } catch (e) { return {}; } }
 function sbSecSet(key, open, simpan) {
@@ -417,6 +418,21 @@ function bindLogin() {
     const b = $('#btnLogin'); btnBusy(b, true, 'Memeriksa akun…');
     api('loginPassword', email, pass).then(onLoginSuccess).catch(err => showLoginError(err.message)).finally(() => btnBusy(b, false));
   });
+  // Tombol "Masuk & Absen": login biasa lalu langsung membuka aplikasi Absensi (tab dibuka lebih dulu agar tidak diblokir)
+  $('#btnLoginAbsen').addEventListener('click', () => {
+    const email = $('#loginEmail').value.trim(), pass = $('#loginPass').value;
+    $('#loginAlert').hidden = true;
+    if (!email || !pass) { showLoginError('Isi email dan kata sandi.'); return; }
+    const tab = window.open('about:blank', '_blank');
+    tabMemuat(tab, 'Membuka Absensi…');
+    const b = $('#btnLoginAbsen'); btnBusy(b, true, 'Memeriksa akun…');
+    api('loginPassword', email, pass).then(r => {
+      S.token = r.data.token;
+      return api('linkAbsensi', r.data.token).then(x => { if (tab && !tab.closed) tab.location.href = x.data.url; else window.location.href = x.data.url; })
+        .catch(err => { if (tab) tab.close(); toast('warning', 'Absensi belum bisa dibuka', err.message); })
+        .then(() => onLoginSuccess(r));
+    }).catch(err => { if (tab) tab.close(); showLoginError(err.message); }).finally(() => btnBusy(b, false));
+  });
   $('#btnGoogle').addEventListener('click', () => {
     const b = $('#btnGoogle'); btnBusy(b, true, 'Memeriksa akun…');
     api('loginGoogle').then(onLoginSuccess).catch(err => showLoginError(err.message)).finally(() => btnBusy(b, false));
@@ -514,10 +530,11 @@ function showApp() {
 function applyRole() {
   const me = S.me || {};
   $('#sbUserName').textContent = me.nama || me.email || '';
-  $('#sbUserRole').textContent = isSA() ? 'Super Admin' : isSales() ? 'Sales' : isCS() ? 'Customer Service' : 'Admin';
+  $('#sbUserRole').textContent = peranTeks((S.me || {}).role);
   document.body.classList.toggle('is-sa', isSA());
   document.body.classList.toggle('is-sales', isSales());
   document.body.classList.toggle('is-cs', isCS());
+  document.body.classList.toggle('is-supir', isSupir());
   $('#sbAvatar').textContent = initials(me.nama);
   $$('.sa-only').forEach(el => { el.hidden = !isSA(); });
   const open = lsGet(LS.master, '1') === '1';
@@ -527,6 +544,7 @@ function applyRole() {
 }
 
 const RENDER = {
+  absen: renderAbsen,
   ringkasan: renderRingkasan, rekap: renderRekap, invoice: renderInvoice,
   pelanggan: () => renderMaster('pelanggan'), kendaraan: () => renderMaster('kendaraan'),
   pengemudi: () => renderMaster('pengemudi'), penerima: () => renderMaster('penerima'), ekspedisi: () => renderMaster('ekspedisi'),
@@ -572,6 +590,9 @@ function bindGlobal() {
     if (nav && (nav.closest('#sbNav') || nav.closest('#bottomNav') || nav.hasAttribute('data-go'))) { e.preventDefault(); navigateTo(nav.dataset.page); return; }
     const go = e.target.closest('[data-go]');
     if (go) { e.preventDefault(); navigateTo(go.dataset.go, go.dataset.fresh ? { fresh: true } : {}); return; }
+    if (e.target.closest('#sbSop')) { e.preventDefault(); bukaSOP(e.target.closest('#sbSop')); return; }
+    const ab = e.target.closest('#sbAbsen, [data-buka-absen]'); if (ab) { e.preventDefault(); bukaAbsensi(ab); return; }
+    const sp = e.target.closest('[data-buka-sop]'); if (sp) { e.preventDefault(); bukaSOP(sp); return; }
     if (e.target.closest('#modal [data-close]')) { closeModal(); return; }
     if (e.target.closest('#drawer [data-close]')) { closeDrawer(); return; }
     if (e.target.closest('#printModal [data-close]')) { $('#printModal').hidden = true; return; }
@@ -1310,6 +1331,50 @@ function openPaidModal(id) {
       upsert('invoices', old); updateBadges(); renderPage(S.page); fail(err, 'Pelunasan gagal disimpan');
     });
   };
+}
+
+/**
+ * Menu "SOP Perusahaan": minta tautan bertoken ke server lalu buka aplikasi SOP di tab baru.
+ * Tab dibuka lebih dulu (agar tidak diblokir popup blocker di iOS/Safari), lalu diisi URL setelah token didapat.
+ * URL bertoken tidak disimpan di mana pun.
+ */
+function bukaSOP(link) {
+  if (link.classList.contains('loading')) return;
+  const tab = window.open('about:blank', '_blank');
+  tabMemuat(tab, 'Membuka SOP Perusahaan…');
+  link.classList.add('loading');
+  const ic = link.querySelector('.bi'); const icAsli = ic.className; ic.className = 'bi bi-arrow-repeat spin';
+  api('linkSop', S.token).then(r => {
+    if (tab && !tab.closed) tab.location.href = r.data.url; else window.location.href = r.data.url;
+    closeSidebar();
+  }).catch(err => { if (tab) tab.close(); fail(err, 'Gagal membuka SOP'); })
+    .finally(() => { link.classList.remove('loading'); ic.className = icAsli; });
+}
+
+function tabMemuat(tab, teks) { if (!tab) return; try { tab.document.title = teks; tab.document.body.innerHTML = '<p style="font:15px system-ui;padding:24px;color:#475569">' + teks + '</p>'; } catch (e) { /* abaikan */ } }
+/** Menu / tombol "Absensi": buka aplikasi Absensi (akun kagumi.hrf) dengan token, tanpa login ulang. */
+function bukaAbsensi(link) {
+  if (link.classList.contains('loading')) return;
+  const tab = window.open('about:blank', '_blank');
+  tabMemuat(tab, 'Membuka Absensi…');
+  link.classList.add('loading');
+  api('linkAbsensi', S.token).then(r => {
+    if (tab && !tab.closed) tab.location.href = r.data.url; else window.location.href = r.data.url;
+    closeSidebar();
+  }).catch(err => { if (tab) tab.close(); fail(err, 'Gagal membuka Absensi'); }).finally(() => link.classList.remove('loading'));
+}
+/** Halaman utama peran Supir: hanya absen & SOP. */
+function renderAbsen() {
+  const me = S.me || {}, d = new Date(today() + 'T00:00:00');
+  $('#page-absen').innerHTML = `<div class="absen-wrap">
+    <div class="card absen-card">
+      <span class="absen-ic"><i class="bi bi-fingerprint"></i></span>
+      <h2>Halo, ${esc(me.nama || '')}</h2>
+      <p class="muted">${HARI[d.getDay()]}, ${tgl(today())}</p>
+      <button class="btn btn-primary btn-lg btn-block" data-buka-absen><i class="bi bi-fingerprint"></i> Absen sekarang</button>
+      <button class="btn btn-secondary btn-block" data-buka-sop><i class="bi bi-book-half"></i> Baca SOP Perusahaan</button>
+      <small class="muted">Absensi &amp; SOP terbuka di tab baru tanpa login ulang.</small>
+    </div></div>`;
 }
 
 /* ── QR Code encoder (tanpa CDN) ──────────────────────────────
@@ -3167,6 +3232,7 @@ function actionBarHTML(lay) {
         <button type="button" data-act="print-tanpa"><i class="bi bi-file-earmark"></i> Cetak tanpa nominal (bawaan)</button>
         <button type="button" data-act="print-nominal"><i class="bi bi-cash-stack"></i> Cetak dengan nominal</button>
         ${lay === 'kirim' ? '<button type="button" data-act="print-tt"><i class="bi bi-receipt-cutoff"></i> Tanda terima pengiriman</button>' : ''}
+        ${lay !== 'sewa' ? '<button type="button" data-act="print-pnt"><i class="bi bi-file-earmark-text"></i> Surat pernyataan tanpa asuransi</button>' : ''}
       </div>
     </div>`;
 }
@@ -3188,6 +3254,7 @@ function setupForm(lay) {
     form.querySelector('[name=Tahun]').innerHTML = '<option value="">Pilih tahun</option>' + Array.from({ length: y + 2 - 1880 }, (_, i) => y + 1 - i).map(v => `<option>${v}</option>`).join('');
   }
   form.querySelector('[data-pay-block]').innerHTML = payBlockHTML(lay);
+  if (lay === 'kirim' || lay === 'paket') asInit(lay);
   form.querySelector('[data-actionbar]').innerHTML = actionBarHTML(lay);
   setupDaftarHargaBox(lay);
   form.querySelectorAll('.combo').forEach(c => initCombo(c, (id, el) => onComboPick(lay, el.dataset.target, id)));
@@ -3248,7 +3315,8 @@ function setupForm(lay) {
       $$('.dd-menu', form).forEach(m => { m.hidden = true; });
       if (!st.rec || st.rec.StatusDok !== 'Terkonfirmasi') { toast('warning', 'Belum dikonfirmasi', 'Konfirmasi order dulu sebelum mencetak.'); return; }
       if (st.dirty && isSA()) { toast('warning', 'Ada perubahan belum disimpan', 'Simpan perubahan dulu agar dokumen sesuai.'); return; }
-      if (a === 'print-tt') printTandaTerima(st.rec.ID); else printOrder(st.rec.ID, a === 'print-nominal' ? 'nominal' : 'tanpa');
+      if (a === 'print-pnt') { printPernyataan(st.rec.ID); return; }
+      cekPolisSebelumCetak(byId('orders', st.rec.ID)).then(lanjut => { if (!lanjut) return; if (a === 'print-tt') printTandaTerima(st.rec.ID); else printOrder(st.rec.ID, a === 'print-nominal' ? 'nominal' : 'tanpa'); });
     }
   });
   // Pulihkan isian lokal yang belum tersimpan
@@ -3329,7 +3397,7 @@ function fillForm(lay, rec) {
   const st = FORMS[lay]; const form = st.el;
   st.rec = rec ? Object.assign({}, rec) : null;
   st.loading = true;
-  form.querySelectorAll('[name]').forEach(el => { if (el.type !== 'hidden' || el.closest('.combo') || ['Pajak', 'Barang', 'DasarTarif', 'Pembayar', 'Jalur', 'ModaAngkut'].includes(el.name)) el.value = ''; el.classList.remove('invalid'); });
+  form.querySelectorAll('[name]').forEach(el => { if (el.type !== 'hidden' || el.closest('.combo') || ['Pajak', 'Barang', 'DasarTarif', 'Pembayar', 'Jalur', 'ModaAngkut', 'Asuransi', 'AsFile', 'PernyataanFile'].includes(el.name)) el.value = ''; el.classList.remove('invalid'); });
   form.querySelectorAll('.combo').forEach(c => comboSet(c, ''));
   form.querySelector('[name=Status]').value = 'Dijadwalkan';
   if (rec) applyValues(lay, rec);
@@ -3341,6 +3409,7 @@ function fillForm(lay, rec) {
   m('NoUnik').textContent = rec ? rec.NoUnik : 'Otomatis';
   st.dirty = false;
   applyLock(lay); updateCustomerInfo(lay); updateWarnings(lay); recalc(lay); updateActionBar(lay);
+  if (lay === 'kirim' || lay === 'paket') asSync(lay);
   dhReset(lay);
   if (lay === 'kirim') updateInspBox();
 }
@@ -3467,9 +3536,9 @@ function recalc(lay) {
   form.querySelector('[name=Pajak]').value = ppEl.value.trim() === '' ? '' : String(pajak);
   form.querySelector('[data-calc="PajakRp"]').textContent = '= ' + rp(pajak) + (pp ? ' (' + fmtPersen(pp) + '% × ' + rp(v('Harga')) + ')' : '');
   form.querySelectorAll('[data-pajak]').forEach(b => b.classList.toggle('on', ppEl.value.trim() !== '' && persenNum(b.dataset.pajak.replace(',', '.')) === pp));
-  const total = v('Harga') + pajak + v('Penyesuaian');
+  const total = v('Harga') + pajak + v('Penyesuaian') + premiForm(lay);
   form.querySelector('[data-calc="Total"]').textContent = rp(total);
-  form.querySelector('[data-calc="TotalText"]').textContent = pay ? 'Metode: ' + (lay === 'paket' ? (METODE_PAKET.find(m => m[0] === pay) || [, pay])[1] : pay) : 'Harga + pajak + penyesuaian';
+  form.querySelector('[data-calc="TotalText"]').textContent = (pay ? 'Metode: ' + (lay === 'paket' ? (METODE_PAKET.find(m => m[0] === pay) || [, pay])[1] : pay) : 'Harga + pajak + penyesuaian') + (premiForm(lay) ? ' · termasuk premi asuransi ' + rp(premiForm(lay)) : '');
   const hari = form.querySelector('[data-pay="hari"]'), dp = form.querySelector('[data-pay="dp"]'), due = form.querySelector('[data-pay="due"]');
   hari.hidden = !(pay === 'Termin' || pay === 'DP');
   form.querySelector('[data-pay-hari-label]').textContent = pay === 'DP' ? 'Pelunasan sisa dalam (hari)' : 'Jumlah hari termin';
@@ -3510,7 +3579,7 @@ function validateForm(lay) {
     });
     if (!ok && !miss.some(m => m[1].startsWith('Barang'))) { const d = form.querySelector('.it-row [data-f="d"]'); if (d) d.classList.add('invalid'); miss.push(['', 'Minimal satu barang kiriman']); }
   }
-  if (data.Pembayaran === 'DP') { const tot = num(data.Harga) + num(data.Pajak) + num(data.Penyesuaian); if (!(num(data.DP) > 0) || num(data.DP) > tot) miss.push(['DP', 'Nominal DP (≤ total)']); }
+  if (data.Pembayaran === 'DP') { const tot = num(data.Harga) + num(data.Pajak) + num(data.Penyesuaian) + (data.Asuransi === 'Asuransi' ? num(data.AsPremi) : 0); if (!(num(data.DP) > 0) || num(data.DP) > tot) miss.push(['DP', 'Nominal DP (≤ total)']); }
   if (!miss.length) return true;
   miss.forEach(([k]) => { if (!k) return; const el = form.querySelector(`[name="${k}"]`); const target = el && el.type === 'hidden' ? el.closest('.combo').querySelector('.combo-input') : el; if (target) target.classList.add('invalid'); });
   const first = form.querySelector('.invalid');
@@ -3547,7 +3616,7 @@ function saveForm(lay, action, btn) {
   }
   if (!validateForm(lay)) return;
   const p = byId('pelanggan', data.PelangganID);
-  const total = num(data.Harga) + num(data.Pajak) + num(data.Penyesuaian);
+  const total = num(data.Harga) + num(data.Pajak) + num(data.Penyesuaian) + (data.Asuransi === 'Asuransi' ? num(data.AsPremi) : 0);
   const rows = lay === 'paket'
     ? [['Pelanggan', p && p.Nama], ['Pengirim', data.PengirimNama], ['Penerima', data.PenerimaNama + ' · ' + firstPart(data.PenerimaAlamat)], ['Isi kiriman', paketRingkas(itemTotals(itemsOf(lay)))], ['Jalur', data.Jalur || 'Darat'], ['Ongkos ditanggung', data.Pembayar === 'penerima' ? 'Penerima' : 'Pengirim']]
     : lay === 'sewa'
@@ -4185,7 +4254,7 @@ function setAkun() {
     <div class="card-title-row" style="padding:18px 20px 0"><div><h3>Daftar pengguna</h3><p class="muted">${users.filter(u => u.Status === 'Aktif').length} aktif dari ${users.length} akun</p></div><button class="btn btn-primary" id="uAdd"><i class="bi bi-person-plus"></i> Tambah pengguna</button></div>
     <div class="table-wrap"><table class="table cards"><thead><tr><th>Pengguna</th><th>Peran</th><th>Divisi</th><th>WhatsApp</th><th>Terakhir masuk</th><th>Status</th><th class="t-actions">Aksi</th></tr></thead><tbody>
     ${users.map(u => `<tr class="${u.Status !== 'Aktif' ? 'row-muted' : ''}"><td class="card-title" data-label="Pengguna"><div class="who"><span class="avatar soft">${esc(initials(u.Nama))}</span><div><span class="t-strong">${esc(u.Nama)}${u.Email === S.me.email ? ' <span class="chip chip-soft">Anda</span>' : ''}</span><span class="t-sub">${esc(u.Email)}</span></div></div></td>
-      <td data-label="Peran"><span class="badge ${u.Peran === 'SUPER_ADMIN' ? 'b-green' : u.Peran === 'SALES' || u.Peran === 'CS' ? 'b-amber' : 'b-indigo'}">${u.Peran === 'SUPER_ADMIN' ? 'Super Admin' : u.Peran === 'SALES' ? 'Sales' : u.Peran === 'CS' ? 'Customer Service' : 'Admin'}</span></td><td data-label="Divisi">${esc(u.Divisi || '—')}${u.KodeCetak && (u.Peran === 'ADMIN' || u.Peran === 'SUPER_ADMIN') ? `<span class="t-sub">Kode cetak <b class="mono">${esc(u.KodeCetak)}</b></span>` : ''}</td>
+      <td data-label="Peran"><span class="badge ${u.Peran === 'SUPER_ADMIN' ? 'b-green' : u.Peran === 'SALES' || u.Peran === 'CS' ? 'b-amber' : u.Peran === 'SUPIR' ? 'b-slate' : 'b-indigo'}">${peranTeks(u.Peran)}</span></td><td data-label="Divisi">${esc(u.Divisi || '—')}${u.KodeCetak && (u.Peran === 'ADMIN' || u.Peran === 'SUPER_ADMIN') ? `<span class="t-sub">Kode cetak <b class="mono">${esc(u.KodeCetak)}</b></span>` : ''}</td>
       <td data-label="WhatsApp" class="mono">${esc(u.NoHP || '—')}</td><td data-label="Terakhir masuk" class="muted">${u.TerakhirLogin ? tglJam(u.TerakhirLogin) : 'Belum pernah'}</td>
       <td data-label="Status"><span class="badge ${u.Status === 'Aktif' ? 'b-green' : 'b-slate'}">${esc(u.Status)}</span></td>
       <td class="t-actions"><button class="icon-btn" data-ue="${esc(u.ID)}" title="Ubah"><i class="bi bi-pencil"></i></button><button class="icon-btn" data-ur="${esc(u.ID)}" title="Reset kata sandi"><i class="bi bi-key"></i></button>${u.Email !== S.me.email ? `<button class="icon-btn" data-ut="${esc(u.ID)}" title="${u.Status === 'Aktif' ? 'Nonaktifkan' : 'Aktifkan'}"><i class="bi ${u.Status === 'Aktif' ? 'bi-slash-circle' : 'bi-check-circle'}"></i></button><button class="icon-btn" data-ud="${esc(u.ID)}" title="Hapus"><i class="bi bi-trash"></i></button>` : ''}</td></tr>`).join('')}
@@ -4219,7 +4288,7 @@ function openUserModal(u) {
     body: `<form id="uForm" class="row-2" novalidate>
       <label class="field" style="grid-column:1/-1"><span class="label req">Nama lengkap</span><input class="input" name="Nama" value="${esc(d.Nama || '')}"></label>
       <label class="field" style="grid-column:1/-1"><span class="label req">Email</span><input class="input" type="email" name="Email" value="${esc(d.Email || '')}" placeholder="nama@gmail.com"><small class="muted">Dipakai untuk masuk. Akun Google pemilik skrip bisa memakai tombol "Masuk dengan Google".</small></label>
-      <label class="field"><span class="label req">Peran</span><select class="input" name="Peran"><option value="ADMIN" ${d.Peran === 'ADMIN' ? 'selected' : ''}>Admin</option><option value="SUPER_ADMIN" ${d.Peran === 'SUPER_ADMIN' ? 'selected' : ''}>Super Admin</option><option value="SALES" ${d.Peran === 'SALES' ? 'selected' : ''}>Sales (hanya menu CRM)</option><option value="CS" ${d.Peran === 'CS' ? 'selected' : ''}>Customer Service (keluhan & pertanyaan)</option></select></label>
+      <label class="field"><span class="label req">Peran</span><select class="input" name="Peran"><option value="ADMIN" ${d.Peran === 'ADMIN' ? 'selected' : ''}>Admin</option><option value="SUPER_ADMIN" ${d.Peran === 'SUPER_ADMIN' ? 'selected' : ''}>Super Admin</option><option value="SALES" ${d.Peran === 'SALES' ? 'selected' : ''}>Sales (hanya menu CRM)</option><option value="CS" ${d.Peran === 'CS' ? 'selected' : ''}>Customer Service (keluhan & pertanyaan)</option><option value="SUPIR" ${d.Peran === 'SUPIR' ? 'selected' : ''}>Supir (hanya absen &amp; baca SOP)</option></select></label>
       <label class="field"><span class="label">Divisi / tanggung jawab</span><input class="input" name="Divisi" value="${esc(d.Divisi || '')}" placeholder="Operasional sewa"></label>
       <label class="field"><span class="label">No. WhatsApp</span><input class="input" name="NoHP" inputmode="tel" value="${esc(d.NoHP || '')}"></label>
       <label class="field" id="uKodeF"><span class="label">Kode cetak (penerbit SJ)</span><input class="input mono" name="KodeCetak" inputmode="numeric" maxlength="2" value="${esc(d.KodeCetak || '')}" placeholder="otomatis"><small class="muted">2 angka di nomor surat jalan, mis. KGM-P0001 2 <b>01</b> 11 26. Kosongkan = otomatis.</small></label>
@@ -4342,7 +4411,7 @@ function saveSettingsUI(obj, btn) {
 }
 function setKop() {
   const st = S.settings;
-  const d = { companyName: st.companyName, companyAddress: st.companyAddress, companyPhone: st.companyPhone, companyEmail: st.companyEmail, companyNPWP: st.companyNPWP, companyWebsite: st.companyWebsite || '', showLogo: st.showLogo, kopAccent: st.kopAccent };
+  const d = { companyName: st.companyName, companyAddress: st.companyAddress, companyPhone: st.companyPhone, companyEmail: st.companyEmail, companyNPWP: st.companyNPWP, companyWebsite: st.companyWebsite || '', showLogo: st.showLogo, kopAccent: st.kopAccent, teksTanpaAsuransi: st.teksTanpaAsuransi || '', teksTanpaAsuransiSJ: st.teksTanpaAsuransiSJ || '' };
   $('#setBody').innerHTML = `<div class="set-grid">
     <div class="card">
       <div class="alert alert-info"><i class="bi bi-info-circle"></i><div>Kop ini dipakai di semua surat jalan, tanda terima, form inspeksi, dan invoice.</div></div>
@@ -4355,6 +4424,8 @@ function setKop() {
       <div class="readonly" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><span><b>Tampilkan logo</b><br><small class="muted">Sisi kiri atas dokumen cetak.</small></span><label class="switch"><input type="checkbox" id="kLogo" ${d.showLogo === 'true' ? 'checked' : ''}><span></span></label></div>
       <span class="label">Aksen garis kop</span>
       <div class="radio-cards" style="grid-template-columns:1fr 1fr;margin-top:6px"><label><input type="radio" name="kAcc" value="primary" ${d.kopAccent !== 'mono' ? 'checked' : ''}><span><b>Warna tema</b><small>Mengikuti warna aplikasi</small></span></label><label><input type="radio" name="kAcc" value="mono" ${d.kopAccent === 'mono' ? 'checked' : ''}><span><b>Monokrom</b><small>Hemat tinta</small></span></label></div>
+      <label class="field" style="margin-top:14px"><span class="label">Tulisan "tanpa asuransi" di surat jalan / resi / tanda terima</span><textarea class="input" data-k="teksTanpaAsuransiSJ" rows="3" maxlength="1000">${esc(d.teksTanpaAsuransiSJ)}</textarea><small class="muted">Ganti <b>No. XXX</b> dengan nomor SOP yang berlaku. Dicetak di dokumen bila pelanggan memilih tanpa asuransi.</small></label>
+      <label class="field"><span class="label">Poin Surat Pernyataan Tanpa Asuransi <small class="muted">(lembar terpisah, dicetak hanya bila diperlukan)</small></span><textarea class="input" data-k="teksTanpaAsuransi" rows="7" maxlength="3000">${esc(d.teksTanpaAsuransi)}</textarea><small class="muted">Satu poin per baris. Hanya dicetak lewat menu cetak → <b>Surat pernyataan tanpa asuransi</b>. Sebaiknya dicek oleh pihak legal perusahaan.</small></label>
       <div class="action-bar" style="position:static;box-shadow:none"><button class="btn btn-ghost" id="kReset"><i class="bi bi-arrow-counterclockwise"></i> Reset</button><button class="btn btn-primary" id="kSave"><i class="bi bi-check2-circle"></i> Simpan kop</button></div>
     </div>
     <div class="card" style="position:sticky;top:84px"><div class="card-title-row"><div><h3>Pratinjau kop dokumen</h3><p class="muted">Diperbarui saat Anda mengetik.</p></div></div><div class="kop-preview" id="kPrev"></div></div>
@@ -4490,6 +4561,7 @@ function priceTable(o) {
     <tr><td>${o.Layanan === 'paket' ? 'Ongkos kirim' + (basisText(o) ? ' (' + esc(basisText(o)) + ')' : '') : 'Harga dasar ' + (o.Layanan === 'sewa' ? 'sewa' : 'pengiriman')}</td><td class="num">${rp(o.Harga)}</td></tr>
     ${num(o.Pajak) ? `<tr><td>${esc(labelPajak(o))}</td><td class="num">${rp(o.Pajak)}</td></tr>` : ''}
     ${num(o.Penyesuaian) ? `<tr><td>Penyesuaian tarif</td><td class="num">${rp(o.Penyesuaian)}</td></tr>` : ''}
+    ${premiOf(o) ? `<tr><td>Premi asuransi${o.AsPerusahaan ? ' (' + esc(o.AsPerusahaan) + ')' : ''}</td><td class="num">${rp(premiOf(o))}</td></tr>` : ''}
     <tr><td style="font-weight:700">TOTAL · ${esc(o.Pembayaran === 'Termin' ? 'Pembayaran termin' : o.Pembayaran)}</td><td class="num" style="font-weight:700;font-size:12px">${rp(o.Total)}</td></tr>
     ${o.Pembayaran === 'DP' ? `<tr><td>DP diterima</td><td class="num">${rp(o.DP)}</td></tr><tr><td>Sisa tagihan</td><td class="num">${rp(o.Sisa)}</td></tr>` : ''}</table>`;
 }
@@ -4526,7 +4598,7 @@ function docSuratJalan(o, nominal, forPdf) {
     : [['Pengirim', o.NamaPelanggan], ['Penerima', o.PenerimaNama]];
   const sign = `<table class="sign" style="margin-top:8px"><tr>${signs.map(([l, n]) => `<td><div style="text-align:left;font-weight:700;font-size:9.5px;color:#475569;margin-bottom:46px">${esc(l)}</div><div class="who">( ${esc(n || '............................')} )</div></td>`).join('')}${petugasCell('Surat Jalan ' + o.NoSJ, 'Petugas KAGUMI')}</tr></table>`;
   const klausul = `<div class="muted" style="font-size:8.5px;margin-top:6px">Barang/kendaraan telah diperiksa sesuai rincian di atas. Penerima wajib memeriksa kondisi sebelum menandatangani surat jalan ini.</div>`;
-  let pages = `<div class="sheet a5">${head}${main}${money}${sign}${klausul}${docFooter('Lembar 1 · ' + esc(st.companyName || ''))}</div>`;
+  let pages = `<div class="sheet a5">${head}${main}${asuransiCetak(o)}${money}${sign}${klausul}${docFooter('Lembar 1 · ' + esc(st.companyName || ''))}</div>`;
   if (o.Layanan === 'kirim' && o.InspeksiID) {
     const insp = byId('inspeksi', o.InspeksiID);
     if (insp && insp.Status === 'Disahkan') pages += `<div class="sheet a5">${inspeksiBody(insp, o, true)}${docFooter('Lampiran form inspeksi · ' + esc(o.NoSJ))}</div>`;
@@ -4540,7 +4612,7 @@ function docSuratJalan(o, nominal, forPdf) {
 function waktuCetakTeks() {
   return new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date()).replace(/\./g, ':').replace(',', '') + ' WIB';
 }
-function peranTeks(r) { return r === 'SUPER_ADMIN' ? 'Super Admin' : r === 'ADMIN' ? 'Admin' : r === 'SALES' ? 'Sales' : r === 'CS' ? 'Customer Service' : (r || '-'); }
+function peranTeks(r) { return r === 'SUPER_ADMIN' ? 'Super Admin' : r === 'ADMIN' ? 'Admin' : r === 'SALES' ? 'Sales' : r === 'CS' ? 'Customer Service' : r === 'SUPIR' ? 'Supir' : (r || '-'); }
 function petugasQR(docName) {
   const me = S.me || {}, st = S.settings || {};
   const txt = [st.companyName || st.appName || 'KAGUMI Transport', 'Dokumen: ' + docName, 'Dicetak oleh: ' + (me.nama || me.email || '-') + ' (' + peranTeks(me.role) + ')', 'Waktu cetak: ' + waktuCetakTeks()].join('\n');
@@ -4568,7 +4640,7 @@ function docResiPaket(o, nominal, forPdf) {
   const cell = ([l, n]) => `<td><div style="text-align:left;font-weight:700;font-size:9.5px;color:#475569;margin-bottom:46px">${esc(l)}</div><div class="who">( ${esc(n || '............................')} )</div></td>`;
   const sign = `<table class="sign" style="margin-top:8px"><tr>${cell(['Pengirim', o.PengirimNama])}${petugasCell('Resi ' + o.NoSJ, 'Petugas')}${cell(['Penerima', o.PenerimaNama])}</tr></table>`;
   const klausul = `<div class="muted" style="font-size:8.5px;margin-top:6px">Isi kiriman dinyatakan oleh pengirim. Penerima wajib memeriksa jumlah koli dan kondisi kemasan sebelum menandatangani resi ini.</div>`;
-  return docShell('Resi ' + o.NoSJ, `<div class="sheet a5">${head}${parties}${items}${money}${sign}${klausul}${docFooter('Resi paket · ' + esc(st.companyName || ''))}</div>`, 'A5 landscape', forPdf);
+  return docShell('Resi ' + o.NoSJ, `<div class="sheet a5">${head}${parties}${items}${asuransiCetak(o)}${money}${sign}${klausul}${docFooter('Resi paket · ' + esc(st.companyName || ''))}</div>`, 'A5 landscape', forPdf);
 }
 function inspeksiBody(insp, o, compact) {
   let cl = []; try { cl = JSON.parse(insp.Checklist || '[]'); } catch (e) { cl = []; }
@@ -4599,6 +4671,7 @@ function docTandaTerima(o, forPdf) {
     <table class="t" style="margin-bottom:7px"><tr><th>No. polisi</th><th>Merk / tipe</th><th>Warna</th><th>No. rangka</th><th>Tahun</th></tr>
       <tr><td style="font-weight:700">${esc(o.NoPolMobil)}</td><td>${esc([o.Merk, o.Tipe, o.Model].filter(Boolean).join(' '))}</td><td>${esc(o.Warna)}</td><td>${esc(o.NoRangka || '—')}</td><td>${esc(o.Tahun)}</td></tr></table>
     <div class="box" style="background:#F0FDF4;border-color:#BBF7D0"><div class="lbl">Status kondisi</div><b>${insp && insp.Status === 'Disahkan' ? esc(insp.KondisiRingkas.toUpperCase()) + ' — sesuai Form Inspeksi Body Kendaraan terlampir' : 'Form inspeksi belum disahkan'}</b></div>
+    ${asuransiCetak(o) ? '<div style="margin-top:7px">' + asuransiCetak(o) + '</div>' : ''}
     <table class="sign" style="margin-top:9px"><tr><td style="width:50%"><div style="text-align:left;font-weight:700;font-size:9.5px;color:#475569;margin-bottom:46px">Penerima / pemilik unit</div><div class="who">( ${esc(o.PenerimaNama)} )</div><div class="muted" style="font-size:9px">Tanggal: ____ / ____ / ${today().slice(0, 4)}</div></td>
       <td><div style="text-align:left;font-weight:700;font-size:9.5px;color:#475569;margin-bottom:46px">Pengemudi / petugas pengirim</div><div class="who">( ${esc(o.PengemudiNama || '..................')} )</div></td>${petugasCell('Tanda Terima ' + o.NoSJ, 'Petugas KAGUMI')}</tr></table>
     <div class="muted" style="font-size:8.5px;margin-top:6px">Dokumen ini merupakan bukti penerimaan fisik kendaraan dalam keadaan sesuai catatan inspeksi.</div>
@@ -4617,9 +4690,10 @@ function docInvoice(i, forPdf) {
       <td style="width:42%;vertical-align:top"><table class="t"><tr><td class="muted">Tanggal terbit</td><td class="num"><b>${tgl(i.Tanggal, true)}</b></td></tr><tr><td class="muted">Jatuh tempo</td><td class="num"><b>${tgl(i.JatuhTempo, true)}</b></td></tr><tr><td class="muted">Metode</td><td class="num">${esc(i.Pembayaran)}</td></tr><tr><td class="muted">Status</td><td class="num"><b>${esc(i.Status)}</b></td></tr></table>
       ${i.Status === 'Lunas' ? `<div style="text-align:right;margin-top:12px"><span class="stamp">LUNAS ${tglPendek(i.TglBayar)}</span></div>` : ''}</td></tr></table>
     <table class="t"><tr><th style="width:4%">No</th><th style="width:13%">${o.Layanan === 'paket' ? 'No. resi' : 'No. SJ'}</th><th style="width:12%">Tanggal</th><th>Layanan / rute &amp; keterangan</th><th class="num">Harga</th><th class="num">Pajak</th><th class="num">Penyesuaian</th><th class="num">Total</th></tr>
-      <tr><td>1</td><td><b>${esc(i.NoSJ)}</b></td><td>${tglPendek(o.Tanggal || i.Tanggal)}</td><td>${desc}</td><td class="num">${fnum(o.Harga)}</td><td class="num">${fnum(o.Pajak)}</td><td class="num">${fnum(o.Penyesuaian)}</td><td class="num"><b>${fnum(i.Total)}</b></td></tr></table>
+      <tr><td>1</td><td><b>${esc(i.NoSJ)}</b></td><td>${tglPendek(o.Tanggal || i.Tanggal)}</td><td>${desc}</td><td class="num">${fnum(o.Harga)}</td><td class="num">${fnum(o.Pajak)}</td><td class="num">${fnum(o.Penyesuaian)}</td><td class="num"><b>${fnum(num(i.Total) - premiOf(o))}</b></td></tr>
+      ${premiOf(o) ? `<tr><td>2</td><td><b>${esc(i.NoSJ)}</b></td><td>${tglPendek(o.Tanggal || i.Tanggal)}</td><td>Premi asuransi ${esc(o.AsJenis || '')}<br><span class="muted">${esc(o.AsPerusahaan || '')}${o.AsPolis ? ' · Polis ' + esc(o.AsPolis) : ' · Polis menyusul'} · nilai pertanggungan ${rp(o.AsNilai)}</span></td><td class="num">${fnum(premiOf(o))}</td><td class="num">0</td><td class="num">0</td><td class="num"><b>${fnum(premiOf(o))}</b></td></tr>` : ''}</table>
     <table style="margin-top:10px"><tr><td style="vertical-align:top;padding-right:16px"><div class="box"><div class="lbl">Terbilang</div><i>${esc(terbilang(i.Tagihan))}</i></div>${bankBox(payAccountsFor(o))}</td>
-      <td style="width:40%;vertical-align:top"><table class="t"><tr><td>Subtotal</td><td class="num">${rp(o.Harga)}</td></tr><tr><td>${esc(labelPajak(o))}</td><td class="num">${rp(o.Pajak)}</td></tr><tr><td>Penyesuaian tarif</td><td class="num">${rp(o.Penyesuaian)}</td></tr><tr><td>Total</td><td class="num">${rp(i.Total)}</td></tr>
+      <td style="width:40%;vertical-align:top"><table class="t"><tr><td>Subtotal</td><td class="num">${rp(o.Harga)}</td></tr><tr><td>${esc(labelPajak(o))}</td><td class="num">${rp(o.Pajak)}</td></tr><tr><td>Penyesuaian tarif</td><td class="num">${rp(o.Penyesuaian)}</td></tr>${premiOf(o) ? `<tr><td>Premi asuransi</td><td class="num">${rp(premiOf(o))}</td></tr>` : ''}<tr><td>Total</td><td class="num">${rp(i.Total)}</td></tr>
         ${num(i.DP) ? `<tr><td>DP diterima</td><td class="num">− ${rp(i.DP)}</td></tr>` : ''}<tr><td style="font-weight:800;color:${acc}">TOTAL TAGIHAN</td><td class="num" style="font:800 14px Arial;color:${acc}">${rp(i.Tagihan)}</td></tr></table></td></tr></table>
     <table style="margin-top:28px"><tr><td></td><td style="width:34%;text-align:center"><div>Hormat kami,</div>${(q => q ? `<img src="${q}" alt="QR petugas" width="64" height="64" style="width:64px;height:64px;display:block;margin:4px auto">` : '<div style="height:64px"></div>')(petugasQR('Invoice ' + i.NoInvoice))}<div style="border-top:1px solid #94A3B8;padding-top:4px;font-weight:700">${esc(st.companyName || '')}</div><div style="font-size:8px;color:#64748B">Dicetak oleh ${esc((S.me || {}).nama || '')} · ${esc(waktuCetakTeks())}</div></td></tr></table>
     ${docFooter('Mohon cantumkan nomor invoice pada berita transfer.')}</div>`;
@@ -7295,6 +7369,145 @@ function artiNoDok(no) {
   const m = String(no || '').match(/^KGM-([PSK])(\d{4})(\d+)(\d{2})(\d{2})(\d{2})$/);
   if (!m) return '';
   return { P: 'Paket', S: 'Sewa', K: 'Kirim mobil' }[m[1]] + ' · urut ' + m[2] + ' · ' + m[3] + (m[1] === 'P' ? ' koli' : ' SJ') + ' · penerbit ' + m[4] + ' · ' + m[5] + '/20' + m[6];
+}
+
+// ── Asuransi pengiriman (Kirim Paket & Kirim Mobil) ──
+const AS_JENIS = ['All Risk', 'Total Loss Only (TLO)', 'Lainnya'];
+const AS_STATUS = ['Diajukan', 'Aktif', 'Ditolak', 'Klaim diproses', 'Selesai'];
+const AS_KEPUTUSAN = ['Menunggu', 'Disetujui', 'Ditolak'];
+function asBlockHTML(lay) {
+  const obj = lay === 'kirim' ? 'kendaraan' : 'barang';
+  return `<div class="card-h"><span class="num"><i class="bi bi-shield-check"></i></span><div><h3>Asuransi pengiriman</h3><p>Tawarkan asuransi ke pelanggan. Bila menolak, pelanggan menandatangani surat pernyataan.</p></div></div>
+    <input type="hidden" name="Asuransi"><input type="hidden" name="AsFile"><input type="hidden" name="PernyataanFile">
+    <div class="field"><span class="label req">Pilihan pelanggan</span>
+      <div class="seg seg-wrap" role="group" aria-label="Asuransi"><button type="button" class="seg-btn" data-as="Asuransi"><i class="bi bi-shield-check"></i> Asuransi</button><button type="button" class="seg-btn" data-as="Tanpa asuransi"><i class="bi bi-shield-slash"></i> Tanpa asuransi</button></div></div>
+    <div data-as-show="ya" hidden>
+      <div class="grid-2">
+        <label class="field"><span class="label req">Jenis asuransi</span><select class="input" name="AsJenis"><option value="">Pilih jenis</option>${AS_JENIS.map(x => `<option>${x}</option>`).join('')}</select></label>
+        <label class="field"><span class="label req">Nilai ${obj}</span><div class="prefix-input"><span>Rp</span><input class="input money" name="AsNilai" inputmode="numeric" placeholder="0"></div></label>
+        <label class="field"><span class="label req">Status asuransi</span><select class="input" name="AsStatus"><option value="">Pilih status</option>${AS_STATUS.map(x => `<option>${x}</option>`).join('')}</select></label>
+        <label class="field"><span class="label req">Nama perusahaan asuransi</span><input class="input" name="AsPerusahaan" maxlength="120" placeholder="mis. PT Asuransi ..."></label>
+        <label class="field"><span class="label">Nomor polis</span><input class="input mono" name="AsPolis" maxlength="60" placeholder="Kosongkan bila belum terbit"><small class="muted">Belum terbit? Dokumen tercetak "polis menyusul"; isi nanti lalu cetak ulang.</small></label>
+        <label class="field"><span class="label">Nilai premi <small class="muted">(ditagihkan ke pelanggan)</small></span><div class="prefix-input"><span>Rp</span><input class="input money" name="AsPremi" inputmode="numeric" placeholder="0"></div></label>
+        <label class="field"><span class="label">Persetujuan / penolakan</span><select class="input" name="AsKeputusan">${AS_KEPUTUSAN.map(x => `<option>${x}</option>`).join('')}</select></label>
+        <div class="field"><span class="label">File polis / bukti persetujuan</span><div class="as-file" data-as-file="AsFile"></div></div>
+      </div>
+    </div>
+    <div data-as-show="tidak" hidden>
+      <div class="alert alert-warning"><i class="bi bi-file-earmark-text"></i><div>Di ${lay === 'kirim' ? 'surat jalan &amp; tanda terima' : 'resi'} tercetak: <i data-as-teks></i> Surat pernyataan lengkap <b>tidak</b> ikut tercetak (hemat kertas); bila perlu, cetak lewat menu cetak → <b>Surat pernyataan tanpa asuransi</b>.</div></div>
+      <div class="field"><span class="label">Scan surat pernyataan bertanda tangan <small class="muted">(opsional)</small></span><div class="as-file" data-as-file="PernyataanFile"></div></div>
+    </div>
+    <div class="as-save" data-as-save hidden><small class="muted">Order sudah dikonfirmasi: data asuransi tetap bisa diperbarui (polis terbit, status klaim, scan pernyataan).</small><button type="button" class="btn btn-primary btn-sm" data-as-simpan><i class="bi bi-check2"></i> Simpan data asuransi</button></div>`;
+}
+function asInit(lay) {
+  const form = FORMS[lay].el, box = form.querySelector('[data-as-block]');
+  box.innerHTML = asBlockHTML(lay);
+  box.addEventListener('click', e => {
+    const b = e.target.closest('[data-as]');
+    if (b) { form.querySelector('[name=Asuransi]').value = b.dataset.as; asSync(lay); form.dispatchEvent(new Event('input', { bubbles: true })); return; }
+    const up = e.target.closest('[data-as-up]');
+    if (up) { asUnggah(lay, up.dataset.asUp); return; }
+    const lh = e.target.closest('[data-as-lihat]');
+    if (lh) { bukaDokAsuransi(lh.dataset.asLihat); return; }
+    const hp = e.target.closest('[data-as-hapus]');
+    if (hp) { form.querySelector(`[name=${hp.dataset.asHapus}]`).value = ''; asSync(lay); form.dispatchEvent(new Event('input', { bubbles: true })); return; }
+    if (e.target.closest('[data-as-simpan]')) asSimpan(lay);
+  });
+}
+function asSync(lay) {
+  const st = FORMS[lay], form = st.el, v = form.querySelector('[name=Asuransi]').value;
+  form.querySelectorAll('[data-as]').forEach(b => b.classList.toggle('on', b.dataset.as === v));
+  form.querySelector('[data-as-show=ya]').hidden = v !== 'Asuransi';
+  form.querySelector('[data-as-show=tidak]').hidden = v !== 'Tanpa asuransi';
+  const tk = form.querySelector('[data-as-teks]'); if (tk) tk.textContent = '"' + teksTanpaAsuransiSJ() + '"';
+  if (!st.loading) recalc(lay);
+  form.querySelectorAll('[data-as-file]').forEach(el => {
+    const k = el.dataset.asFile, id = form.querySelector(`[name=${k}]`).value;
+    el.innerHTML = id ? `<span class="as-chip"><i class="bi bi-paperclip"></i> File terlampir</span><button type="button" class="btn btn-secondary btn-sm" data-as-lihat="${esc(id)}"><i class="bi bi-eye"></i> Lihat</button><button type="button" class="btn btn-ghost btn-sm" data-as-up="${k}">Ganti</button><button type="button" class="icon-btn" data-as-hapus="${k}" title="Lepas file"><i class="bi bi-x-lg"></i></button>`
+      : `<button type="button" class="btn btn-secondary btn-sm" data-as-up="${k}"><i class="bi bi-upload"></i> Unggah PDF / foto</button><small class="muted">Maks. 5 MB</small>`;
+  });
+  // Seluruh kartu asuransi tetap bisa diubah setelah order dikonfirmasi (lewat tombol Simpan data asuransi)
+  form.querySelectorAll('[data-as-block] [name], [data-as-block] button').forEach(el => { if (el.tagName === 'SELECT') el.disabled = false; else el.readOnly = false; });
+  const conf = st.rec && st.rec.StatusDok === 'Terkonfirmasi';
+  form.querySelector('[data-as-save]').hidden = !conf;
+}
+function asUnggah(lay, kolom) {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'application/pdf,image/jpeg,image/png,image/webp';
+  inp.onchange = () => {
+    const f = inp.files && inp.files[0]; if (!f) return;
+    const kirim = dataUrl => api('uploadDokAsuransi', S.token, dataUrl, f.name).then(r => {
+      FORMS[lay].el.querySelector(`[name=${kolom}]`).value = r.data.id; asSync(lay);
+      FORMS[lay].el.dispatchEvent(new Event('input', { bubbles: true }));
+      toast('success', 'File terunggah', FORMS[lay].rec && FORMS[lay].rec.StatusDok === 'Terkonfirmasi' ? 'Tekan "Simpan data asuransi" untuk menyimpan.' : 'Tersimpan bersama order.');
+    }).catch(err => fail(err, 'Gagal mengunggah'));
+    toast('info', 'Mengunggah…', f.name);
+    if (/^image\//.test(f.type)) compressImage(f, 1800, 0.8).then(kirim).catch(err => fail(err));
+    else if (f.type === 'application/pdf') { if (f.size > 5 * 1024 * 1024) return toast('warning', 'File terlalu besar', 'Maksimal 5 MB.'); const rd = new FileReader(); rd.onload = () => kirim(rd.result); rd.readAsDataURL(f); }
+    else toast('warning', 'Format tidak didukung', 'Pilih PDF, JPG, PNG, atau WEBP.');
+  };
+  inp.click();
+}
+function bukaDokAsuransi(id) {
+  const tab = window.open('about:blank', '_blank');
+  api('getDokAsuransi', S.token, id).then(r => {
+    const bin = atob(r.data.data), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([u8], { type: r.data.mime }));
+    if (tab && !tab.closed) tab.location.href = url; else window.open(url, '_blank');
+  }).catch(err => { if (tab) tab.close(); fail(err, 'Dokumen tidak bisa dibuka'); });
+}
+function asSimpan(lay) {
+  const st = FORMS[lay], form = st.el; if (!st.rec) return;
+  const v = {}; ['Asuransi', 'AsJenis', 'AsStatus', 'AsPerusahaan', 'AsPolis', 'AsKeputusan', 'AsFile', 'PernyataanFile'].forEach(k => { v[k] = form.querySelector(`[name=${k}]`).value; });
+  ['AsNilai', 'AsPremi'].forEach(k => { const x = form.querySelector(`[name=${k}]`).value.trim(); v[k] = x === '' ? '' : String(num(x)); });
+  const b = form.querySelector('[data-as-simpan]'); btnBusy(b, true, 'Menyimpan…');
+  api('updateAsuransi', S.token, lay, st.rec.ID, v).then(r => { upsert('orders', r.data); saveCache(); fillForm(lay, r.data); ok(r.message); if (S.page === 'rekap') renderRekapTable(); })
+    .catch(err => fail(err, 'Gagal menyimpan asuransi')).finally(() => btnBusy(b, false));
+}
+/** Baris asuransi di surat jalan / resi. */
+function asuransiCetak(o) {
+  if (o.Asuransi === 'Asuransi') return `<div class="box" style="margin-bottom:7px"><div class="lbl">Asuransi</div><div class="val">Diasuransikan · ${esc(o.AsJenis || '')} · ${esc(o.AsPerusahaan || '')} · ${o.AsPolis ? 'Polis ' + esc(o.AsPolis) : 'No. polis menyusul'}</div><div class="muted">Nilai pertanggungan ${rp(o.AsNilai)}${o.AsStatus ? ' · Status ' + esc(o.AsStatus) : ''}</div></div>`;
+  if (o.Asuransi === 'Tanpa asuransi') return `<div class="box" style="margin-bottom:7px"><div class="lbl">Asuransi</div><div class="val">Tanpa asuransi</div><div class="muted">${esc(teksTanpaAsuransiSJ())}</div></div>`;
+  return '';
+}
+/** Lembar Surat Pernyataan Pengiriman Tanpa Asuransi (A5 landscape, ikut dicetak bersama SJ / resi). */
+function pernyataanSheet(o) {
+  const st = S.settings || {}, paket = o.Layanan === 'paket';
+  const poin = String(st.teksTanpaAsuransi || '').split(/\n+/).map(x => x.trim()).filter(Boolean);
+  const pel = byId('pelanggan', o.PelangganID) || {};
+  const objek = paket ? barangOf(o).map(b => b.d).filter(Boolean).join(', ') + ' (' + fnumDec(num(o.TotalKoli)) + ' koli)' : [o.NoPolMobil, o.Merk, o.Tipe, o.Warna].filter(Boolean).join(' · ');
+  const baris = [['Nama', paket ? o.PengirimNama || o.NamaPelanggan : o.NamaPelanggan], ['Pelanggan', o.NamaPelanggan], ['No. HP', paket ? o.PengirimHP : (pel.NoHP || pel.HP || '')],
+    [paket ? 'No. resi' : 'No. surat jalan', o.NoSJ], [paket ? 'Barang' : 'Kendaraan', objek], ['Tujuan', paket ? [o.KotaTujuan, o.PenerimaNama].filter(Boolean).join(' · ') : o.PenerimaNama]];
+  return `<div class="sheet a5">${kopHTML(st, false)}
+    <div class="title" style="text-align:center;margin:8px 0 2px">SURAT PERNYATAAN PENGIRIMAN TANPA ASURANSI</div>
+    <div class="muted" style="text-align:center;margin-bottom:6px">Lampiran ${paket ? 'resi' : 'surat jalan'} ${esc(o.NoSJ)}</div>
+    <div style="font-size:10px;margin-bottom:4px">Yang bertanda tangan di bawah ini:</div>
+    <table style="font-size:10px;margin-bottom:5px">${baris.map(([l, v]) => `<tr><td style="width:110px;padding:1px 0">${l}</td><td style="width:10px">:</td><td style="padding:1px 0"><b>${esc(v || '............................................')}</b></td></tr>`).join('')}</table>
+    <div style="font-size:10px;margin-bottom:3px">dengan ini menyatakan bahwa:</div>
+    <ol style="font-size:9.6px;line-height:1.45;margin:0 0 6px;padding-left:18px">${poin.map(p => `<li>${esc(p)}</li>`).join('')}</ol>
+    <div style="font-size:10px">Demikian pernyataan ini saya buat dengan sadar dan tanpa paksaan.</div>
+    <table class="sign" style="margin-top:6px"><tr><td><div style="text-align:left;font-size:9.5px;color:#475569;margin-bottom:40px"><b>Yang menyatakan</b> · ${tgl(o.Tanggal, true)}</div><div class="who">( ${esc((paket ? o.PengirimNama : o.NamaPelanggan) || '............................')} )</div></td>${petugasCell('Pernyataan tanpa asuransi ' + o.NoSJ, 'Petugas', true)}</tr></table>
+    ${docFooter('Surat pernyataan tanpa asuransi · ' + esc(st.companyName || ''))}</div>`;
+}
+function printPernyataan(id) {
+  const o = byId('orders', id);
+  if (!o || o.StatusDok !== 'Terkonfirmasi') { toast('warning', 'Belum dikonfirmasi', 'Konfirmasi order dulu sebelum mencetak.'); return; }
+  if (o.Asuransi !== 'Tanpa asuransi') { toast('info', 'Order ini memakai asuransi', 'Surat pernyataan hanya untuk pengiriman tanpa asuransi.'); return; }
+  openPrint({ title: 'Pernyataan Tanpa Asuransi ' + o.NoSJ, sub: o.NamaPelanggan + ' · A5 landscape', build: () => docShell('Pernyataan ' + o.NoSJ, pernyataanSheet(o), 'A5 landscape', false),
+    pdfBuild: () => docShell('Pernyataan ' + o.NoSJ, pernyataanSheet(o), 'A5 landscape', true),
+    onPrint: (v, html, pdf) => api('markPrinted', S.token, o.Layanan, id, 'tanpa', html, 'pnt', !!pdf).then(r => { if (!pdf) toast('success', 'Surat pernyataan diarsipkan', r.message); return r; }) });
+}
+
+const premiOf = o => (o && o.Asuransi === 'Asuransi' ? num(o.AsPremi) : 0);
+function premiForm(lay) {
+  if (lay !== 'kirim' && lay !== 'paket') return 0;
+  const f = FORMS[lay].el, a = f.querySelector('[name=Asuransi]'), p = f.querySelector('[name=AsPremi]');
+  return a && a.value === 'Asuransi' && p ? num(p.value) : 0;
+}
+function teksTanpaAsuransiSJ() { return (S.settings && S.settings.teksTanpaAsuransiSJ) || 'KAGUMI sudah merekomendasikan asuransi, tetapi pelanggan setuju tanpa asuransi.'; }
+/** Sebelum cetak: bila diasuransikan tapi no. polis belum ada → pilih cetak sekarang ("polis menyusul") atau tunggu polis. */
+function cekPolisSebelumCetak(o) {
+  if (!o || o.Asuransi !== 'Asuransi' || String(o.AsPolis || '').trim()) return Promise.resolve(true);
+  return confirmDialog({ title: 'Nomor polis belum terbit', text: 'Dokumen akan tercetak dengan tulisan "No. polis menyusul". Cetak sekarang, atau tunggu polis terbit lalu cetak ulang?', icon: 'bi-shield-exclamation', variant: 'warn', ok: 'Cetak sekarang', cancel: 'Tunggu polis' }).then(v => v === true);
 }
 // Penanda: js/app.js termuat sampai akhir
 window.__KGM_JS_END = true;

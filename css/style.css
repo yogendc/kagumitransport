@@ -381,7 +381,7 @@ select.input{appearance:none;padding-right:34px;cursor:pointer;
 .lock-banner b{display:block;font-size:14.5px}
 .lock-banner .grow{flex:1;min-width:220px}
 .lock-banner.sa{background:var(--indigo-soft);color:var(--indigo-text);border-color:transparent}
-.order-form.locked .card .input:not([name="Status"]),.order-form.locked .combo-input{pointer-events:none;background:var(--surface-3);color:var(--text);border-color:transparent}
+.order-form.locked .card .input:not([name="Status"]):not(.no-lock .input),.order-form.locked .combo-input{pointer-events:none;background:var(--surface-3);color:var(--text);border-color:transparent}
 .order-form.locked .link-btn{display:none}
 .order-form.locked .combo>i{display:none} .order-form.locked .combo .combo-input{padding-left:12px}
 
@@ -1109,4 +1109,16 @@ body.is-sales .no-sales{display:none!important}
 .cek-tahap small{color:var(--muted);font-size:12.5px}
 .cek-tahap .cek-act{display:flex;gap:6px;margin-left:auto}
 #usSave:disabled{opacity:.55;cursor:not-allowed}
+.sb-link .sb-ext{margin-left:auto;font-size:12px;opacity:.55}
+.sb-link.loading{opacity:.7;pointer-events:none}
+.bi.spin{display:inline-block;animation:kgmSpin .8s linear infinite}@keyframes kgmSpin{to{transform:rotate(360deg)}}
+.as-card .card-h .num i{font-size:15px}
+.as-file{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-height:40px}
+.as-chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--green,#15803d)}
+.as-save{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;border-top:1px dashed var(--border);padding-top:12px;margin-top:4px}
+body.is-supir .sb-sec:not([data-sec=dok]),body.is-supir #bottomNav,body.is-supir .top-search,body.is-supir #globalSearch,body.is-supir #sbMaster,body.is-supir #sbMasterToggle{display:none!important}
+.absen-wrap{display:grid;place-items:center;min-height:60vh;padding:16px 0}
+.absen-card{max-width:420px;width:100%;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px;padding:28px 22px}
+.absen-card h2{margin:4px 0 0;font-size:22px}.absen-card p{margin:0}
+.absen-ic{width:64px;height:64px;border-radius:18px;display:grid;place-items:center;background:var(--primary-soft,#e8f3ee);color:var(--primary);font-size:30px}
 :root{--kgm-css-end:1}

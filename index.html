@@ -92,6 +92,9 @@
         <button type="submit" class="btn btn-primary btn-block btn-lg" id="btnLogin">
           <span>Masuk</span><i class="bi bi-arrow-right"></i>
         </button>
+        <button type="button" class="btn btn-secondary btn-block btn-lg" id="btnLoginAbsen" style="margin-top:10px">
+          <i class="bi bi-fingerprint"></i><span>Masuk &amp; Absen</span>
+        </button>
       </form>
       <p class="login-help"><i class="bi bi-shield-lock"></i> Lupa kata sandi? Hubungi Super Admin untuk mereset.</p>
     </div>
@@ -155,6 +158,13 @@
         <div class="sb-sec-b">
         <a class="sb-link no-sales" data-page="surat" href="javascript:void(0)"><i class="bi bi-envelope-paper"></i><span>Surat Menyurat</span><b class="sb-badge danger" id="badgeSurat" hidden></b></a>
         <a class="sb-link" data-page="harga" href="javascript:void(0)"><i class="bi bi-tags"></i><span>Daftar Harga</span></a>
+        </div>
+      </div>
+      <div class="sb-sec" data-sec="dok">
+        <button class="sb-group sb-sec-h" data-sec-toggle="dok" aria-expanded="true"><span>Dokumen</span><b class="sb-dot" hidden></b><i class="bi bi-chevron-down chev"></i></button>
+        <div class="sb-sec-b">
+        <a class="sb-link" id="sbAbsen" href="javascript:void(0)" title="Buka aplikasi Absensi di tab baru"><i class="bi bi-fingerprint"></i><span>Absensi</span><i class="bi bi-box-arrow-up-right sb-ext"></i></a>
+        <a class="sb-link" id="sbSop" href="javascript:void(0)" title="Buka aplikasi SOP di tab baru"><i class="bi bi-book-half"></i><span>SOP Perusahaan</span><i class="bi bi-box-arrow-up-right sb-ext"></i></a>
         </div>
       </div>
       <div class="sb-sec sa-only" data-sec="web">
@@ -227,6 +237,7 @@
     <main class="content" id="content">
 
       <!-- ───────── RINGKASAN ───────── -->
+      <section class="page" id="page-absen" data-title="Absen"></section>
       <section class="page" id="page-ringkasan" data-title="Ringkasan"></section>
 
       <!-- ───────── FORM SEWA ───────── -->
@@ -412,6 +423,7 @@
               </div>
             </div>
 
+            <div class="card as-card no-lock" data-as-block></div>
             <div class="card pay-card" data-pay-block></div>
           </div>
           <div class="action-bar" data-actionbar></div>
@@ -521,6 +533,7 @@
               </div>
             </div>
 
+            <div class="card as-card no-lock" data-as-block></div>
             <div class="card pay-card" data-pay-block></div>
 
             <div class="card no-lock eksp-card">
