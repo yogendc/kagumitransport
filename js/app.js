@@ -1380,14 +1380,14 @@ function renderAbsen() {
 /** Penjelasan jelas bila SOP / Absensi gagal dibuka, beserta langkah perbaikannya. */
 function gagalTautan(err, nama) {
   const m = String((err && err.message) || err || '');
-  const key = nama === 'SOP' ? 'SOP' : 'ABSENSI';
   let html;
   if (/Aksi tidak dikenal/i.test(m)) html = `Server Apps Script masih versi lama, belum mengenal menu ${esc(nama)}.<br><br><b>Perbaikan (Super Admin):</b> ganti isi Kode.gs dengan yang terbaru, lalu <b>Terapkan → Kelola penerapan → Edit → Versi baru → Terapkan</b>.`;
   else if (/belum diatur/i.test(m)) html = isSA()
-    ? `Kunci penghubung ${esc(nama)} belum diisi.<br><br>Buka Apps Script (akun kagumi.me) → ⚙️ <b>Setelan proyek → Properti skrip</b>, lalu isi:<br>• <code>${key}_SESSION_SECRET</code> = rahasia dari proyek ${esc(nama)} (akun kagumi.hrf)<br>• <code>${key}_FRONTEND_URL</code> = alamat web ${esc(nama)} tanpa "/" di akhir<br><br>Tidak perlu membuat versi baru setelah mengisi properti.`
+    ? `Alamat & rahasia ${esc(nama)} belum diisi.<br><br>Buka <b>Pengaturan Sistem → Integrasi SOP &amp; Absensi</b>, isi alamat web dan rahasia (secret) dari proyek ${esc(nama)} di akun kagumi.hrf, lalu Simpan.`
     : `Penghubung ke ${esc(nama)} belum diatur. Hubungi Super Admin.`;
   else html = esc(m || 'Koneksi gagal. Coba lagi.');
-  confirmDialog({ title: 'Gagal membuka ' + nama, html, icon: 'bi-exclamation-triangle', variant: 'warn', ok: 'Mengerti', cancel: 'Tutup' });
+  confirmDialog({ title: 'Gagal membuka ' + nama, html, icon: 'bi-exclamation-triangle', variant: 'warn', ok: isSA() && /belum diatur/i.test(m) ? 'Buka pengaturan' : 'Mengerti', cancel: 'Tutup' })
+    .then(v => { if (v === true && isSA() && /belum diatur/i.test(m)) { S.ui.set = S.ui.set || {}; S.ui.set.tab = 'integrasi'; navigateTo('pengaturan'); } });
 }
 
 /* ── QR Code encoder (tanpa CDN) ──────────────────────────────
@@ -4255,11 +4255,11 @@ function renderPengaturan() {
     <div class="ph-icon"><i class="bi bi-gear"></i></div>
     <div><h1>Pengaturan Sistem &amp; Hak Akses</h1><p class="muted">Kelola akun, identitas aplikasi, kop dokumen cetak, rekening bank, dan status sistem.</p></div>
   </div>
-  <div class="tabs">${[['akun', 'bi-people', 'Kelola akun & pengguna'], ['branding', 'bi-palette', 'Branding & identitas'], ['kop', 'bi-printer', 'Kop dokumen cetak'], ['rekening', 'bi-bank', 'Master rekening bank'], ['sistem', 'bi-hdd-network', 'Konfigurasi sistem']]
+  <div class="tabs">${[['akun', 'bi-people', 'Kelola akun & pengguna'], ['branding', 'bi-palette', 'Branding & identitas'], ['kop', 'bi-printer', 'Kop dokumen cetak'], ['rekening', 'bi-bank', 'Master rekening bank'], ['integrasi', 'bi-link-45deg', 'Integrasi SOP & Absensi'], ['sistem', 'bi-hdd-network', 'Konfigurasi sistem']]
     .map(([k, i, l]) => `<button class="tab ${t === k ? 'active' : ''}" data-st="${k}"><i class="bi ${i}"></i> ${l}</button>`).join('')}</div>
   <div id="setBody"></div>`;
   el.querySelectorAll('[data-st]').forEach(b => b.onclick = () => { S.ui.set.tab = b.dataset.st; renderPengaturan(); });
-  ({ akun: setAkun, branding: setBranding, kop: setKop, rekening: setRekening, sistem: setSistem })[t]();
+  ({ akun: setAkun, branding: setBranding, kop: setKop, rekening: setRekening, integrasi: setIntegrasi, sistem: setSistem })[t]();
 }
 function setAkun() {
   const users = S.d.users.slice().sort((a, b) => (a.Peran === b.Peran ? 0 : a.Peran === 'SUPER_ADMIN' ? -1 : 1) || a.Nama.localeCompare(b.Nama));
@@ -7521,6 +7521,34 @@ function teksTanpaAsuransiSJ() { return (S.settings && S.settings.teksTanpaAsura
 function cekPolisSebelumCetak(o) {
   if (!o || o.Asuransi !== 'Asuransi' || String(o.AsPolis || '').trim()) return Promise.resolve(true);
   return confirmDialog({ title: 'Nomor polis belum terbit', text: 'Dokumen akan tercetak dengan tulisan "No. polis menyusul". Cetak sekarang, atau tunggu polis terbit lalu cetak ulang?', icon: 'bi-shield-exclamation', variant: 'warn', ok: 'Cetak sekarang', cancel: 'Tunggu polis' }).then(v => v === true);
+}
+
+// ── Pengaturan → Integrasi SOP & Absensi (Super Admin) ──
+function setIntegrasi() {
+  const body = $('#setBody');
+  body.innerHTML = '<div class="card"><div class="sk" style="width:40%;margin-bottom:12px"></div><div class="sk" style="width:80%"></div></div>';
+  api('getIntegrasi', S.token).then(r => {
+    const d = r.data;
+    const kartu = (k, judul, ic, contoh, akun) => {
+      const x = d[k];
+      return `<div class="card integ-card" data-ig="${k}">
+        <div class="card-title-row"><h3><i class="bi ${ic}"></i> ${judul}</h3><span class="badge ${x.ada && x.url ? 'b-green' : 'b-amber'}">${x.ada && x.url ? 'Tersambung' : 'Belum diatur'}</span></div>
+        <label class="field"><span class="label req">Alamat web ${judul}</span><input class="input" data-f="url" value="${esc(x.url)}" placeholder="${contoh}" inputmode="url"><small class="muted">Tanpa "/" di akhir.</small></label>
+        <label class="field"><span class="label ${x.ada ? '' : 'req'}">Rahasia (secret)</span><input class="input mono" data-f="secret" type="password" autocomplete="new-password" placeholder="${x.ada ? 'Tersimpan (' + esc(x.samar) + ') — kosongkan bila tidak diganti' : 'Tempel rahasia di sini'}">
+          <small class="muted">Ambil di akun <b>${akun}</b>: buka proyek ${judul} di Apps Script → jalankan <code>lihatRahasiaUntukAppUtama</code> → salin dari log. Rahasia tidak pernah ditampilkan lagi.</small></label>
+        <div class="chips-row" style="justify-content:flex-end;gap:8px"><button class="btn btn-secondary btn-sm" data-ig-uji="${k}"><i class="bi bi-box-arrow-up-right"></i> Uji buka</button><button class="btn btn-primary btn-sm" data-ig-simpan="${k}"><i class="bi bi-check2"></i> Simpan</button></div>
+      </div>`;
+    };
+    body.innerHTML = `<div class="alert alert-info"><i class="bi bi-info-circle"></i><div>Menu <b>Absensi</b> dan <b>SOP Perusahaan</b> membuka aplikasi lain (akun kagumi.hrf) tanpa login ulang. Isi alamat dan rahasianya di sini. Rahasia disimpan aman di server (Script Properties) dan tidak pernah dikirim ke browser.</div></div>
+      <div class="grid-2">${kartu('sop', 'SOP Perusahaan', 'bi-book-half', 'https://kagumi-sop-d4ax.vercel.app', 'kagumi.hrf')}${kartu('absensi', 'Absensi', 'bi-fingerprint', 'https://absensi-kagumi.vercel.app', 'kagumi.hrf')}</div>`;
+    body.querySelectorAll('[data-ig-simpan]').forEach(b => b.onclick = () => {
+      const k = b.dataset.igSimpan, c = body.querySelector(`[data-ig="${k}"]`);
+      btnBusy(b, true, 'Menyimpan…');
+      api('simpanIntegrasi', S.token, k, c.querySelector('[data-f=url]').value, c.querySelector('[data-f=secret]').value)
+        .then(x => { ok(x.message); setIntegrasi(); }).catch(err => { fail(err); btnBusy(b, false); });
+    });
+    body.querySelectorAll('[data-ig-uji]').forEach(b => b.onclick = () => (b.dataset.igUji === 'sop' ? bukaSOP(b) : bukaAbsensi(b)));
+  }).catch(err => { body.innerHTML = `<div class="card">${esc(err.message)}</div>`; });
 }
 // Penanda: js/app.js termuat sampai akhir
 window.__KGM_JS_END = true;
