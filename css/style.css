@@ -1122,4 +1122,11 @@ body.is-supir .sb-sec:not([data-sec=dok]),body.is-supir #bottomNav,body.is-supir
 .absen-card h2{margin:4px 0 0;font-size:22px}.absen-card p{margin:0}
 .absen-ic{width:64px;height:64px;border-radius:18px;display:grid;place-items:center;background:var(--primary-soft,#e8f3ee);color:var(--primary);font-size:30px}
 .grid-2>.integ-card{margin-top:0!important;align-self:start}
+.klh-sug{border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface,#fff);margin-top:-4px}
+.klh-sug-h{font-size:12px;color:var(--muted);padding:8px 12px;background:var(--bg,#f6f8f7);border-bottom:1px solid var(--border)}
+.klh-sug-i{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;text-align:left;padding:9px 12px;border:0;border-bottom:1px solid var(--border);background:none;cursor:pointer;font:inherit;color:inherit}
+.klh-sug-i:last-child{border-bottom:0}.klh-sug-i:hover,.klh-sug-i:focus{background:var(--primary-soft,#e8f5ee);outline:none}
+.klh-sug-i span{font-size:12px;color:var(--muted)}
+.klh-draf-hint{font-size:12px;margin:12px 0 0;line-height:1.5}
+.klh-draf-box{align-items:center}
 :root{--kgm-css-end:1}
